@@ -38,27 +38,29 @@ public class SecurityConfig {
 
     private final TokenAuthFilter tokenAuthFilter;
 
+    private final AnonymousEndpointMatcher anonymousEndpointMatcher;
+
     /**
-     * 构造器注入 Token 认证过滤器。
+     * 构造器注入 Token 认证过滤器与匿名接口匹配器。
      *
-     * @param tokenAuthFilter Token 认证过滤器，用于在每次请求中校验用户身份
+     * @param tokenAuthFilter         Token 认证过滤器，用于在每次请求中校验用户身份
+     * @param anonymousEndpointMatcher 匿名接口匹配器，扫描 {@link Anonymous} 注解放行公开接口
      */
-    public SecurityConfig(TokenAuthFilter tokenAuthFilter) {
+    public SecurityConfig(TokenAuthFilter tokenAuthFilter, AnonymousEndpointMatcher anonymousEndpointMatcher) {
         this.tokenAuthFilter = tokenAuthFilter;
+        this.anonymousEndpointMatcher = anonymousEndpointMatcher;
     }
 
     /**
      * 配置安全过滤链，定义请求的认证与授权规则。
      * <p>
-     * 该 Bean 配置了以下安全策略：
+     * 采用"默认全拦截、注解显式放行"的策略：
      * <ul>
-     *   <li>禁用 CSRF 保护和 Session，采用无状态 Token 认证模式；</li>
-     *   <li>对 OPTIONS 预检请求、登录注册相关接口、家具展示接口、监控接口放行；</li>
+     *   <li>禁用 CSRF 和 Session，采用无状态 Token 认证模式；</li>
+     *   <li>OPTIONS 预检请求、标注了 {@link Anonymous} 注解的接口、监控与文档接口放行；</li>
+     *   <li>管理后台接口（/admin/**）仅允许 ADMIN 角色访问；</li>
      *   <li>AI 相关接口需要已认证用户；</li>
-     *   <li>管理后台接口仅允许 ADMIN 角色访问；</li>
-     *   <li>其余所有请求均需认证；</li>
-     *   <li>在用户名密码过滤器之前插入自定义 Token 认证过滤器；</li>
-     *   <li>配置认证失败和权限不足的 JSON 格式响应。</li>
+     *   <li>其余所有请求均需认证——新增接口默认被拦截，需公开时用 {@link Anonymous} 注解读取。</li>
      * </ul>
      * </p>
      *
@@ -74,36 +76,17 @@ public class SecurityConfig {
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        .requestMatchers(
-                                "/user/login",
-                                "/user/register",
-                                "/user/code",
-                                "/user/r_code",
-                                "/user/reset-code",
-                                "/user/reset-password"
-                        ).permitAll()
-                        .requestMatchers(
-                                "/furniture/**",
-                                "/furniture_type/**"
-                        ).permitAll()
-                        .requestMatchers(
-                                HttpMethod.GET,
-                                "/comment/list/*",
-                                "/review-comment/list/*"
-                        ).permitAll()
-                        .requestMatchers(
-                                HttpMethod.GET,
-                                "/site-content"
-                        ).permitAll()
-                        .requestMatchers("/monitor/**").permitAll()
+                        // 扫描 @Anonymous 注解的公开接口，统一放行
+                        .requestMatchers(anonymousEndpointMatcher).permitAll()
                         .requestMatchers(
                                 "/doc.html",
                                 "/swagger-ui/**",
                                 "/v3/api-docs/**",
                                 "/webjars/**"
                         ).permitAll()
-                        .requestMatchers("/ai/**").authenticated()
+                        .requestMatchers("/monitor/**").permitAll()
                         .requestMatchers("/admin/**").hasRole("ADMIN")
+                        .requestMatchers("/ai/**").authenticated()
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(tokenAuthFilter, UsernamePasswordAuthenticationFilter.class)

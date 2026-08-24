@@ -5,6 +5,7 @@ import cn.hutool.core.bean.BeanUtil;
 import gcy.system.aspect.OperationLog;
 import gcy.system.entity.dto.*;
 import gcy.system.integration.OssService;
+import gcy.system.security.Anonymous;
 import gcy.system.service.IUserService;
 import gcy.system.utils.UserHolder;
 import io.swagger.v3.oas.annotations.Operation;
@@ -43,6 +44,7 @@ public class UserController {
      * @return 包含发送结果的 {@link Result} 对象
      */
     @Operation(summary = "发送注册验证码")
+    @Anonymous
     @PostMapping("/r_code")
     public Result sendRegisterCode(@Parameter(description = "请求体") @RequestBody RegisterFormDTO registerFormDTO) {
         return userService.sendRegisterCode(registerFormDTO);
@@ -57,6 +59,7 @@ public class UserController {
      * @return 包含发送结果的 {@link Result} 对象
      */
     @Operation(summary = "发送登录验证码")
+    @Anonymous
     @PostMapping("/code")
     public Result sendLoginCode(@Parameter(description = "请求体") @RequestBody LoginFormDTO loginFormDTO) {
         return userService.sendLoginCode(loginFormDTO);
@@ -78,6 +81,7 @@ public class UserController {
     }
 
     @Operation(summary = "发送重置密码验证码")
+    @Anonymous
     @PostMapping("/reset-code")
     public Result sendResetCode(@Parameter(description = "请求体") @RequestBody ResetPasswordFormDTO dto) {
         return userService.sendResetCode(dto);
@@ -93,6 +97,7 @@ public class UserController {
      */
     @OperationLog("重置密码")
     @Operation(summary = "重置密码")
+    @Anonymous
     @PostMapping("/reset-password")
     public Result resetPassword(@Parameter(description = "请求体") @RequestBody ResetPasswordFormDTO dto) {
         return userService.resetPassword(dto);
@@ -108,6 +113,7 @@ public class UserController {
      */
     @OperationLog("用户登录")
     @Operation(summary = "用户登录")
+    @Anonymous
     @PostMapping("/login")
     public Result login(@Parameter(description = "请求体") @RequestBody LoginFormDTO loginFormDTO) {
         return userService.login(loginFormDTO);
@@ -153,6 +159,7 @@ public class UserController {
      */
     @OperationLog("用户注册")
     @Operation(summary = "用户注册")
+    @Anonymous
     @PostMapping("/register")
     public Result register(@Parameter(description = "请求体") @RequestBody RegisterFormDTO registerFormDTO) {
         return userService.register(registerFormDTO);

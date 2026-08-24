@@ -1,6 +1,7 @@
 package gcy.system.controller;
 
 import gcy.system.entity.dto.Result;
+import gcy.system.security.Anonymous;
 import gcy.system.service.ISiteContentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -36,6 +37,7 @@ public class SiteContentController {
      * @return 包含分组后的站点内容数据的结果对象，key 为分组名，value 为该分组下的内容列表
      */
     @Operation(summary = "获取所有启用的站点内容")
+    @Anonymous
     @GetMapping("/site-content")
     public Result getSiteContent() {
         return siteContentService.getActiveSiteContentGrouped();

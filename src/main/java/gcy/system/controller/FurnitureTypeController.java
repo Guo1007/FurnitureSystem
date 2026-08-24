@@ -1,6 +1,7 @@
 package gcy.system.controller;
 
 import gcy.system.entity.dto.Result;
+import gcy.system.security.Anonymous;
 import gcy.system.service.IFurnitureTypeService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -21,6 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "家具类型", description = "家具类型相关接口")
 @RestController
 @RequestMapping("/furniture_type")
+@Anonymous
 @RequiredArgsConstructor
 public class FurnitureTypeController {
 

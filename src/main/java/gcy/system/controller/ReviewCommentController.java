@@ -3,6 +3,7 @@ package gcy.system.controller;
 import gcy.system.entity.dto.Result;
 import gcy.system.entity.dto.UserDTO;
 import gcy.system.entity.pojo.ReviewComment;
+import gcy.system.security.Anonymous;
 import gcy.system.service.IReviewCommentService;
 import gcy.system.utils.UserHolder;
 import io.swagger.v3.oas.annotations.Operation;
@@ -40,6 +41,7 @@ public class ReviewCommentController {
      * @return 包含评论列表数据的 {@link Result} 对象
      */
     @Operation(summary = "根据评审ID查询评论列表")
+    @Anonymous
     @GetMapping("/list/{reviewId}")
     public Result list(@Parameter(description = "评审ID") @PathVariable Long reviewId) {
         // 游客可浏览评论：未登录时 userId 传 0，仅返回审核通过的公开评论

@@ -5,6 +5,7 @@ import gcy.system.entity.dto.UserDTO;
 import gcy.system.entity.pojo.CommentAppend;
 import gcy.system.entity.pojo.GoodsComment;
 import gcy.system.integration.OssService;
+import gcy.system.security.Anonymous;
 import gcy.system.service.ICommentService;
 import gcy.system.utils.UserHolder;
 import io.swagger.v3.oas.annotations.Operation;
@@ -46,6 +47,7 @@ public class CommentController {
      * @return 包含分页评论数据的 Result 对象
      */
     @Operation(summary = "根据商品ID获取评论列表")
+    @Anonymous
     @GetMapping("/list/{goodsId}")
     public Result list(@Parameter(description = "商品ID") @PathVariable Long goodsId,
                        @Parameter(description = "当前页码") @RequestParam(defaultValue = "1") Integer current,
