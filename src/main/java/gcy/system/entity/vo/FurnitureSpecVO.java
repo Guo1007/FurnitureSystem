@@ -91,10 +91,6 @@ public class FurnitureSpecVO {
          */
         private Long id;
         /**
-         * SKU编码
-         */
-        private String skuCode;
-        /**
          * 价格
          */
         private BigDecimal price;

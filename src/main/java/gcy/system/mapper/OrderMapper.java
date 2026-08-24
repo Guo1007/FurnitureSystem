@@ -32,7 +32,7 @@ public interface OrderMapper extends BaseMapper<Order> {
     List<OrderTrendDataVO> selectOrderTrend(@Param("since") LocalDateTime since);
 
     /**
-     * 查询当前所有有效交易订单的总收入金额，仅统计状态为待发货、已发货、已完成、已评价的订单，
+     * 查询当前所有有效交易订单的总收入金额，仅统计状态为已支付、已发货、已完成、已评价的订单，
      * 排除已删除的订单。若无匹配记录则返回 0。
      *
      * @return 有效订单的总收入金额

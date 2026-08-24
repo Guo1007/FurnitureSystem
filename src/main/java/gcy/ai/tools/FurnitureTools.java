@@ -69,6 +69,35 @@ public class FurnitureTools {
     }
 
     /**
+     * 查询系统当前所有可用的家具分类（系列）及其宣传语。
+     * <p>
+     * 从数据库实时获取全部未删除的家具分类，用于回答"系统有哪些系列/分类"等问题。
+     * 不作硬编码，以数据库为准。
+     * </p>
+     *
+     * @return 家具分类清单文本
+     */
+    @Tool("查询系统当前所有家具分类（系列）及其宣传语，用于回答系统有哪些系列/分类")
+    public String queryFurnitureTypes() {
+        log.debug("调用queryFurnitureTypes");
+        List<FurnitureType> types = furnitureTypeMapper.selectList(
+                new LambdaQueryWrapper<FurnitureType>()
+                        .orderByAsc(FurnitureType::getId));
+        if (types.isEmpty()) {
+            return "当前暂无家具分类";
+        }
+        StringBuilder sb = new StringBuilder("【家具分类】\n");
+        for (FurnitureType t : types) {
+            sb.append("- ").append(t.getName());
+            if (t.getTitle() != null && !t.getTitle().isEmpty()) {
+                sb.append("（").append(t.getTitle()).append("）");
+            }
+            sb.append("\n");
+        }
+        return sb.toString();
+    }
+
+    /**
      * 查询指定商品的SKU规格、库存和价格信息。
      *
      * @param furnitureName 商品名称
@@ -106,8 +135,8 @@ public class FurnitureTools {
         StringBuilder sb = new StringBuilder("【").append(furniture.getFName()).append(" 规格库存信息】\n");
         if (skuSpecs.isEmpty()) {
             for (Sku sku : skus) {
-                sb.append(String.format("SKU编码: %s | 价格: ¥%s | 库存: %d件\n",
-                        sku.getSkuCode(), sku.getPrice(), sku.getStock()));
+                sb.append(String.format("价格: ¥%s | 库存: %d件\n",
+                        sku.getPrice(), sku.getStock()));
             }
             return sb.toString();
         }
@@ -120,8 +149,8 @@ public class FurnitureTools {
         Map<Long, String> valueNames = specValueMapper.selectByIds(valueIds).stream()
                 .collect(Collectors.toMap(SpecValue::getId, SpecValue::getValueName));
         for (Sku sku : skus) {
-            sb.append(String.format("SKU编码: %s | 价格: ¥%s | 库存: %d件",
-                    sku.getSkuCode(), sku.getPrice(), sku.getStock()));
+            sb.append(String.format("价格: ¥%s | 库存: %d件",
+                        sku.getPrice(), sku.getStock()));
             List<SkuSpec> specs = specMap.get(sku.getId());
             if (specs != null && !specs.isEmpty()) {
                 sb.append(" | 规格: ");

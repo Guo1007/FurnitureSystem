@@ -126,15 +126,6 @@
               <span v-else style="color: #999">无规格</span>
             </template>
           </el-table-column>
-          <el-table-column label="SKU编码" width="140">
-            <template #default="{ row }">
-              <el-input
-                v-model="row.skuCode"
-                size="small"
-                placeholder="如：SF-MB-3P"
-              />
-            </template>
-          </el-table-column>
           <el-table-column label="价格(¥)" width="120">
             <template #default="{ row }">
               <el-input-number
@@ -287,7 +278,6 @@ const loadSpecData = async () => {
       }));
       skuTableData.value = (data.skuList || []).map((s) => ({
         id: s.id,
-        skuCode: s.skuCode || "",
         price: Number(s.price) || 0,
         stock: s.stock || 0,
         skuImage: s.skuImage || "",
@@ -394,7 +384,6 @@ const generateSkuTable = () => {
     const existing = oldSkuMap[idKey] || oldSkuMap[specText];
     return {
       id: existing ? existing.id : null,
-      skuCode: existing ? existing.skuCode : "",
       price: existing ? existing.price : 0,
       stock: existing ? existing.stock : 0,
       skuImage: existing ? existing.skuImage : "",
@@ -413,7 +402,6 @@ const generateSkuTable = () => {
 const addManualSku = () => {
   skuTableData.value.push({
     id: null,
-    skuCode: "",
     price: 0,
     stock: 0,
     skuImage: "",
@@ -509,7 +497,6 @@ const handleSaveSpec = async () => {
       })),
       skuList: skuTableData.value.map((s) => ({
         id: s.id,
-        skuCode: s.skuCode,
         price: s.price,
         stock: s.stock,
         skuImage: s.skuImage,

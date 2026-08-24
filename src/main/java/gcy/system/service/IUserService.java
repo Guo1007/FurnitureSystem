@@ -15,7 +15,7 @@ public interface IUserService extends IService<User> {
     /**
      * 发送注册验证码，用于新用户注册时的身份校验。
      *
-     * @param registerFormDTO 注册表单数据，包含用户手机号等必要信息
+     * @param registerFormDTO 注册表单数据，包含用户邮箱、验证码等必要信息
      * @return 操作结果，包含成功状态及提示信息
      */
     Result sendRegisterCode(RegisterFormDTO registerFormDTO);
@@ -23,7 +23,7 @@ public interface IUserService extends IService<User> {
     /**
      * 发送登录验证码，用于已有用户登录时的身份校验。
      *
-     * @param loginFormDTO 登录表单数据，包含用户手机号等必要信息
+     * @param loginFormDTO 登录表单数据，包含用户账号等必要信息
      * @return 操作结果，包含成功状态及提示信息
      */
     Result sendLoginCode(LoginFormDTO loginFormDTO);
@@ -31,7 +31,7 @@ public interface IUserService extends IService<User> {
     /**
      * 用户登录，根据登录表单数据进行身份认证并生成登录令牌。
      *
-     * @param loginFormDTO 登录表单数据，包含手机号、验证码等登录凭证
+     * @param loginFormDTO 登录表单数据，包含账号、验证码或密码等登录凭证
      * @return 操作结果，包含登录令牌及用户基本信息
      */
     Result login(LoginFormDTO loginFormDTO);
@@ -46,7 +46,7 @@ public interface IUserService extends IService<User> {
     /**
      * 用户注册，根据注册表单数据创建新用户账号。
      *
-     * @param registerFormDTO 注册表单数据，包含用户名、手机号、密码等注册信息
+     * @param registerFormDTO 注册表单数据，包含邮箱、密码、确认密码等注册信息
      * @return 操作结果，包含成功状态及新用户基本信息
      */
     Result register(RegisterFormDTO registerFormDTO);
@@ -54,7 +54,7 @@ public interface IUserService extends IService<User> {
     /**
      * 发送重置密码验证码，用于用户忘记密码时进行身份校验。
      *
-     * @param dto 重置密码表单数据，包含用户手机号等必要信息
+     * @param dto 重置密码表单数据，包含用户邮箱等必要信息
      * @return 操作结果，包含成功状态及提示信息
      */
     Result sendResetCode(ResetPasswordFormDTO dto);
@@ -73,7 +73,7 @@ public interface IUserService extends IService<User> {
     /**
      * 重置密码，在验证码校验通过后将用户密码更新为新密码。
      *
-     * @param dto 重置密码表单数据，包含手机号、验证码及新密码
+     * @param dto 重置密码表单数据，包含邮箱、验证码及新密码
      * @return 操作结果，包含成功状态及提示信息
      */
     Result resetPassword(ResetPasswordFormDTO dto);

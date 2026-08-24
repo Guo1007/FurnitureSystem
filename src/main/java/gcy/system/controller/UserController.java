@@ -39,7 +39,7 @@ public class UserController {
      * <p>
      * POST /user/r_code
      *
-     * @param registerFormDTO 注册表单数据，包含用户注册所需信息（如手机号等）
+     * @param registerFormDTO 注册表单数据，包含用户注册所需信息（如邮箱等）
      * @return 包含发送结果的 {@link Result} 对象
      */
     @Operation(summary = "发送注册验证码")
@@ -53,7 +53,7 @@ public class UserController {
      * <p>
      * POST /user/code
      *
-     * @param loginFormDTO 登录表单数据，包含用户登录所需信息（如手机号等）
+     * @param loginFormDTO 登录表单数据，包含用户登录所需信息（如账号等）
      * @return 包含发送结果的 {@link Result} 对象
      */
     @Operation(summary = "发送登录验证码")
@@ -103,7 +103,7 @@ public class UserController {
      * <p>
      * POST /user/login
      *
-     * @param loginFormDTO 登录表单数据，包含登录凭证（如手机号、验证码或密码等）
+     * @param loginFormDTO 登录表单数据，包含登录凭证（如账号、验证码或密码等）
      * @return 包含登录结果的 {@link Result} 对象，登录成功时通常包含用户信息和令牌
      */
     @OperationLog("用户登录")
@@ -148,7 +148,7 @@ public class UserController {
      * <p>
      * POST /user/register
      *
-     * @param registerFormDTO 注册表单数据，包含用户名、密码、手机号等注册所需信息
+     * @param registerFormDTO 注册表单数据，包含邮箱、密码等注册所需信息
      * @return 包含注册结果的 {@link Result} 对象
      */
     @OperationLog("用户注册")

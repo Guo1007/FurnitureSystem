@@ -7,13 +7,11 @@ import gcy.system.entity.dto.Result;
 import gcy.system.entity.dto.admin.FurnitureSpecDTO;
 import gcy.system.entity.pojo.*;
 import gcy.system.entity.vo.FurnitureSpecVO;
-import gcy.system.exception.BusinessException;
 import gcy.system.mapper.*;
 import gcy.system.service.ISpecService;
 import gcy.system.utils.RedisConstants;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -100,7 +98,6 @@ public class SpecServiceImpl implements ISpecService {
             for (Sku s : skus) {
                 FurnitureSpecVO.SkuVO skuVO = new FurnitureSpecVO.SkuVO();
                 skuVO.setId(s.getId());
-                skuVO.setSkuCode(s.getSkuCode());
                 skuVO.setPrice(s.getPrice());
                 skuVO.setStock(s.getStock());
                 skuVO.setSkuImage(s.getSkuImage());
@@ -181,7 +178,6 @@ public class SpecServiceImpl implements ISpecService {
         for (Sku s : skus) {
             FurnitureSpecVO.SkuVO svo = new FurnitureSpecVO.SkuVO();
             svo.setId(s.getId());
-            svo.setSkuCode(s.getSkuCode());
             svo.setPrice(s.getPrice());
             svo.setStock(s.getStock());
             svo.setSkuImage(s.getSkuImage());
@@ -219,7 +215,6 @@ public class SpecServiceImpl implements ISpecService {
      *
      * @param dto 包含规格组列表和SKU列表的数据传输对象
      * @return 操作结果，成功返回ok
-     * @throws BusinessException 当SKU编码为空或重复时抛出业务异常
      */
     @Override
     @Transactional
@@ -258,7 +253,6 @@ public class SpecServiceImpl implements ISpecService {
         if (groups == null || groups.isEmpty() || skuDTOs == null || skuDTOs.isEmpty()) {
             Sku defaultSku = new Sku();
             defaultSku.setFurnitureId(furnitureId);
-            defaultSku.setSkuCode("SKU-" + furnitureId);
             defaultSku.setPrice(furniture.getPrice());
             defaultSku.setStock(furniture.getStock() != null ? furniture.getStock() : 0);
             defaultSku.setStatus(1);
@@ -301,42 +295,15 @@ public class SpecServiceImpl implements ISpecService {
             nameGroupMap.put(groupDTO.getGroupName(), valueNameToId);
         }
 
-        // SKU code 唯一性校验
-        Set<String> skuCodesInBatch = new HashSet<>();
-        for (FurnitureSpecDTO.SkuDTO skuDTO : skuDTOs) {
-            String code = StrUtil.isNotBlank(skuDTO.getSkuCode()) ? skuDTO.getSkuCode().trim() : null;
-            if (StrUtil.isBlank(code)) {
-                throw new BusinessException("SKU编码不能为空，请填写所有SKU编码");
-            }
-            if (!skuCodesInBatch.add(code)) {
-                throw new BusinessException("SKU编码 [" + code + "] 重复，请使用唯一的编码");
-            }
-        }
-        // 检查数据库中是否已有相同编码（一次批量查询，避免 N 次 selectCount）
-        List<String> codes = skuDTOs.stream()
-                .map(d -> d.getSkuCode().trim())
-                .collect(Collectors.toList());
-        List<Sku> existingByCode = skuMapper.selectList(
-                new LambdaQueryWrapper<Sku>().in(Sku::getSkuCode, codes));
-        if (!existingByCode.isEmpty()) {
-            throw new BusinessException("SKU编码 [" + existingByCode.get(0).getSkuCode() + "] 已被其他商品使用，请更换");
-        }
-
         for (FurnitureSpecDTO.SkuDTO skuDTO : skuDTOs) {
             Sku sku = new Sku();
             sku.setFurnitureId(furnitureId);
-            sku.setSkuCode(skuDTO.getSkuCode().trim());
             sku.setPrice(skuDTO.getPrice());
             sku.setStock(skuDTO.getStock() != null ? skuDTO.getStock() : 0);
             sku.setSkuImage(skuDTO.getSkuImage());
             sku.setStatus(skuDTO.getStatus() != null ? skuDTO.getStatus() : 1);
             sku.setCreateTime(LocalDateTime.now());
-            try {
-                skuMapper.insert(sku);
-            } catch (DuplicateKeyException e) {
-                // 前置检查与插入之间存在并发窗口，数据库唯一索引冲突时转为友好提示（事务整体回滚）
-                throw new BusinessException("SKU编码 [" + skuDTO.getSkuCode() + "] 已被其他商品使用，请更换");
-            }
+            skuMapper.insert(sku);
             Long newSkuId = sku.getId();
             // 优先使用 specs（按名称精确匹配），回退到 specValueIds（按ID映射）
             List<FurnitureSpecDTO.SpecPair> specs = skuDTO.getSpecs();

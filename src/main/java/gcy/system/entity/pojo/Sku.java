@@ -34,11 +34,6 @@ public class Sku {
     private Long furnitureId;
 
     /**
-     * SKU编码，唯一标识一个SKU
-     */
-    private String skuCode;
-
-    /**
      * SKU价格
      */
     private BigDecimal price;

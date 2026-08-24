@@ -108,9 +108,6 @@ public class FurnitureSpecDTO {
         @Schema(description = "SKU ID（编辑时有值，新增时为null）")
         private Long id;
 
-        @Schema(description = "SKU编码")
-        private String skuCode;
-
         @Schema(description = "销售价格")
         private BigDecimal price;
 
