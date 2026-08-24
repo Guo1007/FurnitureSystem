@@ -138,5 +138,4 @@ public interface IOrderManageService extends IService<Order> {
      * @return 包含退款各状态数量的Result对象
      */
     Result getRefundStatusCounts();
-
 }
