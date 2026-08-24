@@ -74,3 +74,10 @@ export function getPendingRefundCount() {
     method: "get",
   });
 }
+
+export function getRefundStatusCounts() {
+  return request({
+    url: "/admin/order/refund/status-counts",
+    method: "get",
+  });
+}

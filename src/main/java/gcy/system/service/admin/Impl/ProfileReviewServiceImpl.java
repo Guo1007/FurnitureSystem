@@ -243,6 +243,22 @@ public class ProfileReviewServiceImpl implements IProfileReviewService {
         return Result.ok(data);
     }
 
+    @Override
+    public Result getStatusCounts() {
+        Map<String, Object> nickname = Map.of(
+                "all", nicknameReviewLogMapper.selectCount(null),
+                "pending", nicknameReviewLogMapper.selectCount(new LambdaQueryWrapper<NicknameReviewLog>().eq(NicknameReviewLog::getStatus, 1)),
+                "approved", nicknameReviewLogMapper.selectCount(new LambdaQueryWrapper<NicknameReviewLog>().eq(NicknameReviewLog::getStatus, 0)),
+                "rejected", nicknameReviewLogMapper.selectCount(new LambdaQueryWrapper<NicknameReviewLog>().eq(NicknameReviewLog::getStatus, 2)),
+                "reReview", nicknameReviewLogMapper.selectCount(new LambdaQueryWrapper<NicknameReviewLog>().eq(NicknameReviewLog::getStatus, 3)));
+        Map<String, Object> icon = Map.of(
+                "all", iconReviewLogMapper.selectCount(null),
+                "pending", iconReviewLogMapper.selectCount(new LambdaQueryWrapper<IconReviewLog>().eq(IconReviewLog::getStatus, 1)),
+                "approved", iconReviewLogMapper.selectCount(new LambdaQueryWrapper<IconReviewLog>().eq(IconReviewLog::getStatus, 0)),
+                "rejected", iconReviewLogMapper.selectCount(new LambdaQueryWrapper<IconReviewLog>().eq(IconReviewLog::getStatus, 2)));
+        return Result.ok(Map.of("nickname", nickname, "icon", icon));
+    }
+
     private void sendNotification(Long userId, String title, String content) {
         try {
             SendNotificationFormDTO dto = new SendNotificationFormDTO();

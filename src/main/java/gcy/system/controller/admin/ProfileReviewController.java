@@ -76,6 +76,12 @@ public class ProfileReviewController {
         return profileReviewService.getPendingCount();
     }
 
+    @Operation(summary = "获取昵称/头像审核各状态数量统计")
+    @GetMapping("/status-counts")
+    public Result statusCounts() {
+        return profileReviewService.getStatusCounts();
+    }
+
     @Data
     public static class RejectRequest {
         private String reason;

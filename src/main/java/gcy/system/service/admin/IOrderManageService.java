@@ -132,4 +132,11 @@ public interface IOrderManageService extends IService<Order> {
      */
     Result getPendingRefundCount();
 
+    /**
+     * 获取退款各状态数量统计（待处理、已退款、全部）。
+     *
+     * @return 包含退款各状态数量的Result对象
+     */
+    Result getRefundStatusCounts();
+
 }

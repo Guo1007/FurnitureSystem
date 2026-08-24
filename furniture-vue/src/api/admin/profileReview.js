@@ -52,3 +52,10 @@ export function rejectIcon(userId, reason) {
 export function getProfileReviewPendingCount() {
   return request.get("/admin/profile-review/pending-count");
 }
+
+/**
+ * 获取昵称/头像审核各状态数量统计
+ */
+export function getProfileReviewStatusCounts() {
+  return request.get("/admin/profile-review/status-counts");
+}

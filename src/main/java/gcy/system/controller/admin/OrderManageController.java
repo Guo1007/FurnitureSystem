@@ -184,4 +184,18 @@ public class OrderManageController {
         return orderManageService.getPendingRefundCount();
     }
 
+    /**
+     * 获取退款各状态数量统计
+     * <p>
+     * 返回待处理（申请退款中+退款审核中）、已退款、全部退款的数量，
+     * 用于售后处理页各页签的数量展示。
+     *
+     * @return 包含退款各状态数量统计的结果对象
+     */
+    @Operation(summary = "获取退款状态数量统计")
+    @GetMapping("/refund/status-counts")
+    public Result getRefundStatusCounts() {
+        return orderManageService.getRefundStatusCounts();
+    }
+
 }

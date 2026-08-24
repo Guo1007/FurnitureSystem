@@ -54,4 +54,11 @@ public interface IProfileReviewService {
      * 获取待审核数量（昵称待审+待复审，头像待审）。
      */
     Result getPendingCount();
+
+    /**
+     * 获取昵称/头像审核各自的状态数量统计（全部/待审核/已通过/已拒绝/待复审）。
+     *
+     * @return 包含昵称、头像各状态数量的Result对象
+     */
+    Result getStatusCounts();
 }

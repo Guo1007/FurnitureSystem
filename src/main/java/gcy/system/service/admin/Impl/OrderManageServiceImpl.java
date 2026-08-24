@@ -459,6 +459,17 @@ public class OrderManageServiceImpl extends ServiceImpl<OrderMapper, Order>
         return Result.ok(java.util.Map.of("pendingRefundCount", count));
     }
 
+    @Override
+    public Result getRefundStatusCounts() {
+        long pending = count(new LambdaQueryWrapper<Order>()
+                .in(Order::getStatus, REFUND_APPLYING.getCode(), REFUND_AUDITING.getCode()));
+        long refunded = count(new LambdaQueryWrapper<Order>().eq(Order::getStatus, REFUNDED.getCode()));
+        return Result.ok(java.util.Map.of(
+                "pending", pending,
+                "refunded", refunded,
+                "all", pending + refunded));
+    }
+
     /**
      * 删除单个订单（仅允许已完结订单）。
      * <p>

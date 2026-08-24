@@ -4,9 +4,15 @@
 
     <!-- 页签 -->
     <el-tabs v-model="activeTab" @tab-change="handleTabChange" class="after-sale-tabs">
-      <el-tab-pane label="待处理" name="6,7" />
-      <el-tab-pane label="已退款" name="8" />
-      <el-tab-pane label="全部售后" name="6,7,8" />
+      <el-tab-pane name="6,7,8">
+        <template #label>全部售后 <span class="tab-count">({{ refundCounts.all }})</span></template>
+      </el-tab-pane>
+      <el-tab-pane name="6,7">
+        <template #label>待处理 <span class="tab-count">({{ refundCounts.pending }})</span></template>
+      </el-tab-pane>
+      <el-tab-pane name="8">
+        <template #label>已退款 <span class="tab-count">({{ refundCounts.refunded }})</span></template>
+      </el-tab-pane>
     </el-tabs>
 
     <!-- 表格 -->
@@ -123,12 +129,14 @@ import {
   approveRefund,
   auditRefund,
   getOrderList,
+  getRefundStatusCounts,
   rejectRefund,
 } from "@/api/admin/order.js";
 
-const activeTab = ref("6,7");
+const activeTab = ref("6,7,8");
 const loading = ref(false);
 const orderList = ref([]);
+const refundCounts = ref({ pending: 0, refunded: 0, all: 0 });
 const currentPage = ref(1);
 const pageSize = ref(10);
 const total = ref(0);
@@ -192,6 +200,21 @@ const handleSizeChange = (val) => {
   loadData();
 };
 
+const loadCounts = async () => {
+  try {
+    const res = await getRefundStatusCounts();
+    if ((res.success || res.code === 200) && res.data) {
+      refundCounts.value = {
+        pending: res.data.pending || 0,
+        refunded: res.data.refunded || 0,
+        all: res.data.all || 0,
+      };
+    }
+  } catch (e) {
+    logger.error(e);
+  }
+};
+
 // 同意退款（6 → 7）
 const handleApprove = async (row) => {
   try {
@@ -201,7 +224,9 @@ const handleApprove = async (row) => {
     const res = await approveRefund(row.id);
     if (res.success || res.code === 200) {
       ElMessage.success("已同意退款，进入审核阶段");
+      window.dispatchEvent(new CustomEvent("review-count-update"));
       loadData();
+      loadCounts();
     } else {
       ElMessage.error(res.msg || res.message || "操作失败");
     }
@@ -228,7 +253,9 @@ const submitReject = async () => {
     if (res.success || res.code === 200) {
       ElMessage.success("已拒绝退款");
       rejectDialogVisible.value = false;
+      window.dispatchEvent(new CustomEvent("review-count-update"));
       loadData();
+      loadCounts();
     } else {
       ElMessage.error(res.msg || res.message || "操作失败");
     }
@@ -249,7 +276,9 @@ const handleAuditPass = async (row) => {
     const res = await auditRefund({ orderId: row.id, passed: true });
     if (res.success || res.code === 200) {
       ElMessage.success("退款审核通过，已退款");
+      window.dispatchEvent(new CustomEvent("review-count-update"));
       loadData();
+      loadCounts();
     } else {
       ElMessage.error(res.msg || res.message || "操作失败");
     }
@@ -280,7 +309,9 @@ const submitAuditFail = async () => {
     if (res.success || res.code === 200) {
       ElMessage.success("审核不通过，订单已恢复");
       auditFailDialogVisible.value = false;
+      window.dispatchEvent(new CustomEvent("review-count-update"));
       loadData();
+      loadCounts();
     } else {
       ElMessage.error(res.msg || res.message || "操作失败");
     }
@@ -294,9 +325,15 @@ const submitAuditFail = async () => {
 
 onMounted(() => {
   loadData();
+  loadCounts();
 });
 </script>
 
 <style scoped lang="scss">
 @import "@/styles/views/after-sale-manage.scss";
+
+.tab-count {
+  color: #999;
+  font-size: 12px;
+}
 </style>

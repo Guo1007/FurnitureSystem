@@ -6,11 +6,21 @@
     </div>
 
     <el-tabs v-model="activeTab" @tab-change="onTabChange">
-      <el-tab-pane label="全部" name="" />
-      <el-tab-pane label="待审核" name="1" />
-      <el-tab-pane label="已通过" name="0" />
-      <el-tab-pane label="已拒绝" name="2" />
-      <el-tab-pane label="待复审" name="3" />
+      <el-tab-pane name="">
+        <template #label>全部 <span class="tab-count">({{ nicknameCounts.all }})</span></template>
+      </el-tab-pane>
+      <el-tab-pane name="1">
+        <template #label>待审核 <span class="tab-count">({{ nicknameCounts.pending }})</span></template>
+      </el-tab-pane>
+      <el-tab-pane name="0">
+        <template #label>已通过 <span class="tab-count">({{ nicknameCounts.approved }})</span></template>
+      </el-tab-pane>
+      <el-tab-pane name="2">
+        <template #label>已拒绝 <span class="tab-count">({{ nicknameCounts.rejected }})</span></template>
+      </el-tab-pane>
+      <el-tab-pane name="3">
+        <template #label>待复审 <span class="tab-count">({{ nicknameCounts.reReview }})</span></template>
+      </el-tab-pane>
     </el-tabs>
 
     <el-table :data="tableData" v-loading="loading" stripe style="width: 100%">
@@ -108,6 +118,7 @@ import { onMounted, reactive, ref } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import {
   getNicknameReviewList,
+  getProfileReviewStatusCounts,
   approveNickname,
   rejectNickname,
 } from "@/api/admin/profileReview.js";
@@ -121,6 +132,7 @@ const pageSize = ref(10);
 const total = ref(0);
 const activeTab = ref("");
 const rejectReasons = ref([]);
+const nicknameCounts = ref({ all: 0, pending: 0, approved: 0, rejected: 0, reReview: 0 });
 
 const rejectDialog = reactive({
   visible: false,
@@ -152,6 +164,22 @@ const loadRejectReasons = async () => {
   } catch (e) { /* ignore */ }
 };
 
+const loadCounts = async () => {
+  try {
+    const res = await getProfileReviewStatusCounts();
+    if ((res.success || res.code === 200) && res.data?.nickname) {
+      const n = res.data.nickname;
+      nicknameCounts.value = {
+        all: n.all || 0,
+        pending: n.pending || 0,
+        approved: n.approved || 0,
+        rejected: n.rejected || 0,
+        reReview: n.reReview || 0,
+      };
+    }
+  } catch (e) { logger.error(e); }
+};
+
 const onTabChange = () => {
   page.value = 1;
   fetchData();
@@ -165,6 +193,7 @@ const approve = (row) => {
         ElMessage.success("审核通过");
         window.dispatchEvent(new CustomEvent("review-count-update"));
         fetchData();
+        loadCounts();
       }
     } catch (e) {
       logger.error(e);
@@ -188,6 +217,7 @@ const confirmReject = async () => {
       window.dispatchEvent(new CustomEvent("review-count-update"));
       rejectDialog.visible = false;
       fetchData();
+      loadCounts();
     }
   } catch (e) {
     logger.error(e);
@@ -197,6 +227,7 @@ const confirmReject = async () => {
 onMounted(() => {
   fetchData();
   loadRejectReasons();
+  loadCounts();
 });
 </script>
 
@@ -233,6 +264,11 @@ onMounted(() => {
 
 .text-danger {
   color: #e35d5d;
+}
+
+.tab-count {
+  color: #999;
+  font-size: 12px;
 }
 
 .pagination-wrap {
