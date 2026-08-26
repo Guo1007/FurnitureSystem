@@ -84,7 +84,6 @@ public class SecurityConfig {
                                 "/v3/api-docs/**",
                                 "/webjars/**"
                         ).permitAll()
-                        .requestMatchers("/monitor/**").permitAll()
                         .requestMatchers("/admin/**").hasRole("ADMIN")
                         .requestMatchers("/ai/**").authenticated()
                         .anyRequest().authenticated()

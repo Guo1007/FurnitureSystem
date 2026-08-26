@@ -8,6 +8,8 @@ import gcy.system.entity.dto.SendNotificationFormDTO;
 import gcy.system.entity.pojo.IconReviewLog;
 import gcy.system.entity.pojo.NicknameReviewLog;
 import gcy.system.entity.pojo.User;
+import gcy.system.entity.vo.admin.IconReviewVO;
+import gcy.system.entity.vo.admin.NicknameReviewVO;
 import gcy.system.mapper.IconReviewLogMapper;
 import gcy.system.mapper.NicknameReviewLogMapper;
 import gcy.system.mapper.UserMapper;
@@ -57,18 +59,17 @@ public class ProfileReviewServiceImpl implements IProfileReviewService {
         wrapper.orderByDesc(NicknameReviewLog::getCreateTime);
 
         Page<NicknameReviewLog> pageResult = nicknameReviewLogMapper.selectPage(new Page<>(page, size), wrapper);
-        List<Map<String, Object>> records = new ArrayList<>();
+        List<NicknameReviewVO> records = new ArrayList<>();
         for (NicknameReviewLog log : pageResult.getRecords()) {
             User user = userMapper.selectById(log.getUserId());
-            Map<String, Object> item = new HashMap<>();
-            item.put("logId", log.getId());
-            item.put("userId", log.getUserId());
-            item.put("userName", user != null ? user.getUserName() : "-");
-            item.put("pendingNickname", log.getNewNickname());
-            item.put("reviewStatus", log.getStatus());
-            item.put("aiRejectReason", log.getAiRejectReason());
-            item.put("manualRejectReason", log.getManualRejectReason());
-            records.add(item);
+            records.add(new NicknameReviewVO(
+                    log.getId(),
+                    log.getUserId(),
+                    user != null ? user.getUserName() : "-",
+                    log.getNewNickname(),
+                    log.getStatus(),
+                    log.getAiRejectReason(),
+                    log.getManualRejectReason()));
         }
 
         Map<String, Object> data = new HashMap<>();
@@ -88,16 +89,15 @@ public class ProfileReviewServiceImpl implements IProfileReviewService {
         wrapper.orderByDesc(IconReviewLog::getCreateTime);
 
         Page<IconReviewLog> pageResult = iconReviewLogMapper.selectPage(new Page<>(page, size), wrapper);
-        List<Map<String, Object>> records = new ArrayList<>();
+        List<IconReviewVO> records = new ArrayList<>();
         for (IconReviewLog log : pageResult.getRecords()) {
             User user = userMapper.selectById(log.getUserId());
-            Map<String, Object> item = new HashMap<>();
-            item.put("logId", log.getId());
-            item.put("userId", log.getUserId());
-            item.put("userName", user != null ? user.getUserName() : "-");
-            item.put("pendingIcon", log.getNewIcon());
-            item.put("reviewStatus", log.getStatus());
-            records.add(item);
+            records.add(new IconReviewVO(
+                    log.getId(),
+                    log.getUserId(),
+                    user != null ? user.getUserName() : "-",
+                    log.getNewIcon(),
+                    log.getStatus()));
         }
 
         Map<String, Object> data = new HashMap<>();

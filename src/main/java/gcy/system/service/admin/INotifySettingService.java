@@ -1,9 +1,9 @@
 package gcy.system.service.admin;
 
 import gcy.system.entity.dto.Result;
+import gcy.system.entity.dto.UserSimpleDTO;
 
 import java.util.List;
-import java.util.Map;
 
 /**
  * 管理员通知设置服务接口。
@@ -39,5 +39,5 @@ public interface INotifySettingService {
      *
      * @return 管理员信息列表
      */
-    List<Map<String, Object>> listAdmins();
+    List<UserSimpleDTO> listAdmins();
 }

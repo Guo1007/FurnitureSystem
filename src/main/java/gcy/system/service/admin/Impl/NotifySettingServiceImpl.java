@@ -3,8 +3,10 @@ package gcy.system.service.admin.Impl;
 import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import gcy.system.entity.dto.Result;
+import gcy.system.entity.dto.UserSimpleDTO;
 import gcy.system.entity.pojo.AdminNotifySetting;
 import gcy.system.entity.pojo.User;
+import gcy.system.entity.vo.admin.NotifyConfigVO;
 import gcy.system.mapper.AdminNotifySettingMapper;
 import gcy.system.mapper.UserMapper;
 import gcy.system.service.admin.INotifySettingService;
@@ -61,13 +63,12 @@ public class NotifySettingServiceImpl implements INotifySettingService {
         Map<String, AdminNotifySetting> byType = settings.stream()
                 .filter(s -> s.getNotifyType() != null)
                 .collect(Collectors.toMap(AdminNotifySetting::getNotifyType, Function.identity(), (a, b) -> a));
-        List<Map<String, Object>> configs = ALL_TYPES.stream().map(type -> {
+        List<NotifyConfigVO> configs = ALL_TYPES.stream().map(type -> {
             AdminNotifySetting setting = byType.get(type);
-            Map<String, Object> m = new HashMap<>();
-            m.put("notifyType", type);
-            m.put("enabled", setting != null && setting.getEnabled() != null && setting.getEnabled() == 1);
-            m.put("adminIds", parseIds(setting != null ? setting.getAdminIds() : null));
-            return m;
+            return new NotifyConfigVO(
+                    type,
+                    setting != null && setting.getEnabled() != null && setting.getEnabled() == 1,
+                    parseIds(setting != null ? setting.getAdminIds() : null));
         }).collect(Collectors.toList());
         Map<String, Object> data = new HashMap<>();
         data.put("configs", configs);
@@ -94,17 +95,13 @@ public class NotifySettingServiceImpl implements INotifySettingService {
     }
 
     @Override
-    public List<Map<String, Object>> listAdmins() {
+    public List<UserSimpleDTO> listAdmins() {
         List<User> admins = userMapper.selectList(
                 new LambdaQueryWrapper<User>()
                         .eq(User::getIsAdmin, 1));
-        return admins.stream().map(u -> {
-            Map<String, Object> m = new HashMap<>();
-            m.put("id", u.getId());
-            m.put("userName", u.getUserName());
-            m.put("email", u.getEmail());
-            return m;
-        }).collect(Collectors.toList());
+        return admins.stream()
+                .map(u -> new UserSimpleDTO(u.getId(), u.getUserName(), u.getEmail()))
+                .collect(Collectors.toList());
     }
 
     /**
