@@ -56,16 +56,16 @@
               <p class="item-price">¥{{ formatPrice(item.price) }}</p>
             </div>
             <div class="item-actions">
-              <div class="quantity-control">
+              <div class="cart-qty-control">
                 <button
-                  class="qty-btn"
+                  class="cart-qty-btn"
                   @click="cartStore.decreaseQuantity(item.cartItemId)"
                 >
                   -
                 </button>
-                <span class="qty-value">{{ item.quantity }}</span>
+                <span class="cart-qty-value">{{ item.quantity }}</span>
                 <button
-                  class="qty-btn"
+                  class="cart-qty-btn"
                   @click="cartStore.increaseQuantity(item.cartItemId)"
                   :disabled="item.quantity >= item.stock"
                 >
@@ -463,5 +463,6 @@ const checkout = async () => {
 </script>
 
 <style scoped lang="scss">
+@import "@/styles/views/cart.scss";
 @import "@/styles/views/cart-drawer.scss";
 </style>

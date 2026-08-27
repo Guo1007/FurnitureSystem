@@ -3,7 +3,7 @@
     <!-- 顶部导航 -->
     <div class="top-nav">
       <div class="nav-content">
-        <el-button text @click="goBack" class="back-btn">
+        <el-button text @click="goBack" class="pay-back-btn">
           <el-icon>
             <ArrowLeft />
           </el-icon>
@@ -288,5 +288,6 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped lang="scss">
+@import "@/styles/views/payView.scss";
 @import "@/styles/views/order-pay-view.scss";
 </style>
