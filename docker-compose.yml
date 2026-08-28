@@ -105,6 +105,7 @@ services:
       - "8080:8081"
 
   # ==================== Nginx 前端 ====================
+  # 仅对宿主机公开内部端口 8880，公网 80/443 由宿主机 nginx 反代（配合 HTTPS 证书）
   frontend:
     build:
       context: .
@@ -114,7 +115,7 @@ services:
     depends_on:
       - backend
     ports:
-      - "80:80"
+      - "8880:80"
 
 volumes:
   mysql-data:
