@@ -123,51 +123,65 @@
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { imgUrl } from "@/utils/img.js";
 import { useBackNavigation } from "@/composables/useBackNavigation.js";
+import { useUserStore } from "@/stores/user";
 
 const { goBack } = useBackNavigation();
 
-const CHAT_STORAGE_KEY = "aiChatMessages";
 const CHAT_MAX_DAYS = 3;
 const CHAT_MAX_AGE = CHAT_MAX_DAYS * 24 * 60 * 60 * 1000;
 
 const inputMessage = ref("");
-const messages = ref(loadMessages());
 const loading = ref(false);
 const bodyRef = ref(null);
 const inputRef = ref(null);
-const conversationId = ref(localStorage.getItem("aiConversationId") || "");
+
+// 聊天记录按登录用户隔离存储，避免退出登录后其他账号看到历史记录
+const userStore = useUserStore();
+const chatScope = () =>
+  userStore.userInfo?.id ? `u${userStore.userInfo.id}` : "guest";
+const chatStorageKey = () => `aiChatMessages:${chatScope()}`;
+const productStorageKey = () => `aiProductCache:${chatScope()}`;
+const conversationStorageKey = () => `aiConversationId:${chatScope()}`;
+
+const messages = ref(loadMessages());
+const conversationId = ref(
+  localStorage.getItem(conversationStorageKey()) || "",
+);
 
 function loadMessages() {
   try {
-    const saved = localStorage.getItem(CHAT_STORAGE_KEY);
+    const saved = localStorage.getItem(chatStorageKey());
     if (!saved) return [];
     const all = JSON.parse(saved);
     const cutoff = Date.now() - CHAT_MAX_AGE;
-    return all.filter(m => !m.time || m.time > cutoff);
+    // 仅保留 3 天内的聊天记录；无有效时间字段的历史消息视为过期一并清除
+    return all.filter(m => m.time && m.time > cutoff);
   } catch { return []; }
 }
 
 function saveMessages() {
   try {
-    localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(messages.value));
+    // 保存时同样只保留 3 天内的消息，避免旧数据长期累积在 localStorage
+    const cutoff = Date.now() - CHAT_MAX_AGE;
+    const recent = messages.value.filter(m => m.time && m.time > cutoff);
+    localStorage.setItem(chatStorageKey(), JSON.stringify(recent));
   } catch { /* ignore quota */ }
 }
 
-// 商品卡片缓存 — 持久化到 localStorage
-const PRODUCT_CACHE_KEY = "aiProductCache";
+// 商品卡片缓存 — 按用户持久化到 localStorage
 const productCache = ref(loadProductCache());
 const cacheVersion = ref(0);
 
 function loadProductCache() {
   try {
-    const saved = localStorage.getItem(PRODUCT_CACHE_KEY);
+    const saved = localStorage.getItem(productStorageKey());
     return saved ? JSON.parse(saved) : {};
   } catch { return {}; }
 }
 
 function saveProductCache() {
   try {
-    localStorage.setItem(PRODUCT_CACHE_KEY, JSON.stringify(productCache.value));
+    localStorage.setItem(productStorageKey(), JSON.stringify(productCache.value));
   } catch { /* ignore */ }
 }
 
@@ -232,9 +246,9 @@ const newChat = () => {
   productCache.value = {};
   cacheVersion.value = 0;
   conversationId.value = "";
-  localStorage.removeItem("aiConversationId");
-  localStorage.removeItem(CHAT_STORAGE_KEY);
-  localStorage.removeItem(PRODUCT_CACHE_KEY);
+  localStorage.removeItem(conversationStorageKey());
+  localStorage.removeItem(chatStorageKey());
+  localStorage.removeItem(productStorageKey());
 };
 
 // 消息变化时自动持久化
@@ -358,7 +372,7 @@ const sendMessage = async (text) => {
           const parsed = JSON.parse(data);
           if (parsed.type === "meta" && parsed.conversationId) {
             conversationId.value = parsed.conversationId;
-            localStorage.setItem("aiConversationId", parsed.conversationId);
+            localStorage.setItem(conversationStorageKey(), parsed.conversationId);
             continue;
           }
           if (parsed.content) {
