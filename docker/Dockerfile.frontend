@@ -17,9 +17,9 @@ RUN npm run build
 FROM nginx:alpine
 
 # 新版 nginx 镜像默认将 pid 写入 /run/nginx.pid，在 CentOS7 老内核（3.10）容器中会因 pwrite 无权限
-# 导致启动失败并反复重启；这里显式把 pid 覆盖到可写的 /tmp 路径。
-RUN sed -i 's|pid /run/nginx.pid;|pid /tmp/nginx.pid;|' /etc/nginx/nginx.conf \
-    && { grep -q 'pid /tmp/nginx.pid' /etc/nginx/nginx.conf || printf 'pid /tmp/nginx.pid;\n' >> /etc/nginx/nginx.conf; }
+# 导致启动失败并反复重启；这里先删掉所有 pid 指令，再统一追加到可写的 /tmp 路径，避免重复指令。
+RUN sed -i '/^pid /d' /etc/nginx/nginx.conf \
+    && printf 'pid /tmp/nginx.pid;\n' >> /etc/nginx/nginx.conf
 
 # 移除默认配置
 RUN rm /etc/nginx/conf.d/default.conf
