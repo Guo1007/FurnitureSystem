@@ -41,5 +41,4 @@ public class AliYunOssConfig {
      * OSS访问域名URL
      */
     private String url;
-
 }
