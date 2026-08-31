@@ -14,7 +14,9 @@ COPY furniture-vue/ .
 RUN npm run build
 
 # ========== 阶段2: Nginx 运行 ==========
-FROM nginx:alpine
+# 固定到 nginx:1.25-alpine：新版 nginx:latest(1.31) 在 CentOS7 老内核(3.10) 容器中
+# 写 pid 文件会报 pwrite Operation not permitted；1.25 与老内核兼容稳定。
+FROM nginx:1.25-alpine
 
 # 新版 nginx 镜像默认将 pid 写入 /run/nginx.pid，在 CentOS7 老内核（3.10）容器中会因 pwrite 无权限
 # 导致启动失败并反复重启；这里先删掉所有 pid 指令，再统一追加到可写的 /tmp 路径，避免重复指令。
