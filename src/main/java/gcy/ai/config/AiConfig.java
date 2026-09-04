@@ -105,6 +105,8 @@ public class AiConfig {
         }
         log.info("开始摄入知识库文档到向量存储...");
         List<Document> documents = ClassPathDocumentLoader.loadDocuments("content");
+        // maxSegmentSizeInChars：每一段文档切片，最多允许多少个字符。
+        // maxOverlapSizeInChars：相邻两块之间，重复保留多少字符。
         DocumentSplitter splitter = DocumentSplitters.recursive(500, 100);
         EmbeddingStoreIngestor ingestor = EmbeddingStoreIngestor.builder()
                 .embeddingStore(redisEmbeddingStore)

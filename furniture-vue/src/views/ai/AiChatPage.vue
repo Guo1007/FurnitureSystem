@@ -11,19 +11,71 @@
     </div>
 
     <div class="chat-container">
-      <!-- 左侧聊天区 -->
+      <!-- 左侧：会话历史栏 -->
+      <aside class="sessions-panel" :class="{ open: drawerOpen }">
+        <div class="sessions-head">
+          <span class="sessions-title">会话历史</span>
+          <button class="icon-btn" @click="newChat" title="新建对话" :disabled="loading">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+          </button>
+        </div>
+
+        <div class="session-list">
+          <div
+            v-for="s in conversations"
+            :key="s.id"
+            class="session-item"
+            :class="{ 'is-active': s.id === activeId }"
+            @click="openSession(s.id)"
+          >
+            <div class="session-item-main">
+              <div class="session-item-title">{{ s.title || '新对话' }}</div>
+              <div class="session-item-meta">
+                <span>{{ s.messages.length }} 条</span>
+                <span>{{ fmtTime(s.updatedAt) }}</span>
+              </div>
+            </div>
+            <div class="session-item-ops" @click.stop>
+              <button class="op-btn" title="重命名" @click="renameSession(s)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+              </button>
+              <button class="op-btn danger" title="删除" @click="deleteSession(s)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <div v-if="conversations.length === 0" class="session-empty">
+            <span class="session-empty-icon">🗂️</span>
+            <p>暂无历史会话</p>
+            <p class="session-empty-sub">点击上方 + 开启新对话</p>
+          </div>
+        </div>
+
+        <div class="sessions-foot" v-if="conversations.length > 0">
+          <span>仅保留近 {{ CHAT_MAX_DAYS }} 天的会话</span>
+        </div>
+      </aside>
+
+      <!-- 移动端抽屉遮罩 -->
+      <div class="drawer-mask" v-if="drawerOpen" @click="drawerOpen = false"></div>
+
+      <!-- 右侧：对话区 -->
       <section class="chat-main">
         <div class="chat-header">
           <div class="header-left">
+            <button class="icon-btn drawer-toggle" @click="drawerOpen = true" title="会话列表">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+            </button>
             <div class="bot-avatar">智</div>
             <div class="header-text">
-              <h2>小智 AI 助手</h2>
+              <h2>{{ activeTitle || '小智 AI 助手' }}</h2>
               <p>随时为您解答家具选购疑问</p>
             </div>
           </div>
           <div class="header-actions">
-            <button class="icon-btn" @click="newChat" title="新对话">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+            <button class="icon-btn" @click="newChat" title="新对话" :disabled="loading">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
             </button>
           </div>
         </div>
@@ -81,46 +133,36 @@
         <!-- 输入区 -->
         <div class="chat-footer">
           <div class="input-row">
-            <input
+            <textarea
               v-model="inputMessage"
-              placeholder="输入您的问题..."
-              :disabled="loading"
-              @keydown.enter="sendMessage()"
               ref="inputRef"
-            />
+              rows="1"
+              placeholder="输入您的问题，Enter 发送，Shift + Enter 换行"
+              @keydown.enter="onEnter"
+              @input="autoResize"
+            ></textarea>
             <button
+              v-if="!loading"
               class="send-btn"
-              :disabled="!inputMessage.trim() || loading"
+              :disabled="!inputMessage.trim()"
               @click="sendMessage()"
+              title="发送"
             >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+            </button>
+            <button v-else class="send-btn stop" @click="stopGenerate" title="停止生成">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
             </button>
           </div>
         </div>
       </section>
-
-      <!-- 右侧侧边栏 -->
-      <aside class="chat-sidebar">
-        <div class="sidebar-card">
-          <h4>🕐 在线时间</h4>
-          <p>7×24 小时在线，随时为您服务</p>
-        </div>
-        <div class="sidebar-card">
-          <h4>📦 常见问题</h4>
-          <ul>
-            <li>如何选择合适的家具尺寸？</li>
-            <li>配送时效及运费说明</li>
-            <li>退换货政策及流程</li>
-            <li>实木家具日常保养</li>
-          </ul>
-        </div>
-      </aside>
     </div>
   </div>
 </template>
 
 <script setup>
-import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { ElMessage, ElMessageBox } from "element-plus";
 import { imgUrl } from "@/utils/img.js";
 import { useBackNavigation } from "@/composables/useBackNavigation.js";
 import { useUserStore } from "@/stores/user";
@@ -134,38 +176,91 @@ const inputMessage = ref("");
 const loading = ref(false);
 const bodyRef = ref(null);
 const inputRef = ref(null);
+const drawerOpen = ref(false);
 
-// 聊天记录按登录用户隔离存储，避免退出登录后其他账号看到历史记录
+// 会话数据按登录用户隔离存储，避免退出登录后其他账号看到历史记录
 const userStore = useUserStore();
 const chatScope = () =>
   userStore.userInfo?.id ? `u${userStore.userInfo.id}` : "guest";
+// 新版：多会话列表结构 [{id, title, createdAt, updatedAt, messages}]
+const convsStorageKey = () => `aiConversations:${chatScope()}`;
+// 旧版单会话存储键（用于数据迁移）
 const chatStorageKey = () => `aiChatMessages:${chatScope()}`;
-const productStorageKey = () => `aiProductCache:${chatScope()}`;
 const conversationStorageKey = () => `aiConversationId:${chatScope()}`;
+// 商品卡片缓存 — 按用户持久化，跨会话共享
+const productStorageKey = () => `aiProductCache:${chatScope()}`;
 
-const messages = ref(loadMessages());
-const conversationId = ref(
-  localStorage.getItem(conversationStorageKey()) || "",
-);
+// 仅保留 3 天内的消息；无有效时间字段的历史消息视为过期一并清除
+const filterRecent = (list) =>
+  (list || []).filter(m => m.time && m.time > Date.now() - CHAT_MAX_AGE);
 
-function loadMessages() {
+/**
+ * 加载多会话列表，兼容旧版单会话数据迁移。
+ * 旧数据（aiChatMessages + aiConversationId）在首次加载时转换为一条会话记录，
+ * 迁移后清空旧键。迁移会话若无后端 conversationId，使用 legacy- 前缀临时 ID，
+ * 首次续聊时由后端 meta 事件返回真实 ID 后替换。
+ */
+function loadConversations() {
   try {
-    const saved = localStorage.getItem(chatStorageKey());
-    if (!saved) return [];
-    const all = JSON.parse(saved);
-    const cutoff = Date.now() - CHAT_MAX_AGE;
-    // 仅保留 3 天内的聊天记录；无有效时间字段的历史消息视为过期一并清除
-    return all.filter(m => m.time && m.time > cutoff);
+    const saved = localStorage.getItem(convsStorageKey());
+    if (saved) {
+      const list = JSON.parse(saved);
+      if (!Array.isArray(list)) return [];
+      const cutoff = Date.now() - CHAT_MAX_AGE;
+      return list
+        .filter(c => c && c.updatedAt && c.updatedAt > cutoff)
+        .map(c => ({ ...c, messages: filterRecent(c.messages) }))
+        .sort((a, b) => b.updatedAt - a.updatedAt);
+    }
+    // 旧版单会话数据迁移
+    const oldRaw = localStorage.getItem(chatStorageKey());
+    if (!oldRaw) return [];
+    const oldId = localStorage.getItem(conversationStorageKey()) || "";
+    localStorage.removeItem(chatStorageKey());
+    localStorage.removeItem(conversationStorageKey());
+    let all = [];
+    try { all = JSON.parse(oldRaw); } catch { return []; }
+    const recent = filterRecent(all);
+    if (recent.length === 0) return [];
+    const firstUser = recent.find(m => m.role === "user");
+    return [{
+      id: oldId || `legacy-${Date.now()}`,
+      title: (firstUser ? firstUser.content : "历史会话").slice(0, 20),
+      createdAt: recent[0].time,
+      updatedAt: recent[recent.length - 1].time,
+      messages: recent,
+    }];
   } catch { return []; }
 }
 
-function saveMessages() {
+function saveConversations() {
   try {
-    // 保存时同样只保留 3 天内的消息，避免旧数据长期累积在 localStorage
-    const cutoff = Date.now() - CHAT_MAX_AGE;
-    const recent = messages.value.filter(m => m.time && m.time > cutoff);
-    localStorage.setItem(chatStorageKey(), JSON.stringify(recent));
+    localStorage.setItem(convsStorageKey(), JSON.stringify(conversations.value));
   } catch { /* ignore quota */ }
+}
+
+const conversations = ref(loadConversations());
+const activeId = ref("");
+
+const activeConv = () => conversations.value.find(c => c.id === activeId.value);
+const activeTitle = computed(() => activeConv()?.title || "");
+
+const messages = ref([]);
+
+let skipPersist = false;
+
+// 消息变化时同步到当前会话并持久化
+watch(messages, () => {
+  if (skipPersist) { skipPersist = false; return; }
+  persistToActive();
+}, { deep: true });
+
+function persistToActive() {
+  const conv = activeConv();
+  if (!conv) return;
+  conv.messages = filterRecent(messages.value);
+  conv.updatedAt = Date.now();
+  saveConversations();
 }
 
 // 商品卡片缓存 — 按用户持久化到 localStorage
@@ -216,17 +311,25 @@ const loadProductInfo = async (ids) => {
   cacheVersion.value++;
 };
 
+/** 恢复当前消息中引用的商品卡片 */
+const restoreProductCards = () => {
+  if (messages.value.length === 0) return;
+  const allIds = new Set();
+  messages.value.forEach(m => {
+    extractProductIds(m.content).forEach(id => allIds.add(id));
+  });
+  if (allIds.size > 0) loadProductInfo([...allIds]);
+};
+
 let abortController = null;
 
-onMounted(() => {
+onMounted(async () => {
   inputRef.value?.focus();
-  // 恢复历史消息中的商品卡片
-  if (messages.value.length > 0) {
-    const allIds = new Set();
-    messages.value.forEach(m => {
-      extractProductIds(m.content).forEach(id => allIds.add(id));
-    });
-    if (allIds.size > 0) loadProductInfo([...allIds]);
+  // 默认打开最近一个会话
+  if (conversations.value.length > 0) {
+    openSession(conversations.value[0].id);
+  } else {
+    restoreProductCards();
   }
 });
 
@@ -242,17 +345,69 @@ const quickQuestions = ref([
 ]);
 
 const newChat = () => {
+  if (loading.value) {
+    ElMessage.warning("正在生成回复，请稍候");
+    return;
+  }
+  activeId.value = "";
+  skipPersist = true;
   messages.value = [];
-  productCache.value = {};
-  cacheVersion.value = 0;
-  conversationId.value = "";
-  localStorage.removeItem(conversationStorageKey());
-  localStorage.removeItem(chatStorageKey());
-  localStorage.removeItem(productStorageKey());
+  drawerOpen.value = false;
+  nextTick(() => inputRef.value?.focus());
 };
 
-// 消息变化时自动持久化
-watch(messages, saveMessages, { deep: true });
+const openSession = (id) => {
+  if (loading.value) {
+    ElMessage.warning("正在生成回复，请稍候再切换");
+    return;
+  }
+  if (id === activeId.value) {
+    drawerOpen.value = false;
+    return;
+  }
+  const conv = conversations.value.find(c => c.id === id);
+  if (!conv) return;
+  activeId.value = id;
+  skipPersist = true;
+  messages.value = conv.messages.map(m => ({ ...m }));
+  drawerOpen.value = false;
+  restoreProductCards();
+  scrollToBottom();
+};
+
+const renameSession = async (s) => {
+  try {
+    const { value } = await ElMessageBox.prompt("请输入会话标题", "重命名会话", {
+      inputValue: s.title || "",
+      inputPlaceholder: "会话标题",
+      confirmButtonText: "保存",
+      cancelButtonText: "取消",
+    });
+    if (value && value.trim()) {
+      s.title = value.trim().slice(0, 30);
+      saveConversations();
+      ElMessage.success("已重命名");
+    }
+  } catch { /* 取消 */ }
+};
+
+const deleteSession = async (s) => {
+  try {
+    await ElMessageBox.confirm("删除后该会话的聊天记录将无法恢复，确认删除？", "删除会话", {
+      type: "warning",
+      confirmButtonText: "确认删除",
+      cancelButtonText: "取消",
+    });
+  } catch { return; }
+  conversations.value = conversations.value.filter(c => c.id !== s.id);
+  saveConversations();
+  if (s.id === activeId.value) {
+    activeId.value = "";
+    skipPersist = true;
+    messages.value = [];
+  }
+  ElMessage.success("已删除");
+};
 
 const scrollToBottom = () => {
   nextTick(() => {
@@ -315,12 +470,31 @@ const fmt = (content, _ver) => {
   return formatted;
 };
 
+/** 输入框自动增高（最多约 5 行） */
+const autoResize = () => {
+  const el = inputRef.value;
+  if (!el) return;
+  el.style.height = "auto";
+  el.style.height = Math.min(el.scrollHeight, 130) + "px";
+};
+
+const onEnter = (e) => {
+  if (e.shiftKey) return;
+  e.preventDefault();
+  sendMessage();
+};
+
+const stopGenerate = () => {
+  if (abortController) abortController.abort();
+};
+
 const sendMessage = async (text) => {
   const msg = text || inputMessage.value.trim();
   if (!msg || loading.value) return;
 
   messages.value.push({ role: "user", content: msg, time: Date.now() });
   inputMessage.value = "";
+  nextTick(autoResize);
   loading.value = true;
   scrollToBottom();
 
@@ -336,7 +510,9 @@ const sendMessage = async (text) => {
       },
       body: JSON.stringify({
         message: msg,
-        conversationId: conversationId.value || null,
+        // legacy- 前缀为迁移的旧会话临时 ID，不传给后端，由后端重新生成
+        conversationId: activeId.value && !activeId.value.startsWith("legacy-")
+          ? activeId.value : null,
       }),
       signal: abortController.signal,
     });
@@ -371,8 +547,25 @@ const sendMessage = async (text) => {
         try {
           const parsed = JSON.parse(data);
           if (parsed.type === "meta" && parsed.conversationId) {
-            conversationId.value = parsed.conversationId;
-            localStorage.setItem(conversationStorageKey(), parsed.conversationId);
+            const newId = parsed.conversationId;
+            if (!activeId.value) {
+              // 首条消息：创建会话记录入列表
+              activeId.value = newId;
+              conversations.value.unshift({
+                id: newId,
+                title: msg.slice(0, 20),
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+                messages: [],
+              });
+              persistToActive();
+            } else if (activeId.value.startsWith("legacy-")) {
+              // 迁移旧会话首次续聊：替换为后端真实 ID
+              const conv = activeConv();
+              if (conv) conv.id = newId;
+              activeId.value = newId;
+              saveConversations();
+            }
             continue;
           }
           if (parsed.content) {
@@ -408,6 +601,11 @@ const sendMessage = async (text) => {
     }
   } finally {
     loading.value = false;
+    // 停止/中断时若 AI 无任何回复内容，移除空消息
+    const last = messages.value[messages.value.length - 1];
+    if (last && last.role === "assistant" && !last.content) {
+      messages.value.pop();
+    }
     scrollToBottom();
   }
 };
