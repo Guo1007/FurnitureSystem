@@ -43,5 +43,4 @@ public class RedissonConfig {
         config.useSingleServer().setAddress("redis://" + redisHost + ":" + redisPort);
         return Redisson.create(config);
     }
-
 }
