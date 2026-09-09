@@ -149,3 +149,7 @@ app:
     allowed-origins:
       - http://localhost:5173
       - http://127.0.0.1:5173
+      - http://mingcheng.asia
+      - https://mingcheng.asia
+      - http://www.mingcheng.asia
+      - https://www.mingcheng.asia
