@@ -3039,6 +3039,7 @@ CREATE TABLE `order`  (
   PRIMARY KEY (`id`) USING BTREE,
   INDEX `user_id`(`user_id` ASC) USING BTREE,
   INDEX `idx_status`(`status` ASC) USING BTREE,
+  INDEX `idx_timeout_query`(`status` ASC, `create_time` ASC) USING BTREE COMMENT '超时未支付订单扫描优化(status=0 且 create_time 早于截止时间)',
   CONSTRAINT `order_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `user` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT
 ) ENGINE = InnoDB AUTO_INCREMENT = 2086819430708658179 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '订单表' ROW_FORMAT = DYNAMIC;
 
