@@ -492,7 +492,7 @@ watch(
       sortBy.value = "default";
       currentPage.value = 1;
       loadTypeInfo();
-      if (!isAllCategories.value) loadBrands();
+      loadBrands();
       loadFurnitureList();
     }
   },
@@ -500,7 +500,7 @@ watch(
 
 onMounted(() => {
   loadTypeInfo();
-  if (!isAllCategories.value) loadBrands();
+  loadBrands();
   if (route.query.keyword) searchForm.value.fName = route.query.keyword;
   loadFurnitureList();
 });
