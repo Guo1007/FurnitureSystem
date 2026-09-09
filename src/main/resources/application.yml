@@ -1,5 +1,4 @@
 spring:
-
   # 邮件配置（发送验证码等）
   mail:
     host: ${MAIL_HOST:smtp.qq.com}
