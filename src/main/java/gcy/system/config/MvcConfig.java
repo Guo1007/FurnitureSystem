@@ -1,6 +1,5 @@
 package gcy.system.config;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
@@ -9,7 +8,6 @@ import org.springframework.web.servlet.config.annotation.AsyncSupportConfigurer;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
-import java.util.List;
 import java.util.concurrent.Executor;
 
 /**
@@ -29,21 +27,17 @@ import java.util.concurrent.Executor;
 @Configuration
 public class MvcConfig implements WebMvcConfigurer {
 
-    @Value("${app.cors.allowed-origins:http://localhost:5173}")
-    private List<String> allowedOrigins;
-
     /**
      * 配置跨域资源共享（CORS）映射规则。
      * <p>
-     * 从配置文件中读取允许的前端域名白名单，支持携带凭证（Cookie），
-     * 并设置预检请求缓存时间为3600秒。
+     * 允许所有来源跨域访问，支持携带凭证（Cookie），并设置预检请求缓存时间为3600秒。
      *
      * @param registry CORS注册器，用于添加跨域映射规则
      */
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/**")
-                .allowedOriginPatterns(allowedOrigins.toArray(new String[0]))
+                .allowedOriginPatterns("*")
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
                 .allowedHeaders("*")
                 .allowCredentials(true)
