@@ -1,6 +1,6 @@
 <template>
   <div class="manage-page">
-    <h2 class="page-title">📧 邮件配置</h2>
+    <h2 class="page-title">邮件配置</h2>
 
     <el-card v-loading="loading">
       <!-- 列表展示：每个功能一行，独立配置邮件开关与接收管理员 -->

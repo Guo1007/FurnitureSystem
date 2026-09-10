@@ -23,7 +23,6 @@
       <el-button type="primary" @click="openAddDialog">发布通知</el-button>
       <el-button
         type="danger"
-        style="margin-left: 10px"
         :disabled="selectedNotifications.length === 0"
         @click="handleBatchDelete"
       >

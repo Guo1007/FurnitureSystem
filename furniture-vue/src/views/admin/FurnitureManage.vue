@@ -1,6 +1,6 @@
 <template>
   <div class="manage-page">
-    <h2 class="page-title">🛋️ 家具管理</h2>
+    <h2 class="page-title">家具管理</h2>
 
     <!-- 搜索栏 -->
     <div class="search-bar">
@@ -21,14 +21,14 @@
         v-model="searchForm.fName"
         placeholder="家具名称"
         clearable
-        style="width: 200px; margin-left: 10px"
+        style="width: 200px"
         @keyup.enter="handleSearch"
       />
       <el-select
         v-model="searchForm.stockStatus"
         placeholder="库存状态"
         clearable
-        style="width: 150px; margin-left: 10px"
+        style="width: 150px"
       >
         <el-option label="有库存" value="in_stock" />
         <el-option label="库存紧张" value="low_stock" />
@@ -38,9 +38,9 @@
         v-model="searchForm.brand"
         placeholder="品牌"
         clearable
-        style="width: 150px; margin-left: 10px"
+        style="width: 150px"
       />
-      <el-button type="primary" style="margin-left: 10px" @click="handleSearch"
+      <el-button type="primary" @click="handleSearch"
         >搜索</el-button
       >
       <el-button @click="resetSearch">重置</el-button>

@@ -1,68 +1,254 @@
-// SiteContentManage.vue 管理端样式
-.page-title {
-  margin: 0 0 24px 0;
-  font-size: 20px;
-  color: var(--color-text-primary);
+// SiteContentManage.vue —— 首页内容管理端样式
+.manage-page {
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  min-height: calc(100vh - 108px);
 }
 
-.sc-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
-  gap: 20px;
+.cv-topbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+
+  .page-title {
+    margin: 0;
+    font-size: 20px;
+    color: var(--color-text-primary);
+  }
+  .page-sub {
+    margin: 6px 0 0;
+    font-size: 13px;
+    color: var(--color-text-tertiary);
+  }
 }
-.sc-card {
-  background: #fff;
+
+.cv-tabs {
+  :deep(.el-tabs__header) {
+    margin-bottom: 18px;
+  }
+}
+
+/* ===== 轮播实时预览 ===== */
+.cv-preview {
+  background: var(--color-surface);
   border: 1px solid var(--color-border-light);
   border-radius: var(--radius-lg);
-  padding: 20px;
+  padding: 16px;
+  margin-bottom: 18px;
+  box-shadow: var(--shadow-xs);
 }
-.sc-card-hd {
+.cv-preview-hd {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
-}
-.sc-key {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--color-text-secondary);
-  font-family: monospace;
-}
-.sc-form :deep(.el-form-item) {
-  margin-bottom: 12px;
-}
-.sc-form :deep(.el-form-item__label) {
-  font-size: 12px;
-}
-.sc-card-actions {
-  display: flex;
   gap: 8px;
-  justify-content: flex-end;
-  margin-top: 16px;
-  padding-top: 16px;
-  border-top: 1px solid var(--color-border-light);
+  margin-bottom: 14px;
+}
+.cv-preview-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+.cv-preview-count {
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+}
+.cv-preview-body {
+  position: relative;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.cv-mini-track {
+  display: flex;
+  transition: transform var(--transition-normal);
+}
+.cv-mini-slide {
+  flex: 0 0 100%;
+  min-height: 132px;
+  padding: 22px 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.cv-mini-text {
+  flex: 1;
+}
+.cv-mini-tag {
+  font-size: 12px;
+  color: var(--color-accent);
+  margin-bottom: 8px;
+}
+.cv-mini-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin-bottom: 6px;
+}
+.cv-mini-desc {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+.cv-mini-emoji {
+  font-size: 44px;
+}
+.cv-mini-dots {
+  position: absolute;
+  bottom: 10px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+}
+.cv-mini-dots span {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.18);
+  cursor: pointer;
+  transition: background var(--transition-fast), width var(--transition-fast);
+}
+.cv-mini-dots span.on {
+  width: 20px;
+  border-radius: 6px;
+  background: var(--color-accent);
 }
 
+/* ===== 条目卡片列表 ===== */
+.cv-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+  gap: 18px;
+}
+.cv-item {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-lg);
+  padding: 16px 18px;
+  box-shadow: var(--shadow-xs);
+  transition: box-shadow var(--transition-fast);
+}
+.cv-item:hover {
+  box-shadow: var(--shadow-sm);
+}
+.cv-item-hd {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 12px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--color-border-light);
+}
+.cv-item-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+.cv-item-ops {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cv-move {
+  display: inline-flex;
+  gap: 4px;
+}
+.cv-move-btn {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--color-border-light);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--color-text-secondary);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.cv-move-btn:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+.cv-toggle {
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: #fff;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.cv-toggle:hover {
+  border-color: var(--color-warning);
+  color: var(--color-warning);
+}
+.cv-toggle.on {
+  background: var(--color-accent-subtle);
+  border-color: var(--color-accent-subtle);
+  color: var(--color-accent);
+}
+
+/* ===== 表单 ===== */
+.cv-form :deep(.el-form-item) {
+  margin-bottom: 14px;
+}
+.cv-form :deep(.el-form-item__label) {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+/* ===== 图片上传 ===== */
 .image-upload-row {
   display: flex;
   align-items: center;
   gap: 8px;
 }
-.sc-preview {
-  width: 48px;
-  height: 48px;
+.cv-thumb {
+  width: 56px;
+  height: 56px;
   object-fit: cover;
-  border-radius: 6px;
-  background: #f5f5f5;
+  border-radius: var(--radius-md);
+  background: #f5f3f0;
+  border: 1px solid var(--color-border-light);
 }
-.sc-no-img {
-  width: 48px;
-  height: 48px;
+.cv-thumb-none {
+  width: 56px;
+  height: 56px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f5f5f5;
-  border-radius: 6px;
-  color: #ccc;
+  background: #f5f3f0;
+  border-radius: var(--radius-md);
+  color: #c9c4bd;
   font-size: 11px;
+  border: 1px dashed var(--color-border);
+}
+
+/* ===== 联系我们面板（全宽） ===== */
+.cv-panel {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  max-width: 860px;
+}
+
+/* ===== 空状态 ===== */
+.cv-tabs :deep(.el-empty) {
+  padding: 48px 0;
+}
+
+/* ===== 跳转页面下拉 ===== */
+.cv-link-select {
+  width: 100%;
+}
+.cv-link-custom {
+  margin-top: 8px;
 }

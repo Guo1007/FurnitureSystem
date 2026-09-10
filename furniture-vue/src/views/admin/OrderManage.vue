@@ -1,6 +1,6 @@
 <template>
   <div class="manage-page">
-    <h2 class="page-title">📋 订单管理</h2>
+    <h2 class="page-title">订单管理</h2>
 
     <!-- 待发货提醒 -->
     <el-alert
@@ -33,7 +33,7 @@
         v-model="searchForm.status"
         placeholder="订单状态"
         clearable
-        style="width: 150px; margin-left: 10px"
+        style="width: 150px"
       >
         <el-option label="待支付" :value="0" />
         <el-option label="已支付" :value="1" />
@@ -49,24 +49,23 @@
         v-model="searchForm.phone"
         placeholder="收货手机号"
         clearable
-        style="width: 150px; margin-left: 10px"
+        style="width: 150px"
       />
       <el-input
         v-model="searchForm.consignee"
         placeholder="收货人姓名"
         clearable
-        style="width: 150px; margin-left: 10px"
+        style="width: 150px"
       />
-      <el-button type="primary" style="margin-left: 10px" @click="handleSearch"
+      <el-button type="primary" @click="handleSearch"
         >搜索</el-button
       >
       <el-button @click="resetSearch">重置</el-button>
-      <el-button type="success" style="margin-left: 20px" @click="handleExport"
+      <el-button type="success" @click="handleExport"
         >导出 Excel</el-button
       >
       <el-button
         type="danger"
-        style="margin-left: 10px"
         :disabled="selectedOrders.length === 0"
         @click="handleBatchDelete"
       >

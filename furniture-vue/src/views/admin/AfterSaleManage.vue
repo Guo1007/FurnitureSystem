@@ -1,6 +1,6 @@
 <template>
   <div class="manage-page">
-    <h2 class="page-title">🛠️ 售后处理</h2>
+    <h2 class="page-title">售后处理</h2>
 
     <!-- 页签 -->
     <el-tabs v-model="activeTab" @tab-change="handleTabChange" class="after-sale-tabs">

@@ -1,6 +1,6 @@
 <template>
   <div class="manage-page">
-    <h2 class="page-title">👥 用户管理</h2>
+    <h2 class="page-title">用户管理</h2>
 
     <!-- 搜索栏 -->
     <div class="search-bar">
@@ -15,19 +15,19 @@
         v-model="searchForm.email"
         placeholder="邮箱搜索"
         clearable
-        style="width: 200px; margin-left: 10px"
+        style="width: 200px"
         @keyup.enter="handleSearch"
       />
       <el-select
         v-model="searchForm.isAdmin"
         placeholder="用户类型"
         clearable
-        style="width: 150px; margin-left: 10px"
+        style="width: 150px"
       >
         <el-option label="普通用户" :value="0" />
         <el-option label="管理员" :value="1" />
       </el-select>
-      <el-button type="primary" style="margin-left: 10px" @click="handleSearch"
+      <el-button type="primary" @click="handleSearch"
         >搜索</el-button
       >
       <el-button @click="resetSearch">重置</el-button>
