@@ -77,5 +77,4 @@ public class Result {
     public static Result fail(Integer code, String msg) {
         return new Result(false, msg, null, null, code);
     }
-
 }
