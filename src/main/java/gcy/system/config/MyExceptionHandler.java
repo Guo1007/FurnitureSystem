@@ -66,44 +66,44 @@ public class MyExceptionHandler {
      * 处理 {@code @RequestBody} 注解的参数校验失败异常 {@link MethodArgumentNotValidException}。
      *
      * @param e 方法参数校验异常对象，包含校验失败的字段信息
-     * @return 包含 HTTP 400 状态码和第一个校验失败字段错误消息的统一响应结果
+     * @return 包含 HTTP 422 状态码和第一个校验失败字段错误消息的统一响应结果
      */
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    @ResponseStatus(HttpStatus.UNPROCESSABLE_ENTITY)
     public Result handleValidationException(MethodArgumentNotValidException e) {
         FieldError fieldError = e.getBindingResult().getFieldErrors().get(0);
         log.warn("RequestBody 参数校验失败: {} ({})", fieldError.getDefaultMessage(), fieldError.getField());
-        return Result.fail(400, fieldError.getDefaultMessage());
+        return Result.fail(422, fieldError.getDefaultMessage());
     }
 
     /**
      * 处理参数绑定异常 {@link BindException}（通常发生在 GET 请求表单参数绑定失败时）。
      *
      * @param e 参数绑定异常对象，包含绑定失败的字段信息
-     * @return 包含 HTTP 400 状态码和第一个绑定失败字段错误消息的统一响应结果
+     * @return 包含 HTTP 422 状态码和第一个绑定失败字段错误消息的统一响应结果
      */
     @ExceptionHandler(BindException.class)
-    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    @ResponseStatus(HttpStatus.UNPROCESSABLE_ENTITY)
     public Result handleBindException(BindException e) {
         FieldError fieldError = e.getBindingResult().getFieldErrors().get(0);
         log.warn("参数绑定失败: {} ({})", fieldError.getDefaultMessage(), fieldError.getField());
-        return Result.fail(400, fieldError.getDefaultMessage());
+        return Result.fail(422, fieldError.getDefaultMessage());
     }
 
     /**
      * 处理约束违反异常 {@link ConstraintViolationException}（通常发生在方法参数校验失败时，如 {@code @Validated} 在类级别使用）。
      *
      * @param e 约束违反异常对象，包含所有违反约束的详细信息
-     * @return 包含 HTTP 400 状态码和所有约束违反消息（以逗号分隔）的统一响应结果
+     * @return 包含 HTTP 422 状态码和所有约束违反消息（以逗号分隔）的统一响应结果
      */
     @ExceptionHandler(ConstraintViolationException.class)
-    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    @ResponseStatus(HttpStatus.UNPROCESSABLE_ENTITY)
     public Result handleConstraintViolationException(ConstraintViolationException e) {
         String message = e.getConstraintViolations().stream()
                 .map(ConstraintViolation::getMessage)
                 .collect(Collectors.joining(", "));
         log.warn("ConstraintViolation 约束违反: {}", message);
-        return Result.fail(400, message);
+        return Result.fail(422, message);
     }
 
     /**
@@ -178,7 +178,7 @@ public class MyExceptionHandler {
      * @return 包含 HTTP 413 状态码和文件大小限制提示的统一响应结果
      */
     @ExceptionHandler(MaxUploadSizeExceededException.class)
-    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    @ResponseStatus(HttpStatus.PAYLOAD_TOO_LARGE)
     public Result handleMaxUploadSizeExceeded(MaxUploadSizeExceededException e) {
         log.warn("文件大小超出限制: {}", e.getMessage());
         return Result.fail(413, "上传文件过大，请选择小于 5MB 的文件");
