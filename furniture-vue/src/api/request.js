@@ -64,7 +64,7 @@ service.interceptors.response.use(
       if (res.code === 401 || res.code === "401") {
         const isProtected = handleUnauthorized();
         if (isProtected && _shouldShowError("401")) {
-          ElMessage.error("登录已过期，请重新登录");
+          ElMessage.error(res.msg || "登录已过期，请重新登录");
         }
         return Promise.reject(res);
       }
@@ -81,14 +81,14 @@ service.interceptors.response.use(
     if (error.response) {
       const status = error.response.status;
       if (status === 401) {
+        // 401：登录态失效。读取后端 msg，区分「登录已过期」与「被顶下线」；
+        // 无论是否受保护页面都提前 return，避免落入下方通用“网络异常”提示
+        const msg = error.response.data?.msg || "登录已过期，请重新登录";
+        handleUnauthorized();
         if (_shouldShowError("401")) {
-          const isProtected = handleUnauthorized();
-          if (isProtected) {
-            ElMessage.error("登录已过期，请重新登录");
-          }
-        } else {
-          return Promise.reject(error);
+          ElMessage.error(msg);
         }
+        return Promise.reject(error);
       } else if (status === 404) {
         message = "页面或资源不存在";
       } else if (status === 500) {
