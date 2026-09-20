@@ -6,6 +6,8 @@ import cn.hutool.core.lang.Assert;
 import cn.hutool.core.lang.UUID;
 import cn.hutool.core.util.RandomUtil;
 import cn.hutool.core.util.StrUtil;
+import cn.hutool.http.useragent.UserAgent;
+import cn.hutool.http.useragent.UserAgentUtil;
 import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import gcy.system.entity.dto.*;
@@ -31,6 +33,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.time.LocalDateTime;
 import java.util.Collections;
@@ -637,18 +641,74 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         UserDTO userDTO = BeanUtil.copyProperties(user, UserDTO.class);
         userDTO.setHasPassword(StrUtil.isNotBlank(user.getPassWord()));
         String token = UUID.randomUUID(true).toString();
-        saveUserToRedis(userDTO, token);
+        String clientType = resolveClientType();
 
         Long userId = user.getId();
         String setKey = LOGIN_USER_TOKENS_SET + userId;
+
+        // 同端互踢：登录前先清理该用户同类型端（PC/MOBILE）的旧会话，不同端可并存
+        evictSameClientTypeTokens(setKey, clientType, token);
+
+        saveUserToRedis(userDTO, token);
+        // 端类型写入登录态 Hash，供同端互踢识别
+        stringRedisTemplate.opsForHash().put(LOGIN_USER_KEY + token, LOGIN_CLIENT_TYPE_FIELD, clientType);
 
         // 把新 token SADD 进用户的 Token Set
         stringRedisTemplate.opsForSet().add(setKey, token);
         // 给 Set Key 也设置同样的 TTL
         stringRedisTemplate.expire(setKey, LOGIN_USER_TTL, TimeUnit.SECONDS);
 
-        log.info("用户登录成功: userId={}, email={}", user.getId(), user.getEmail());
+        log.info("用户登录成功: userId={}, email={}, clientType={}", user.getId(), user.getEmail(), clientType);
         return Result.ok(token);
+    }
+
+    /**
+     * 从当前请求 User-Agent 解析端类型（PC / MOBILE），解析失败视为 PC。
+     */
+    private String resolveClientType() {
+        ServletRequestAttributes attrs = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+        if (attrs == null) {
+            return "PC";
+        }
+        String ua = attrs.getRequest().getHeader("User-Agent");
+        if (StrUtil.isBlank(ua)) {
+            return "PC";
+        }
+        try {
+            UserAgent agent = UserAgentUtil.parse(ua);
+            return agent.isMobile() ? "MOBILE" : "PC";
+        } catch (Exception e) {
+            log.warn("端类型识别失败，按PC处理。User-Agent={}", ua);
+            return "PC";
+        }
+    }
+
+    /**
+     * 清理指定用户下与当前登录端类型相同的旧会话 token（同端互踢）。
+     * 未记录端类型的历史 token 不处理，避免误踢已有会话。
+     *
+     * @param setKey     用户 Token Set 的 key
+     * @param clientType 本次登录的端类型（PC / MOBILE）
+     * @param newToken   本次登录的新 token（跳过，不误删自身）
+     */
+    private void evictSameClientTypeTokens(String setKey, String clientType, String newToken) {
+        Set<String> tokens = stringRedisTemplate.opsForSet().members(setKey);
+        if (tokens == null || tokens.isEmpty()) {
+            return;
+        }
+        for (String t : tokens) {
+            if (StrUtil.equals(t, newToken)) {
+                continue;
+            }
+            Object type = stringRedisTemplate.opsForHash().get(LOGIN_USER_KEY + t, LOGIN_CLIENT_TYPE_FIELD);
+            if (type != null && clientType.equals(String.valueOf(type))) {
+                stringRedisTemplate.delete(LOGIN_USER_KEY + t);
+                // 写入被踢标记，供过滤器区分「登录已过期」与「被强制下线」
+                stringRedisTemplate.opsForValue().set(LOGIN_KICKED_KEY + t, "1", LOGIN_KICKED_TTL, TimeUnit.SECONDS);
+                stringRedisTemplate.opsForSet().remove(setKey, t);
+                log.info("同端互踢已下线旧会话: token={}, clientType={}", t, clientType);
+            }
+        }
     }
 
     /**

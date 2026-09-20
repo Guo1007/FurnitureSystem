@@ -1,6 +1,8 @@
 package gcy.system.security;
 
 import cn.hutool.core.bean.BeanUtil;
+import cn.hutool.json.JSONUtil;
+import gcy.system.entity.dto.Result;
 import gcy.system.entity.dto.UserDTO;
 import gcy.system.utils.RedisConstants;
 import gcy.system.utils.UserHolder;
@@ -85,6 +87,11 @@ public class TokenAuthFilter extends OncePerRequestFilter {
             Map<Object, Object> userMap = stringRedisTemplate.opsForHash().entries(hashKey);
 
             if (userMap.isEmpty()) {
+                // 区分被踢下线与登录过期：Hash 不存在，但存在被踢标记 → 强制下线
+                if (Boolean.TRUE.equals(stringRedisTemplate.hasKey(RedisConstants.LOGIN_KICKED_KEY + token))) {
+                    writeUnauthorized(response, "您的账号已在其他设备登录，您已被强制下线");
+                    return;
+                }
                 filterChain.doFilter(request, response);
                 return;
             }
@@ -105,7 +112,11 @@ public class TokenAuthFilter extends OncePerRequestFilter {
                         stringRedisTemplate.delete(hashKey);
                         // 日志不记录完整 token（token 即 Redis 键，泄露可会话劫持），只记录 userId
                         logger.warn("Token 不在用户的有效 Set 中，判定为已被踢下线，userId=" + userId);
-                        filterChain.doFilter(request, response);
+                        if (Boolean.TRUE.equals(stringRedisTemplate.hasKey(RedisConstants.LOGIN_KICKED_KEY + token))) {
+                            writeUnauthorized(response, "您的账号已在其他设备登录，您已被强制下线");
+                        } else {
+                            filterChain.doFilter(request, response);
+                        }
                         return;
                     }
 
@@ -134,5 +145,18 @@ public class TokenAuthFilter extends OncePerRequestFilter {
         } finally {
             UserHolder.removeUser();
         }
+    }
+
+    /**
+     * 直接写出 401 未认证响应（带业务提示）。
+     * 用于被踢下线场景下，向被挤下线的设备返回明确的错误信息。
+     *
+     * @param response HTTP 响应对象
+     * @param msg      返回给客户端的提示文案
+     */
+    private void writeUnauthorized(HttpServletResponse response, String msg) throws IOException {
+        response.setStatus(401);
+        response.setContentType("application/json;charset=utf-8");
+        response.getWriter().write(JSONUtil.toJsonStr(Result.fail(401, msg)));
     }
 }

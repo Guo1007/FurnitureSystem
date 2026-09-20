@@ -79,6 +79,22 @@ public final class RedisConstants {
      */
     public static final String LOGIN_USER_TOKENS_SET = "login:user:tokens:set:";
 
+    /**
+     * 登录态 Hash 中的端类型字段（值：PC / MOBILE），用于同端互踢
+     */
+    public static final String LOGIN_CLIENT_TYPE_FIELD = "clientType";
+
+    /**
+     * 被踢下线标记 key，后接 token。存在即表示该会话已被同类型端登录挤下线，
+     * 用于前端区分「登录已过期」与「被强制下线」。
+     */
+    public static final String LOGIN_KICKED_KEY = "login:kick:";
+
+    /**
+     * 被踢标记有效期（秒），2 分钟，足够前端收到 401 后识别
+     */
+    public static final Long LOGIN_KICKED_TTL = 120L;
+
     // ==================== 缓存 ====================
 
     /**
