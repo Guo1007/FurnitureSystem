@@ -31,6 +31,13 @@
       class="cart-drawer"
     >
       <div class="cart-content">
+        <!-- 领券通栏入口 -->
+        <router-link to="/coupons" class="coupon-banner" @click="cartStore.closeCart()">
+          <span class="coupon-banner-icon">🎁</span>
+          <span class="coupon-banner-text">领券中心 · 满减券、折扣券、无门槛券等你领</span>
+          <span class="coupon-banner-btn">去领券</span>
+        </router-link>
+
         <!-- 空状态 -->
         <div v-if="cartStore.isEmpty" class="cart-empty">
           <div class="empty-icon">🛒</div>
@@ -85,6 +92,43 @@
                 删除
               </el-button>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 优惠券 -->
+      <div v-if="!cartStore.isEmpty" class="coupon-select">
+        <div class="coupon-select-hd">
+          <span class="label">优惠券</span>
+          <button class="picker" @click="toggleCouponPanel">
+            <span v-if="selectedCoupon">
+              {{ selectedCoupon.name }}
+              <em class="picker-save">-{{ formatPrice(discountEstimate) }}</em>
+            </span>
+            <span v-else>{{ availableCoupons.length ? "选择优惠券" : "暂无可用优惠券" }}</span>
+            <span class="arrow">▾</span>
+          </button>
+        </div>
+        <div v-if="showCouponPanel" class="coupon-panel">
+          <div class="coupon-opt" @click="selectCoupon(null)">不使用优惠券</div>
+          <div
+            v-for="c in availableCoupons"
+            :key="c.userCouponId"
+            class="coupon-opt"
+            :class="{ on: selectedCoupon?.userCouponId === c.userCouponId }"
+            @click="selectCoupon(c)"
+          >
+            <div class="opt-info">
+              <b>{{ c.amountText }}</b>
+              <span>{{ c.name }}</span>
+              <span v-if="Number(c.minThreshold) > 0" class="opt-threshold"
+                >满{{ c.minThreshold }}可用</span
+              >
+            </div>
+            <div class="opt-discount">-{{ formatPrice(estimateCoupon(c)) }}</div>
+          </div>
+          <div v-if="!availableCoupons.length" class="coupon-none">
+            当前购物车暂无可用优惠券
           </div>
         </div>
       </div>
@@ -194,7 +238,13 @@
         <div class="cart-footer">
           <div class="footer-info">
             <span class="total-count">共 {{ cartStore.totalCount }} 件</span>
-            <span class="total-price">合计：¥{{ cartStore.totalPrice }}</span>
+            <span class="total-price">
+              <template v-if="discountEstimate > 0">
+                <span class="og-price">¥{{ formatPrice(cartStore.totalPrice) }}</span>
+                -{{ formatPrice(discountEstimate) }}
+              </template>
+              合计：¥{{ formatPrice(cartStore.totalPrice - discountEstimate) }}
+            </span>
           </div>
           <div class="footer-actions">
             <el-button type="danger" plain @click="cartStore.clearCart"
@@ -216,6 +266,7 @@ import { useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
 import { createOrder } from "@/api/order.js";
 import { getAddressList, saveAddress } from "@/api/address.js";
+import { getMyCoupons } from "@/api/coupon.js";
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { imgUrl } from "@/utils/img.js";
 import { formatPrice } from "@/utils/format.js";
@@ -225,6 +276,56 @@ import { useRequireLogin } from "@/composables/useRequireLogin.js";
 const cartStore = useCartStore();
 const router = useRouter();
 const { requireLogin } = useRequireLogin();
+
+// ========== 优惠券 ==========
+const mineCoupons = ref([]);
+const selectedCoupon = ref(null);
+const showCouponPanel = ref(false);
+
+const loadCoupons = async () => {
+  const res = await getMyCoupons();
+  mineCoupons.value = (res.success || res.code === 200) ? res.data || [] : [];
+};
+
+// 可用券：未用+未过期+满足门槛
+const availableCoupons = computed(() => {
+  const total = Number(cartStore.totalPrice || 0);
+  return mineCoupons.value.filter((c) => {
+    if (c.status !== 0) return false;
+    if (c.expireTime) {
+      const t = Array.isArray(c.expireTime)
+        ? new Date(c.expireTime[0], c.expireTime[1] - 1, c.expireTime[2])
+        : new Date(c.expireTime);
+      if (t.getTime() < Date.now()) return false;
+    }
+    if (Number(c.minThreshold) > total) return false;
+    return true;
+  });
+});
+
+// 预估优惠额（与服务端口径一致，最终以服务端为准）
+const estimateCoupon = (c) => {
+  const total = Number(cartStore.totalPrice || 0);
+  let d = 0;
+  if (c.type === 2 && c.discount) d = total * (1 - Number(c.discount));
+  else if (c.amount) d = Number(c.amount);
+  if (c.capAmount && d > Number(c.capAmount)) d = Number(c.capAmount);
+  d = Math.min(d, total);
+  return Math.max(0, Math.round(d * 100) / 100);
+};
+
+const discountEstimate = computed(() =>
+  selectedCoupon.value ? estimateCoupon(selectedCoupon.value) : 0,
+);
+
+const toggleCouponPanel = () => {
+  showCouponPanel.value = !showCouponPanel.value;
+};
+
+const selectCoupon = (c) => {
+  selectedCoupon.value = c;
+  showCouponPanel.value = false;
+};
 
 const btnPosition = ref({ x: 0, y: 0 });
 const isDragging = ref(false);
@@ -410,6 +511,7 @@ watch(
       showAddressForm.value = false;
       if (localStorage.getItem("token")) {
         loadAddresses();
+        loadCoupons();
       }
     } else {
       // 抽屉关闭时清除本次结算的勾选集合，避免残留影响下次结算
@@ -442,6 +544,7 @@ const checkout = async () => {
       phone: selectedAddress.value.phone,
       address: selectedAddress.value.address,
       remark: "",
+      userCouponId: selectedCoupon.value?.userCouponId || undefined,
       // 优先结算购物车页勾选的商品；从顶部图标直接打开抽屉时为空，则结算全部
       itemList: cartStore.getCartData(cartStore.checkoutIds),
     };

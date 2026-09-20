@@ -697,11 +697,15 @@
         <div class="detail-summary">
           <div class="summary-row">
             <span>商品总额</span>
-            <span>¥{{ formatPrice(currentOrder.totalPrice) }}</span>
+            <span>¥{{ formatPrice(Number(currentOrder.totalPrice) + Number(currentOrder.couponDiscount || 0)) }}</span>
           </div>
           <div class="summary-row">
             <span>运费</span>
             <span>¥0.00</span>
+          </div>
+          <div class="summary-row" v-if="Number(currentOrder.couponDiscount || 0) > 0">
+            <span>优惠券抵扣</span>
+            <span class="discount">-¥{{ formatPrice(currentOrder.couponDiscount) }}</span>
           </div>
           <div class="summary-row total">
             <span>实付金额</span>

@@ -172,6 +172,19 @@
           </div>
         </el-card>
 
+        <el-card shadow="hover" class="feature-card" @click="goToCoupons">
+          <div class="card-icon-box" style="background: #faf3eb">
+            <el-icon :size="28" color="#b8753e"><Tickets /></el-icon>
+          </div>
+          <div class="card-info">
+            <h3>我的卡券</h3>
+            <p>领取和使用优惠券</p>
+          </div>
+          <div class="card-arrow">
+            <el-icon><ArrowRight /></el-icon>
+          </div>
+        </el-card>
+
         <el-card shadow="hover" class="feature-card" @click="goToNotifications">
           <div class="card-icon-box" style="background: #f0f2f0">
             <el-icon :size="28" color="#2c2c2c"><Bell /></el-icon>
@@ -398,6 +411,7 @@ import {
   ShoppingCart,
   Star,
   SwitchButton,
+  Tickets,
   User,
   Warning,
 } from "@element-plus/icons-vue";
@@ -441,6 +455,7 @@ const {
 
 const goToOrders = () => router.push("/user/orders");
 const goToFavorites = () => router.push("/user/favorites");
+const goToCoupons = () => router.push("/user/coupons");
 const goToNotifications = () => router.push("/notification");
 const goToAddresses = () => router.push("/user/addresses");
 

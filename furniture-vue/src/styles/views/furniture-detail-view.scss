@@ -558,6 +558,29 @@
   padding: 12px 20px;
 }
 
+/* ===== 立即购买弹窗 —— 底部按钮对齐 ===== */
+.buy-dialog {
+  :deep(.el-dialog__footer) {
+    padding: 8px 24px 20px;
+  }
+  :deep(.dialog-footer) {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 12px;
+
+    /* 两个等高大按钮，保证垂直齐平 */
+    .el-button {
+      height: 40px;
+      line-height: 38px;
+      padding: 0 24px;
+    }
+    .el-button--primary {
+      font-weight: 500;
+    }
+  }
+}
+
 .video-preview-body {
   display: flex;
   justify-content: center;

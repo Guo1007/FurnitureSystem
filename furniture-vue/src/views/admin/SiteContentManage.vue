@@ -13,6 +13,10 @@
     <el-tabs v-model="activeGroup" class="cv-tabs">
       <!-- 轮播图 -->
       <el-tab-pane label="轮播图" name="carousel">
+        <div class="cv-toolbar">
+          <el-button type="primary" @click="handleAddCarousel">+ 新增轮播图</el-button>
+          <span class="cv-toolbar-tip">可新增任意多张，前台自动循环展示</span>
+        </div>
         <el-empty
           v-if="!carouselItems.length"
           description="暂无轮播图数据"
@@ -67,6 +71,9 @@
                     @click="toggleItem(item)"
                   >
                     {{ item.isActive === 1 ? "已启用" : "已停用" }}
+                  </button>
+                  <button class="cv-del-btn" title="删除" @click="handleDeleteItem(item)">
+                    🗑 删除
                   </button>
                 </div>
               </div>
@@ -160,6 +167,9 @@
                 >
                   {{ item.isActive === 1 ? "已启用" : "已停用" }}
                 </button>
+                <button class="cv-del-btn" title="删除" @click="handleDeleteItem(item)">
+                  🗑 删除
+                </button>
               </div>
             </div>
             <el-form label-width="84px" class="cv-form">
@@ -223,8 +233,9 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref } from "vue";
-import { ElMessage } from "element-plus";
+import { ElMessage, ElMessageBox } from "element-plus";
 import {
+  deleteSiteContent,
   getAdminSiteContentList,
   saveSiteContent,
   toggleSiteContent,
@@ -234,6 +245,7 @@ import { imgUrl } from "@/utils/img.js";
 
 const activeGroup = ref("carousel");
 const list = ref([]);
+const needRefresh = ref(false);
 const extraCache = reactive({});
 const contactExtra = reactive({
   phone: "",
@@ -256,7 +268,8 @@ const parseExtra = (str) => {
 };
 
 /* ---------- 字段显隐规则（与实际前台消费保持一致） ---------- */
-const hasImage = (key) => ["hero_1", "hero_2", "hero_3", "system_logo"].includes(key);
+const hasImage = (key) =>
+  (key && key.startsWith("hero_")) || key === "system_logo";
 const hasIcon = (key) => key.startsWith("value_") || key.startsWith("service_");
 const hasTitle = (key) => !["system_logo", "contact_info"].includes(key);
 const hasText = (key) =>
@@ -279,16 +292,29 @@ const linkOptions = [
   { label: "不跳转", value: "" },
   { label: "全部商品", value: "/type/0" },
   { label: "AI 智能导购", value: "/ai-chat" },
+  { label: "领券中心", value: "/coupons" },
   { label: "关于我们", value: "/about" },
   { label: "自定义链接", value: "__custom" },
 ];
 
+// 记录处于"自定义链接"编辑态的项（内存态，不入库）。用 reactive Set 保证选中后可刷新界面
+const customLinks = reactive(new Set());
+
+// 是否为自定义链接：显式切换过，或 linkUrl 不在预设项里
+const isCustomLink = (item) =>
+  customLinks.has(item) ||
+  (item.linkUrl && !linkOptions.some((o) => o.value === item.linkUrl));
+
 // 当前链接若已在预设选项中则显示对应项，否则显示"自定义链接"
-const linkValue = (item) =>
-  linkOptions.some((o) => o.value === item.linkUrl) ? item.linkUrl || "" : "__custom";
+const linkValue = (item) => (isCustomLink(item) ? "__custom" : item.linkUrl || "");
 
 const onLinkChange = (item, val) => {
-  if (val !== "__custom") item.linkUrl = val;
+  if (val === "__custom") {
+    customLinks.add(item); // 进入自定义编辑态，保留当前 linkUrl 不动
+    return;
+  }
+  customLinks.delete(item);
+  item.linkUrl = val;
 };
 
 /* ---------- 分组定义 ---------- */
@@ -300,6 +326,11 @@ const commonTabs = [
 ];
 
 const keyLabel = (key) => {
+  // 动态轮播：hero_N → 轮播图 N
+  if (key && key.startsWith("hero_")) {
+    const m = /^hero_(\d+)$/.exec(key);
+    if (m) return "轮播图 " + m[1];
+  }
   const map = {
     hero_1: "轮播图 ①",
     hero_2: "轮播图 ②",
@@ -355,6 +386,34 @@ const loadData = async () => {
   }
 };
 
+/* ---------- 新增轮播图 ---------- */
+const handleAddCarousel = () => {
+  const items = filteredBy("carousel");
+  let maxSeq = 0;
+  items.forEach((i) => {
+    const m = /^hero_(\d+)$/.exec(i.sectionKey || "");
+    if (m) maxSeq = Math.max(maxSeq, Number(m[1]));
+  });
+  const maxSort = items.reduce((mx, i) => Math.max(mx, i.sortOrder || 0), 0);
+  const newItem = {
+    id: -Date.now(), // 临时负 id，保存后由后端落库自增
+    sectionKey: "hero_" + (maxSeq + 1),
+    sectionGroup: "carousel",
+    contentTitle: "",
+    contentText: "",
+    imageUrl: "",
+    linkUrl: "/type/0",
+    extraData: "{}",
+    sortOrder: maxSort + 1,
+    isActive: 1,
+    deleted: 0,
+  };
+  list.value.push(newItem);
+  extraCache[newItem.id] = {};
+  activeGroup.value = "carousel";
+  ElMessage.success("已新增空轮播，编辑后点击保存");
+};
+
 /* ---------- 保存当前分组 ---------- */
 const saveGroup = async () => {
   saving.value = true;
@@ -369,13 +428,25 @@ const saveGroup = async () => {
       } else {
         it.extraData = JSON.stringify(extraCache[it.id] || {});
       }
-      const res = await saveSiteContent({ ...it });
+      const payload = { ...it };
+      // 未落库的临时项（负 id）：不传给后端，让数据库自增主键，避免溢出
+      let hadTemp = false;
+      if (payload.id && payload.id < 0) {
+        delete payload.id;
+        hadTemp = true;
+      }
+      const res = await saveSiteContent(payload);
       if (!(res.success || res.code === 200)) {
         ElMessage.error(res.msg || `${it.sectionKey || it.id} 保存失败`);
         return;
       }
+      if (hadTemp) needRefresh.value = true;
     }
     ElMessage.success("当前分组已保存，前台已同步");
+    if (needRefresh.value) {
+      needRefresh.value = false;
+      loadData(); // 刷新拿到真实 id，便于后续删除/启停
+    }
   } catch {
     ElMessage.error("保存失败，请稍后重试");
   } finally {
@@ -394,6 +465,36 @@ const move = async (item, dir) => {
     items[i].sortOrder,
   ];
   await saveGroup();
+};
+
+/* ---------- 删除某项 ---------- */
+const handleDeleteItem = async (item) => {
+  // 未落库的临时项（负 id）：直接本地移除
+  if (item.id < 0) {
+    list.value = list.value.filter((i) => i.id !== item.id);
+    delete extraCache[item.id];
+    return;
+  }
+  try {
+    await ElMessageBox.confirm(
+      `确定删除该${item.sectionGroup === "carousel" ? "轮播" : "内容"}吗？`,
+      "提示",
+      {
+        confirmButtonText: "删除",
+        cancelButtonText: "取消",
+        type: "warning",
+      },
+    );
+    const res = await deleteSiteContent(item.id);
+    if (res.success || res.code === 200) {
+      ElMessage.success("删除成功");
+      loadData();
+    } else {
+      ElMessage.error(res.msg || "删除失败");
+    }
+  } catch (e) {
+    if (e !== "cancel") ElMessage.error("删除失败");
+  }
 };
 
 /* ---------- 状态切换 ---------- */

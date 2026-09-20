@@ -56,6 +56,19 @@
 
         <el-divider />
 
+        <!-- 金额明细（含优惠券抵扣） -->
+        <div class="amount-detail" v-if="Number(orderInfo?.couponDiscount || 0) > 0">
+          <div class="info-row">
+            <span>商品总额</span>
+            <span>¥{{ formatPrice(Number(orderInfo.totalPrice) + Number(orderInfo.couponDiscount)) }}</span>
+          </div>
+          <div class="info-row discount">
+            <span>优惠券抵扣</span>
+            <span>-¥{{ formatPrice(orderInfo.couponDiscount) }}</span>
+          </div>
+          <el-divider />
+        </div>
+
         <!-- 支付金额 -->
         <div class="pay-amount">
           <span>应付金额</span>

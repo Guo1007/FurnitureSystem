@@ -59,6 +59,12 @@ const router = createRouter({
           meta: { public: true },
         },
         {
+          path: "coupons",
+          name: "Coupons",
+          component: () => import("@/views/coupon/CouponCenter.vue"),
+          meta: { requiresAuth: true },
+        },
+        {
           path: "ai-chat",
           name: "AiChat",
           component: () => import("@/views/ai/AiChatPage.vue"),
@@ -83,6 +89,12 @@ const router = createRouter({
               path: "favorites",
               name: "UserFavorites",
               component: () => import("@/views/user/UserFavoritesView.vue"),
+              meta: { requiresAuth: true },
+            },
+            {
+              path: "coupons",
+              name: "MyCoupons",
+              component: () => import("@/views/coupon/MyCoupons.vue"),
               meta: { requiresAuth: true },
             },
             {
@@ -134,6 +146,10 @@ const router = createRouter({
         {
           path: "furniture_type",
           component: () => import("@/views/admin/FurnitureTypeManage.vue"),
+        },
+        {
+          path: "coupons",
+          component: () => import("@/views/admin/CouponManage.vue"),
         },
         {
           path: "notification",

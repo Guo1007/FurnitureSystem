@@ -4,6 +4,7 @@ import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import gcy.system.entity.dto.CartFormDTO;
@@ -72,6 +73,10 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
 
     private final SpecValueMapper specValueMapper;
 
+    private final CouponMapper couponMapper;
+
+    private final UserCouponMapper userCouponMapper;
+
     private final RedissonClient redissonClient;
 
     /**
@@ -115,6 +120,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
             order.setStatus(PENDING_PAYMENT.getCode());
             order.setUserId(userId);
             BigDecimal totalAmount = BigDecimal.ZERO;
+            Set<Long> itemTypeIds = new HashSet<>();
             List<OrderItem> orderItems = new ArrayList<>();
             for (OrderItemDTO itemDto : items) {
                 Long furnitureId = itemDto.getFurnitureId();
@@ -126,6 +132,9 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
                 Furniture furniture = furnitureMapper.selectById(furnitureId);
                 if (furniture == null) {
                     throw new BusinessException("商品不存在或已下架");
+                }
+                if (furniture.getTypeId() != null) {
+                    itemTypeIds.add(furniture.getTypeId());
                 }
                 BigDecimal itemPrice;
                 if (skuId != null) {
@@ -185,6 +194,17 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
                 orderItems.add(orderItem);
             }
             order.setTotalPrice(totalAmount);
+            LocalDateTime now = LocalDateTime.now();
+            // 优惠券抵扣
+            if (dto.getUserCouponId() != null) {
+                Coupon usedCoupon = validateCoupon(userId, dto.getUserCouponId(), totalAmount, itemTypeIds, now);
+                if (usedCoupon != null) {
+                    BigDecimal discount = calcCouponDiscount(usedCoupon, totalAmount);
+                    order.setCouponId(usedCoupon.getId());
+                    order.setCouponDiscount(discount);
+                    order.setTotalPrice(totalAmount.subtract(discount).max(BigDecimal.ZERO));
+                }
+            }
             save(order);
             Long orderId = order.getId();
             for (OrderItem item : orderItems) {
@@ -194,6 +214,10 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
             if (!success) {
                 throw new BusinessException("订单明细保存失败");
             }
+            // 订单创建成功后，将已用优惠券置为已用并关联订单
+            if (dto.getUserCouponId() != null) {
+                markCouponUsed(dto.getUserCouponId(), orderId, now);
+            }
             log.info("订单创建成功: orderId={}, userId={}, amount={}", orderId, userId, totalAmount);
             // 通知管理员有新订单
             adminNotifyService.sendNotification(NotifySettingServiceImpl.TYPE_NEW_ORDER, "🛒 新订单通知",
@@ -202,6 +226,97 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         } finally {
             lock.unlock();
         }
+    }
+
+    /**
+     * 校验优惠券是否可用于本单：归属、未用、有效期内、门槛、适用范围。不满足抛异常。
+     */
+    private Coupon validateCoupon(Long userId, Long userCouponId, BigDecimal goodsTotal, Set<Long> itemTypeIds, LocalDateTime now) {
+        UserCoupon uc = userCouponMapper.selectById(userCouponId);
+        if (uc == null || !uc.getUserId().equals(userId)) {
+            throw new BusinessException("优惠券不存在");
+        }
+        if (uc.getStatus() != null && uc.getStatus() != 0) {
+            throw new BusinessException("优惠券不可用");
+        }
+        if (uc.getExpireTime() != null && uc.getExpireTime().isBefore(now)) {
+            throw new BusinessException("优惠券已过期");
+        }
+        Coupon c = couponMapper.selectById(uc.getCouponId());
+        if (c == null || c.getStatus() == null || c.getStatus() != 1) {
+            throw new BusinessException("优惠券已停用");
+        }
+        BigDecimal threshold = c.getMinThreshold() == null ? BigDecimal.ZERO : c.getMinThreshold();
+        if (goodsTotal.compareTo(threshold) < 0) {
+            throw new BusinessException("未满足优惠券使用门槛");
+        }
+        if (c.getScope() != null && c.getScope() == 1 && c.getTypeId() != null
+                && (itemTypeIds == null || !itemTypeIds.contains(c.getTypeId()))) {
+            throw new BusinessException("该优惠券不适用于所选商品");
+        }
+        return c;
+    }
+
+    /**
+     * 计算优惠金额：满减/无门槛取面额；折扣券按折扣率并受最高优惠上限约束，均不超过商品总额。
+     */
+    private BigDecimal calcCouponDiscount(Coupon c, BigDecimal goodsTotal) {
+        BigDecimal discount;
+        if (c.getType() != null && c.getType() == 2 && c.getDiscount() != null) {
+            discount = goodsTotal.multiply(BigDecimal.ONE.subtract(c.getDiscount()));
+            if (c.getCapAmount() != null && discount.compareTo(c.getCapAmount()) > 0) {
+                discount = c.getCapAmount();
+            }
+        } else {
+            discount = c.getAmount() == null ? BigDecimal.ZERO : c.getAmount();
+        }
+        discount = discount.max(BigDecimal.ZERO).min(goodsTotal);
+        return discount.setScale(2, java.math.RoundingMode.HALF_UP);
+    }
+
+    /**
+     * 下单成功后，将使用的优惠券置为已用并关联订单。
+     */
+    private void markCouponUsed(Long userCouponId, Long orderId, LocalDateTime now) {
+        userCouponMapper.update(null, new LambdaUpdateWrapper<UserCoupon>()
+                .eq(UserCoupon::getId, userCouponId)
+                .set(UserCoupon::getStatus, 1)
+                .set(UserCoupon::getUseTime, now)
+                .set(UserCoupon::getOrderId, orderId));
+    }
+
+    /**
+     * 订单取消/超时/退款等环节归还已用优惠券。
+     */
+    private void returnCoupon(Order order) {
+        if (order == null || order.getCouponId() == null) {
+            return;
+        }
+        List<UserCoupon> list = userCouponMapper.selectList(new LambdaQueryWrapper<UserCoupon>()
+                .eq(UserCoupon::getUserId, order.getUserId())
+                .eq(UserCoupon::getCouponId, order.getCouponId())
+                .eq(UserCoupon::getOrderId, order.getId())
+                .eq(UserCoupon::getStatus, 1));
+        for (UserCoupon uc : list) {
+            userCouponMapper.update(null, new LambdaUpdateWrapper<UserCoupon>()
+                    .eq(UserCoupon::getId, uc.getId())
+                    .set(UserCoupon::getStatus, 0)
+                    .set(UserCoupon::getUseTime, null)
+                    .set(UserCoupon::getOrderId, null));
+            log.info("归还优惠券: userCouponId={}, orderId={}", uc.getId(), order.getId());
+        }
+    }
+
+    /**
+     * 对外归还某订单的已用优惠券（退款成功等场景调用）。
+     */
+    @Override
+    public void returnCouponForOrder(Long orderId) {
+        if (orderId == null) {
+            return;
+        }
+        Order order = getById(orderId);
+        returnCoupon(order);
     }
 
     /**
@@ -359,6 +474,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
             return Result.fail("订单状态异常，请稍后重试！");
         }
         doCancelOrder(id);
+        returnCoupon(order); // 取消后归还已用优惠券
         log.info("用户取消订单: orderId={}, userId={}", id, userId);
         return Result.ok();
     }
@@ -381,6 +497,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
             return Result.ok();
         }
         doCancelOrder(id);
+        returnCoupon(order); // 超时取消后归还已用优惠券
         log.info("超时未支付订单已自动取消: orderId={}, userId={}", id, order.getUserId());
         return Result.ok();
     }

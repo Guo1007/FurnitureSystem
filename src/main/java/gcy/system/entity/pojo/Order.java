@@ -40,6 +40,16 @@ public class Order {
     private BigDecimal totalPrice;
 
     /**
+     * 使用的优惠券模板ID（未使用为空）
+     */
+    private Long couponId;
+
+    /**
+     * 优惠金额（使用优惠券时抵扣的金额）
+     */
+    private BigDecimal couponDiscount;
+
+    /**
      * 订单状态（如待支付、已支付、已发货、已收货等）
      */
     private int status;

@@ -154,6 +154,18 @@ public final class RedisConstants {
      */
     public static final String STOCK_ALERT_TASK_KEY = "lock:stock:alert:task";
 
+    // ==================== 优惠券 ====================
+
+    /**
+     * 优惠券已领取计数，后接 couponId。用于并发领券的 Lua 原子扣减与已领数量展示。
+     */
+    public static final String COUPON_COUNT_KEY = "coupon:count:";
+
+    /**
+     * 用户已领某券数量，后接 couponId:userId
+     */
+    public static final String COUPON_USER_COUNT_KEY = "coupon:user:";
+
     // ==================== AI / 向量 ====================
 
     /**

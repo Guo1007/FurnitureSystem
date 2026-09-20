@@ -1,0 +1,203 @@
+// CouponCenter.vue 页面样式 — 与全局暖色极简风格一致
+.coupon-center {
+  min-height: 60vh;
+
+  .page-breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 16px;
+    font-size: var(--text-sm);
+    color: var(--color-text-secondary);
+
+    .breadcrumb-back {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      border: 1px solid var(--color-border);
+      border-radius: 8px;
+      background: var(--color-surface);
+      color: var(--color-text-secondary);
+      cursor: pointer;
+
+      &:hover {
+        border-color: var(--color-accent);
+        color: var(--color-accent);
+      }
+    }
+
+    a {
+      color: var(--color-text-secondary);
+      text-decoration: none;
+
+      &:hover {
+        color: var(--color-accent);
+      }
+    }
+
+    .current {
+      color: var(--color-text-primary);
+    }
+  }
+
+  .coupon-content {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 0 16px 48px;
+
+    :deep(.el-tabs__item) {
+      font-size: var(--text-base);
+    }
+  }
+
+  .coupon-filters {
+    display: flex;
+    gap: 10px;
+    margin: 4px 0 18px;
+  }
+
+  .filter-chip {
+    padding: 4px 16px;
+    border-radius: 999px;
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-text-secondary);
+    font-size: var(--text-sm);
+    cursor: pointer;
+    transition: all 0.2s;
+
+    &:hover {
+      border-color: var(--color-accent);
+      color: var(--color-accent);
+    }
+
+    &.on {
+      border-color: var(--color-accent);
+      background: var(--color-accent-subtle);
+      color: var(--color-accent);
+      font-weight: 500;
+    }
+  }
+
+  .coupon-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .coupon-card {
+    display: flex;
+    align-items: stretch;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+    overflow: hidden;
+    transition: box-shadow 0.2s;
+
+    &:hover {
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+    }
+
+    .coupon-left {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-width: 104px;
+      padding: 18px 14px;
+      background: var(--color-accent-subtle);
+      border-right: 1px dashed var(--color-border);
+
+      .coupon-amount {
+        font-size: var(--text-2xl);
+        font-weight: 600;
+        color: var(--color-accent);
+        line-height: 1.1;
+      }
+
+      .coupon-cond {
+        margin-top: 8px;
+        font-size: var(--text-xs);
+        color: var(--color-accent);
+      }
+    }
+
+    .coupon-body {
+      flex: 1;
+      padding: 16px 18px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 4px;
+      min-width: 0;
+
+      .coupon-name {
+        font-size: var(--text-md);
+        color: var(--color-text-primary);
+        margin: 0;
+      }
+
+      .coupon-meta {
+        font-size: var(--text-xs);
+        color: var(--color-text-tertiary);
+        margin: 0;
+      }
+    }
+
+    .coupon-action {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 18px;
+      min-width: 92px;
+    }
+
+    .claim-btn {
+      padding: 8px 22px;
+      border: none;
+      border-radius: 999px;
+      background: var(--color-accent);
+      color: #fff;
+      font-size: var(--text-base);
+      cursor: pointer;
+      transition: background 0.2s;
+
+      &:hover:not(:disabled) {
+        background: var(--color-accent-hover);
+      }
+
+      &:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+    }
+
+    .claim-state {
+      font-size: var(--text-sm);
+      color: var(--color-text-tertiary);
+    }
+
+    &.mine {
+      .coupon-left .coupon-amount {
+        color: var(--color-text-primary);
+      }
+      .coupon-left {
+        background: transparent;
+      }
+    }
+  }
+
+  .empty {
+    padding: 40px 0;
+  }
+
+  .loading {
+    text-align: center;
+    padding: 60px 0;
+    color: var(--color-text-tertiary);
+  }
+}

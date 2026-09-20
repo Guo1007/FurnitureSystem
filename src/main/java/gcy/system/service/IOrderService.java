@@ -94,4 +94,11 @@ public interface IOrderService extends IService<Order> {
      */
     Result deleteMyOrder(Long id);
 
+    /**
+     * 归还指定订单已使用的优惠券（退款成功等场景）。
+     *
+     * @param orderId 订单ID
+     */
+    void returnCouponForOrder(Long orderId);
+
 }

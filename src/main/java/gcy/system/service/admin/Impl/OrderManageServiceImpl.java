@@ -422,6 +422,7 @@ public class OrderManageServiceImpl extends ServiceImpl<OrderMapper, Order>
             if (!success) {
                 throw new BusinessException("退款审核失败，请重试");
             }
+            orderService.returnCouponForOrder(orderId); // 退款成功归还已用优惠券
             OrderEmailUtil.sendOrderStatus(emailService, userMapper, order, "退款成功",
                     "您的订单 #" + order.getId() + " 退款已到账，感谢您的理解与支持。",
                     "✅", null);

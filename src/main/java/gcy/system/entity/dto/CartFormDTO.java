@@ -49,4 +49,10 @@ public class CartFormDTO {
     @Schema(description = "订单项明细列表")
     private List<OrderItemDTO> itemList;
 
+    /**
+     * 使用的用户优惠券记录ID（user_coupon.id，不选则为空）
+     */
+    @Schema(description = "用户优惠券记录ID")
+    private Long userCouponId;
+
 }

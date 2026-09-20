@@ -134,7 +134,7 @@
         <!-- Cart -->
         <button
           class="icon-btn cart-btn"
-          @click="cartStore.openCart()"
+          @click="router.push('/cart')"
           aria-label="购物车"
         >
           <svg

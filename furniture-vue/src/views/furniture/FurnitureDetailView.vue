@@ -1014,6 +1014,52 @@
         </div>
       </div>
 
+      <!-- 优惠券 -->
+      <div class="buy-coupon">
+        <div class="coupon-select-hd">
+          <span class="label">优惠券</span>
+          <button class="picker" @click="toggleBuyCoupon">
+            <span v-if="bgCoupon">
+              {{ bgCoupon.name }}
+              <em class="picker-save">-{{ formatPrice(buyDiscountEstimate) }}</em>
+            </span>
+            <span v-else>{{ buyAvailableCoupons.length ? "选择优惠券" : "暂无可用优惠券" }}</span>
+            <span class="arrow">▾</span>
+          </button>
+        </div>
+        <div v-if="showBuyCoupon" class="coupon-panel">
+          <div class="coupon-opt" @click="selectBuyCoupon(null)">不使用优惠券</div>
+          <div
+            v-for="c in buyAvailableCoupons"
+            :key="c.userCouponId"
+            class="coupon-opt"
+            :class="{ on: bgCoupon?.userCouponId === c.userCouponId }"
+            @click="selectBuyCoupon(c)"
+          >
+            <div class="opt-info">
+              <b>{{ c.amountText }}</b>
+              <span>{{ c.name }}</span>
+              <span v-if="Number(c.minThreshold) > 0" class="opt-threshold"
+                >满{{ c.minThreshold }}可用</span
+              >
+            </div>
+            <div class="opt-discount">-{{ formatPrice(buyEstimate(c)) }}</div>
+          </div>
+          <div v-if="!buyAvailableCoupons.length" class="coupon-none">暂无可用优惠券</div>
+        </div>
+      </div>
+
+      <!-- 应付合计 -->
+      <div class="buy-total">
+        <div v-if="buyDiscountEstimate > 0" class="buy-og">
+          商品总额 ¥{{ formatPrice(buyGoodsTotal) }}，优惠
+          -{{ formatPrice(buyDiscountEstimate) }}
+        </div>
+        <div class="buy-pay">
+          应付金额：<b>¥{{ formatPrice(buyGoodsTotal - buyDiscountEstimate) }}</b>
+        </div>
+      </div>
+
       <el-form :model="buyForm" label-position="top" class="buy-form">
         <el-form-item label="收货地址">
           <el-select
@@ -1121,6 +1167,7 @@ import { useCartStore } from "@/stores/cart.js";
 import { checkFavorite, toggleFavorite } from "@/api/favorite.js";
 import { getAddressList, saveAddress } from "@/api/address.js";
 import { deleteAppend, deleteReview, getComments } from "@/api/comment.js";
+import { getMyCoupons } from "@/api/coupon.js";
 import {
   addReviewComment,
   deleteReviewComment,
@@ -1191,6 +1238,59 @@ const {
 
 const { goBack } = useBackNavigation();
 const { requireLogin } = useRequireLogin();
+
+// ========== 立即购买 - 优惠券 ==========
+const buyCoupons = ref([]);
+const bgCoupon = ref(null);
+const showBuyCoupon = ref(false);
+const buyGoodsTotal = computed(() =>
+  Math.round(Number(displayPrice.value || 0) * Number(quantity.value || 1) * 100) / 100,
+);
+
+const buyAvailableCoupons = computed(() =>
+  buyCoupons.value.filter((c) => {
+    if (c.status !== 0) return false;
+    if (c.expireTime) {
+      const t = Array.isArray(c.expireTime)
+        ? new Date(c.expireTime[0], c.expireTime[1] - 1, c.expireTime[2])
+        : new Date(c.expireTime);
+      if (t.getTime() < Date.now()) return false;
+    }
+    if (Number(c.minThreshold) > buyGoodsTotal.value) return false;
+    return true;
+  }),
+);
+
+const buyEstimate = (c) => {
+  const total = buyGoodsTotal.value;
+  let d = 0;
+  if (c.type === 2 && c.discount) d = total * (1 - Number(c.discount));
+  else if (c.amount) d = Number(c.amount);
+  if (c.capAmount && d > Number(c.capAmount)) d = Number(c.capAmount);
+  d = Math.min(d, total);
+  return Math.max(0, Math.round(d * 100) / 100);
+};
+
+const buyDiscountEstimate = computed(() =>
+  bgCoupon.value ? buyEstimate(bgCoupon.value) : 0,
+);
+
+const loadBuyCoupons = async () => {
+  if (!localStorage.getItem("token")) return;
+  const res = await getMyCoupons();
+  buyCoupons.value = (res.success || res.code === 200) ? res.data || [] : [];
+};
+
+const toggleBuyCoupon = () => {
+  showBuyCoupon.value = !showBuyCoupon.value;
+};
+const selectBuyCoupon = (c) => {
+  bgCoupon.value = c;
+  showBuyCoupon.value = false;
+};
+watch(buyDialogVisible, (open) => {
+  if (open) loadBuyCoupons();
+});
 
 // 重写 buyNow，在打开对话框时填入已选地址
 const buyNow = () => {
@@ -1274,7 +1374,7 @@ const goToAddresses = () => {
 };
 
 const handleSubmitBuy = async () => {
-  const success = await submitBuy();
+  const success = await submitBuy(bgCoupon.value?.userCouponId);
   if (success) {
     // 订单创建成功后，自动保存地址（静默处理，不打扰用户）
     try {
@@ -1724,5 +1824,33 @@ const handleSummaryImgError = (e) => {
 
 <style scoped lang="scss">
 @import "@/styles/views/furniture-detail-view.scss";
+@import "@/styles/views/cart-drawer.scss";
+
+/* 立即购买弹窗 - 优惠券与应付区域 */
+.buy-coupon {
+  margin: 4px 0 12px;
+  padding: 0 2px;
+}
+.buy-total {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  padding: 6px 2px 12px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid #f0ece7;
+  .buy-og {
+    font-size: 13px;
+    color: #999;
+  }
+  .buy-pay {
+    font-size: 14px;
+    color: #333;
+    b {
+      color: #c5554a;
+      font-size: 20px;
+    }
+  }
+}
 </style>
 

@@ -1,0 +1,88 @@
+// CouponManage.vue 管理端优惠券样式 — 复用管理端统一壳样式
+.manage-page {
+  background: #fff;
+  border-radius: 8px;
+  padding: 24px;
+  min-height: calc(100vh - 108px);
+}
+
+.page-title {
+  margin: 0 0 24px 0;
+  font-size: 20px;
+  color: #333;
+}
+
+.search-bar {
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.pagination {
+  margin-top: 20px;
+  display: flex;
+  justify-content: center;
+}
+
+:deep(.el-divider) {
+  margin: 16px 0;
+}
+
+:deep(.el-divider__text) {
+  font-size: 14px;
+  color: var(--color-accent, #b8753e);
+}
+
+.dialog-footer {
+  width: 100%;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+}
+
+/* ===== 新增/编辑优惠券弹窗 —— 更舒适统一的排版 ===== */
+.coupon-dialog {
+  :deep(.el-dialog) {
+    border-radius: 12px;
+  }
+  :deep(.el-dialog__header) {
+    padding: 20px 24px 8px;
+    margin: 0;
+  }
+  :deep(.el-dialog__title) {
+    font-size: 17px;
+    font-weight: 600;
+  }
+  :deep(.el-dialog__body) {
+    padding: 8px 24px 4px;
+    max-height: 66vh;
+    overflow-y: auto;
+  }
+  :deep(.el-dialog__footer) {
+    padding: 4px 24px 20px;
+  }
+
+  :deep(.el-form) {
+    .el-divider {
+      margin: 16px 0 14px;
+    }
+    .el-form-item {
+      margin-bottom: 14px;
+    }
+    /* 分组标题距上方更松、距字段更紧 */
+    .el-divider:first-child {
+      margin-top: 0;
+    }
+  }
+
+  :deep(.el-radio-group) {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: nowrap;
+    white-space: nowrap;
+    height: 32px;
+  }
+}
