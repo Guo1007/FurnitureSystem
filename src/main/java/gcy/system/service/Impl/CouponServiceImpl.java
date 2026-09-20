@@ -241,6 +241,12 @@ public class CouponServiceImpl implements ICouponService {
         // Redis Lua 原子扣减
         String countKey = COUPON_COUNT_KEY + couponId;
         String userKey = COUPON_USER_COUNT_KEY + couponId + ":" + userId;
+        // Redis 计数缺失时回种 DB 已领数，避免 Redis 被清空后超发
+        if (stringRedisTemplate.opsForValue().get(countKey) == null) {
+            long dbCount = userCouponMapper.selectCount(new LambdaQueryWrapper<UserCoupon>()
+                    .eq(UserCoupon::getCouponId, couponId));
+            stringRedisTemplate.opsForValue().setIfAbsent(countKey, String.valueOf(dbCount));
+        }
         Long total = c.getTotalCount() == null ? 0L : c.getTotalCount().longValue();
         Long limit = c.getPerUserLimit() == null ? 1L : c.getPerUserLimit().longValue();
         Long res = stringRedisTemplate.execute(CLAIM_SCRIPT, List.of(countKey, userKey),

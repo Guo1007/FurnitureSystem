@@ -254,6 +254,11 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
                 && (itemTypeIds == null || !itemTypeIds.contains(c.getTypeId()))) {
             throw new BusinessException("该优惠券不适用于所选商品");
         }
+        // 按券类型校验关键字段，避免收到的券配置异常导致抵扣失真
+        if (c.getType() == null || (c.getType() == 2 && c.getDiscount() == null)
+                || (c.getType() != 2 && c.getAmount() == null)) {
+            throw new BusinessException("优惠券配置异常，请联系管理员");
+        }
         return c;
     }
 
@@ -280,6 +285,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     private void markCouponUsed(Long userCouponId, Long orderId, LocalDateTime now) {
         userCouponMapper.update(null, new LambdaUpdateWrapper<UserCoupon>()
                 .eq(UserCoupon::getId, userCouponId)
+                .eq(UserCoupon::getStatus, 0)
                 .set(UserCoupon::getStatus, 1)
                 .set(UserCoupon::getUseTime, now)
                 .set(UserCoupon::getOrderId, orderId));
