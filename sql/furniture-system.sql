@@ -11,7 +11,7 @@
  Target Server Version : 80043 (8.0.43)
  File Encoding         : 65001
 
- Date: 09/09/2026 11:23:11
+ Date: 20/09/2026 17:13:29
 */
 
 SET NAMES utf8mb4;
@@ -68,6 +68,42 @@ CREATE TABLE `comment_append`  (
 -- ----------------------------
 INSERT INTO `comment_append` VALUES (1, 2, 2, '还可以吧', '', 1, 1, NULL, NULL, '2026-06-22 22:51:20', 0, 0);
 INSERT INTO `comment_append` VALUES (2, 10, 1, '确实', '[\"https://gmc-1007.oss-cn-beijing.aliyuncs.com/comment/image/2026/06/22/1896557540fb48b5ac3d8042c5c0e850.jpg\"]', 1, 1, NULL, NULL, '2026-06-22 23:14:09', 1, 0);
+
+-- ----------------------------
+-- Table structure for coupon
+-- ----------------------------
+DROP TABLE IF EXISTS `coupon`;
+CREATE TABLE `coupon`  (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '优惠券ID（自增主键）',
+  `name` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '券名称',
+  `type` tinyint NOT NULL COMMENT '券类型：1-满减券，2-折扣券，3-无门槛券',
+  `min_threshold` decimal(10, 2) NOT NULL DEFAULT 0.00 COMMENT '使用门槛金额（满xx可用，0表示无门槛）',
+  `amount` decimal(10, 2) NULL DEFAULT NULL COMMENT '减免金额（满减/无门槛券使用）',
+  `discount` decimal(3, 2) NULL DEFAULT NULL COMMENT '折扣率（折扣券使用，如0.80表示8折）',
+  `cap_amount` decimal(10, 2) NULL DEFAULT NULL COMMENT '折扣券最高优惠上限（可空）',
+  `scope` tinyint NOT NULL DEFAULT 0 COMMENT '适用范围：0-全场，1-按分类',
+  `type_id` bigint NULL DEFAULT NULL COMMENT 'scope=1时的家具分类ID（可空）',
+  `total_count` int NULL DEFAULT NULL COMMENT '发放总量（NULL表示不限）',
+  `per_user_limit` int NOT NULL DEFAULT 1 COMMENT '每人限领数',
+  `claim_start` datetime NULL DEFAULT NULL COMMENT '领取开始时间（NULL表示不限领取时间）',
+  `claim_end` datetime NULL DEFAULT NULL COMMENT '领取结束时间（NULL表示不限领取时间）',
+  `valid_type` tinyint NOT NULL DEFAULT 1 COMMENT '有效期模式：1-固定有效期，2-领取后N天',
+  `valid_start` datetime NULL DEFAULT NULL COMMENT '固定有效期开始（valid_type=1时使用）',
+  `valid_end` datetime NULL DEFAULT NULL COMMENT '固定有效期结束（valid_type=1时使用）',
+  `valid_days` int NULL DEFAULT NULL COMMENT '领取后有效天数（valid_type=2时使用）',
+  `target_type` tinyint NOT NULL DEFAULT 0 COMMENT '领取人群：0-不限，1-新用户，2-老用户',
+  `target_days` int NULL DEFAULT NULL COMMENT '新/老用户判定天数阈值',
+  `status` tinyint NOT NULL DEFAULT 1 COMMENT '状态：0-停用，1-启用',
+  `deleted` tinyint(1) NOT NULL DEFAULT 0 COMMENT '逻辑删除（0未删/1已删）',
+  `create_time` datetime NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `update_time` datetime NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`) USING BTREE
+) ENGINE = InnoDB AUTO_INCREMENT = 2 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '优惠券模板表' ROW_FORMAT = DYNAMIC;
+
+-- ----------------------------
+-- Records of coupon
+-- ----------------------------
+INSERT INTO `coupon` VALUES (1, '惊喜满减券', 1, 500.00, 20.00, 0.80, NULL, 0, NULL, 5, 10, '2026-09-20 16:35:56', '2026-09-30 00:00:00', 2, NULL, NULL, 15, 0, 30, 1, 0, '2026-09-20 16:36:04', '2026-09-20 16:52:12');
 
 -- ----------------------------
 -- Table structure for favorite
@@ -995,7 +1031,7 @@ INSERT INTO `furniture` VALUES (970, '黑色文件柜', 'https://gmc-1007.oss-cn
 INSERT INTO `furniture` VALUES (971, '钢制文件柜', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/46cc793ad71c4d62acb0d09459b3aa4b.jpg', 3, 1443.28, '芝华仕', 12, '多层抽屉', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/46cc793ad71c4d62acb0d09459b3aa4b.jpg', NULL, 0, '2026-07-08 03:54:00', '2026-09-09 11:08:03', 0, 0);
 INSERT INTO `furniture` VALUES (972, '简约资料柜', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/46cc793ad71c4d62acb0d09459b3aa4b.jpg', 3, 784.63, '宜家', 73, '多层抽屉', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/46cc793ad71c4d62acb0d09459b3aa4b.jpg', NULL, 0, '2026-07-13 22:27:00', '2026-09-09 11:08:03', 3, 0);
 INSERT INTO `furniture` VALUES (973, '简约文件柜', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/46cc793ad71c4d62acb0d09459b3aa4b.jpg', 3, 2227.56, '林氏', 47, '钢制结构', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/46cc793ad71c4d62acb0d09459b3aa4b.jpg', NULL, 0, '2026-07-15 21:36:00', '2026-09-09 11:08:03', 12, 0);
-INSERT INTO `furniture` VALUES (974, '白色文件柜', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/46cc793ad71c4d62acb0d09459b3aa4b.jpg', 3, 1366.78, '曲美', 10, '钢制结构', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/46cc793ad71c4d62acb0d09459b3aa4b.jpg', NULL, 0, '2026-07-18 20:13:00', '2026-09-09 11:08:03', 30, 0);
+INSERT INTO `furniture` VALUES (974, '白色文件柜', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/46cc793ad71c4d62acb0d09459b3aa4b.jpg', 3, 1366.78, '曲美', 10, '钢制结构', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/46cc793ad71c4d62acb0d09459b3aa4b.jpg', NULL, 0, '2026-07-18 20:13:00', '2026-09-20 16:53:51', 30, 0);
 INSERT INTO `furniture` VALUES (975, '开门式文件柜', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/46cc793ad71c4d62acb0d09459b3aa4b.jpg', 3, 1088.30, '顾家', 94, '玻璃门', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/46cc793ad71c4d62acb0d09459b3aa4b.jpg', NULL, 0, '2026-07-27 20:02:00', '2026-09-09 11:08:03', 5, 0);
 INSERT INTO `furniture` VALUES (976, '简约文件柜', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/46cc793ad71c4d62acb0d09459b3aa4b.jpg', 3, 2045.59, '芝华仕', 40, '带锁设计', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/46cc793ad71c4d62acb0d09459b3aa4b.jpg', NULL, 0, '2026-07-12 01:45:00', '2026-09-09 11:08:03', 0, 0);
 INSERT INTO `furniture` VALUES (977, '实木资料柜', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/46cc793ad71c4d62acb0d09459b3aa4b.jpg', 3, 1329.82, '曲美', 20, '钢制结构', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/46cc793ad71c4d62acb0d09459b3aa4b.jpg', NULL, 0, '2026-07-06 21:28:00', '2026-09-09 11:08:03', 13, 0);
@@ -2907,7 +2943,7 @@ CREATE TABLE `notification`  (
   CONSTRAINT `fk_notification_review` FOREIGN KEY (`review_id`) REFERENCES `goods_comment` (`id`) ON DELETE SET NULL ON UPDATE RESTRICT,
   CONSTRAINT `fk_notification_review_comment` FOREIGN KEY (`review_comment_id`) REFERENCES `review_comment` (`id`) ON DELETE SET NULL ON UPDATE RESTRICT,
   CONSTRAINT `fk_notification_user` FOREIGN KEY (`user_id`) REFERENCES `user` (`id`) ON DELETE SET NULL ON UPDATE RESTRICT
-) ENGINE = InnoDB AUTO_INCREMENT = 23 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '通知表' ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB AUTO_INCREMENT = 24 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '通知表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of notification
@@ -2926,6 +2962,7 @@ INSERT INTO `notification` VALUES (19, 2, '收到新回复', 'Glimcy 回复了�
 INSERT INTO `notification` VALUES (20, 2, '昵称审核未通过', '您的新昵称未通过审核，原因：包含联系方式（手机号、微信号等）', 'profile_review', '2026-08-18 14:42:01', 0, NULL, NULL, NULL);
 INSERT INTO `notification` VALUES (21, 2, '昵称审核未通过', '您的新昵称未通过审核，原因：包含联系方式（手机号、微信号等）', 'profile_review', '2026-08-18 14:47:45', 0, NULL, NULL, NULL);
 INSERT INTO `notification` VALUES (22, 2, '昵称审核未通过', '您的新昵称未通过审核，原因：包含联系方式（手机号、微信号等）', 'profile_review', '2026-08-18 14:54:52', 0, NULL, NULL, NULL);
+INSERT INTO `notification` VALUES (23, 1, '您的回复审核未通过', '回复内容：臭狗屎\n审核结果：未通过\n拒绝原因：包含辱骂或人身攻击', 'reply_reject', '2026-09-10 17:24:32', 0, 11, 6, 19);
 
 -- ----------------------------
 -- Table structure for operation_log
@@ -2946,7 +2983,7 @@ CREATE TABLE `operation_log`  (
   INDEX `idx_user_id`(`user_id` ASC) USING BTREE,
   INDEX `idx_create_time`(`create_time` ASC) USING BTREE,
   INDEX `idx_operation`(`operation` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 59 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '操作日志表' ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB AUTO_INCREMENT = 120 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '操作日志表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of operation_log
@@ -3009,6 +3046,67 @@ INSERT INTO `operation_log` VALUES (55, 1, 'Glimcy', '获取当前用户信息',
 INSERT INTO `operation_log` VALUES (56, 1, 'Glimcy', '用户登出', '无', 3, '成功', '', '127.0.0.1', '2026-09-04 15:26:48');
 INSERT INTO `operation_log` VALUES (57, 2, 'GLOPS', '用户登录', 'loginFormDTO=LoginFormDTO(account=3482439245@qq.com, code=null, passWord=***', 95, '成功', '', '127.0.0.1', '2026-09-04 15:26:57');
 INSERT INTO `operation_log` VALUES (58, 2, 'GLOPS', '获取当前用户信息', '无', 0, '成功', '', '127.0.0.1', '2026-09-04 15:26:57');
+INSERT INTO `operation_log` VALUES (59, 1, 'Glimcy', '用户登录', 'loginFormDTO=LoginFormDTO(account=3102777566@qq.com, code=null, passWord=***', 164, '成功', '', '127.0.0.1', '2026-09-10 17:08:52');
+INSERT INTO `operation_log` VALUES (60, 1, 'Glimcy', '获取当前用户信息', '无', 0, '成功', '', '127.0.0.1', '2026-09-10 17:08:53');
+INSERT INTO `operation_log` VALUES (61, 1, 'Glimcy', '保存网站内容', 'form=SiteContent(id=1, sectionKey=hero_1, sectionGroup=carousel, contentTitle=热销家具精选, contentText=爆款单品超值低价，好物一站直达, imageUrl=null, linkUrl=/type/0, extraData={\"bg\":\"#f5ece0\",\"cta\":\"立即抢购\",\"tag\":\"🔥 热销爆款\"}, sortOrder=1, isActive=1, updatedAt=2026-07-14T00:17:55)', 32, '成功', '', '127.0.0.1', '2026-09-10 17:24:00');
+INSERT INTO `operation_log` VALUES (62, 1, 'Glimcy', '保存网站内容', 'form=SiteContent(id=2, sectionKey=hero_2, sectionGroup=carousel, contentTitle=打造你的梦想家庭, contentText=真皮沙发 + 茶几成套购买更省心, imageUrl=null, linkUrl=/type/0, extraData={\"bg\":\"#eef1f5\",\"cta\":\"查看全部家具\",\"tag\":\"🏠 客厅焕新\"}, sortOrder=2, isActive=1, updatedAt=2026-07-14T00:17:33)', 11, '成功', '', '127.0.0.1', '2026-09-10 17:24:00');
+INSERT INTO `operation_log` VALUES (63, 1, 'Glimcy', '保存网站内容', 'form=SiteContent(id=3, sectionKey=hero_3, sectionGroup=carousel, contentTitle=小智智能帮你选家具, contentText=不知道选什么风格？问问 AI 客服小智，获取专业搭配建议, imageUrl=null, linkUrl=/ai-chat, extraData={\"bg\":\"#eefbf5\",\"cta\":\"开始对话\",\"tag\":\"🤖 AI 导购\"}, sortOrder=3, isActive=1, updatedAt=2026-07-31T18:59:11)', 6, '成功', '', '127.0.0.1', '2026-09-10 17:24:01');
+INSERT INTO `operation_log` VALUES (64, 1, 'Glimcy', '驳回评论回复', 'id=19, request=CommentManageController.RejectRequest(rejectReason=包含辱骂或人身攻击)', 53, '成功', '', '127.0.0.1', '2026-09-10 17:24:32');
+INSERT INTO `operation_log` VALUES (65, 1, 'Glimcy', '用户登录', 'loginFormDTO=LoginFormDTO(account=3102777566@qq.com, code=null, passWord=***', 136, '成功', '', '127.0.0.1', '2026-09-20 15:53:30');
+INSERT INTO `operation_log` VALUES (66, 1, 'Glimcy', '获取当前用户信息', '无', 0, '成功', '', '127.0.0.1', '2026-09-20 15:53:30');
+INSERT INTO `operation_log` VALUES (67, 1, 'Glimcy', '获取当前用户信息', '无', 1, '成功', '', '127.0.0.1', '2026-09-20 15:54:11');
+INSERT INTO `operation_log` VALUES (68, 1, 'Glimcy', '获取当前用户信息', '无', 0, '成功', '', '127.0.0.1', '2026-09-20 15:55:09');
+INSERT INTO `operation_log` VALUES (69, 1, 'Glimcy', '新增优惠券', 'dto=AdminCouponFormDTO(id=null, name=新人专享券, type=3, minThreshold=0, amount=20, discount=0.8, capAmount=null, scope=0, typeId=null, totalCount=null, perUserLimit=1, claimStart=null, claimEnd=null, validType=2, validStart=null, validEnd=null, validDays=30, targetType=1, targetDays=30, status=1)', 18, '成功', '新增成功', '127.0.0.1', '2026-09-20 15:56:10');
+INSERT INTO `operation_log` VALUES (70, 1, 'Glimcy', '获取当前用户信息', '无', 0, '成功', '', '127.0.0.1', '2026-09-20 15:56:18');
+INSERT INTO `operation_log` VALUES (71, 1, 'Glimcy', '获取当前用户信息', '无', 0, '成功', '', '127.0.0.1', '2026-09-20 15:56:23');
+INSERT INTO `operation_log` VALUES (72, 1, 'Glimcy', '新增优惠券', 'dto=AdminCouponFormDTO(id=null, name=老用户福利, type=3, minThreshold=0, amount=30, discount=0.8, capAmount=null, scope=0, typeId=null, totalCount=null, perUserLimit=1, claimStart=null, claimEnd=null, validType=2, validStart=null, validEnd=null, validDays=30, targetType=2, targetDays=30, status=1)', 7, '成功', '新增成功', '127.0.0.1', '2026-09-20 15:57:54');
+INSERT INTO `operation_log` VALUES (73, 1, 'Glimcy', '获取当前用户信息', '无', 0, '成功', '', '127.0.0.1', '2026-09-20 15:57:59');
+INSERT INTO `operation_log` VALUES (74, 1, 'Glimcy', '获取当前用户信息', '无', 0, '成功', '', '127.0.0.1', '2026-09-20 15:58:06');
+INSERT INTO `operation_log` VALUES (75, 1, 'Glimcy', '保存网站内容', 'form=SiteContent(id=1, sectionKey=hero_1, sectionGroup=carousel, contentTitle=热销家具精选, contentText=爆款单品超值低价，好物一站直达, imageUrl=null, linkUrl=/type/0, extraData={\"bg\":\"#f5ece0\",\"cta\":\"立即抢购\",\"tag\":\"🔥 热销爆款\"}, sortOrder=1, isActive=1, updatedAt=2026-09-10T17:24)', 13, '成功', '', '127.0.0.1', '2026-09-20 16:03:54');
+INSERT INTO `operation_log` VALUES (76, 1, 'Glimcy', '保存网站内容', 'form=SiteContent(id=2, sectionKey=hero_2, sectionGroup=carousel, contentTitle=打造你的梦想家庭, contentText=真皮沙发 + 茶几成套购买更省心, imageUrl=null, linkUrl=/type/0, extraData={\"bg\":\"#eef1f5\",\"cta\":\"查看全部家具\",\"tag\":\"🏠 客厅焕新\"}, sortOrder=2, isActive=1, updatedAt=2026-09-10T17:24)', 6, '成功', '', '127.0.0.1', '2026-09-20 16:03:54');
+INSERT INTO `operation_log` VALUES (77, 1, 'Glimcy', '保存网站内容', 'form=SiteContent(id=3, sectionKey=hero_3, sectionGroup=carousel, contentTitle=小智智能帮你选家具, contentText=不知道选什么风格？问问 AI 客服小智，获取专业搭配建议, imageUrl=null, linkUrl=/ai-chat, extraData={\"bg\":\"#eefbf5\",\"cta\":\"开始对话\",\"tag\":\"🤖 AI 导购\"}, sortOrder=3, isActive=1, updatedAt=2026-09-10T17:24:01)', 5, '成功', '', '127.0.0.1', '2026-09-20 16:03:54');
+INSERT INTO `operation_log` VALUES (78, 1, 'Glimcy', '保存网站内容', 'form=SiteContent(id=-1789891359762, sectionKey=hero_4, sectionGroup=carousel, contentTitle=领取大额优惠券, contentText=超大额优惠券一键领取, imageUrl=, linkUrl=/type/0, extraData={\"cta\":\"立即领取\",\"tag\":\"大额优惠\",\"bg\":\"#f7e5e5\"}, sortOrder=4, isActive=1, updatedAt=null)', 11, '失败', '\r\n### Error updating database.  Cause: org.apache.ibatis.executor.ExecutorException: Error getting generated key or setting result to parameter object. Cause: org.apache.ibatis.executor.result.ResultMapException: Error attempting to get column #1 from result set.  Cause: java.sql.SQLDataException: Value \'18,446,742,283,818,191,854\' is outside of valid range for type java.lang.Long\r\n### The error may exist in gcy/system/mapper/SiteContentMapper.java (best guess)\r\n### The error may involve gcy.sys', '127.0.0.1', '2026-09-20 16:03:55');
+INSERT INTO `operation_log` VALUES (79, 1, 'Glimcy', '保存网站内容', 'form=SiteContent(id=1, sectionKey=hero_1, sectionGroup=carousel, contentTitle=热销家具精选, contentText=爆款单品超值低价，好物一站直达, imageUrl=null, linkUrl=/type/0, extraData={\"bg\":\"#f5ece0\",\"cta\":\"立即抢购\",\"tag\":\"🔥 热销爆款\"}, sortOrder=1, isActive=1, updatedAt=2026-09-20T16:03:54)', 7, '成功', '', '127.0.0.1', '2026-09-20 16:07:49');
+INSERT INTO `operation_log` VALUES (80, 1, 'Glimcy', '保存网站内容', 'form=SiteContent(id=2, sectionKey=hero_2, sectionGroup=carousel, contentTitle=打造你的梦想家庭, contentText=真皮沙发 + 茶几成套购买更省心, imageUrl=null, linkUrl=/type/0, extraData={\"bg\":\"#eef1f5\",\"cta\":\"查看全部家具\",\"tag\":\"🏠 客厅焕新\"}, sortOrder=2, isActive=1, updatedAt=2026-09-20T16:03:54)', 5, '成功', '', '127.0.0.1', '2026-09-20 16:07:49');
+INSERT INTO `operation_log` VALUES (81, 1, 'Glimcy', '保存网站内容', 'form=SiteContent(id=3, sectionKey=hero_3, sectionGroup=carousel, contentTitle=小智智能帮你选家具, contentText=不知道选什么风格？问问 AI 客服小智，获取专业搭配建议, imageUrl=null, linkUrl=/ai-chat, extraData={\"bg\":\"#eefbf5\",\"cta\":\"开始对话\",\"tag\":\"🤖 AI 导购\"}, sortOrder=3, isActive=1, updatedAt=2026-09-20T16:03:54)', 5, '成功', '', '127.0.0.1', '2026-09-20 16:07:49');
+INSERT INTO `operation_log` VALUES (82, 1, 'Glimcy', '保存网站内容', 'form=SiteContent(id=null, sectionKey=hero_4, sectionGroup=carousel, contentTitle=领取大额优惠券, contentText=超大额优惠券一键领取, imageUrl=, linkUrl=/type/0, extraData={\"bg\":\"#f7e5e5\",\"cta\":\"立即领取\",\"tag\":\"大额优惠\"}, sortOrder=4, isActive=1, updatedAt=2026-09-20T16:03:55)', 7, '成功', '', '127.0.0.1', '2026-09-20 16:07:49');
+INSERT INTO `operation_log` VALUES (83, 1, 'Glimcy', '保存网站内容', 'form=SiteContent(id=1, sectionKey=hero_1, sectionGroup=carousel, contentTitle=热销家具精选, contentText=爆款单品超值低价，好物一站直达, imageUrl=null, linkUrl=/type/0, extraData={\"bg\":\"#f5ece0\",\"cta\":\"立即抢购\",\"tag\":\"🔥 热销爆款\"}, sortOrder=1, isActive=1, updatedAt=2026-09-20T16:07:49)', 7, '成功', '', '127.0.0.1', '2026-09-20 16:11:12');
+INSERT INTO `operation_log` VALUES (84, 1, 'Glimcy', '保存网站内容', 'form=SiteContent(id=2, sectionKey=hero_2, sectionGroup=carousel, contentTitle=打造你的梦想家庭, contentText=真皮沙发 + 茶几成套购买更省心, imageUrl=null, linkUrl=/type/0, extraData={\"bg\":\"#eef1f5\",\"cta\":\"查看全部家具\",\"tag\":\"🏠 客厅焕新\"}, sortOrder=2, isActive=1, updatedAt=2026-09-20T16:07:49)', 5, '成功', '', '127.0.0.1', '2026-09-20 16:11:13');
+INSERT INTO `operation_log` VALUES (85, 1, 'Glimcy', '保存网站内容', 'form=SiteContent(id=3, sectionKey=hero_3, sectionGroup=carousel, contentTitle=小智智能帮你选家具, contentText=不知道选什么风格？问问 AI 客服小智，获取专业搭配建议, imageUrl=null, linkUrl=/ai-chat, extraData={\"bg\":\"#eefbf5\",\"cta\":\"开始对话\",\"tag\":\"🤖 AI 导购\"}, sortOrder=3, isActive=1, updatedAt=2026-09-20T16:07:49)', 4, '成功', '', '127.0.0.1', '2026-09-20 16:11:13');
+INSERT INTO `operation_log` VALUES (86, 1, 'Glimcy', '保存网站内容', 'form=SiteContent(id=null, sectionKey=hero_4, sectionGroup=carousel, contentTitle=领取大额优惠券, contentText=超大额优惠券一键领取, imageUrl=, linkUrl=/coupons, extraData={\"bg\":\"#f7e5e5\",\"cta\":\"立即领取\",\"tag\":\"大额优惠\"}, sortOrder=4, isActive=1, updatedAt=2026-09-20T16:07:49)', 5, '成功', '', '127.0.0.1', '2026-09-20 16:11:13');
+INSERT INTO `operation_log` VALUES (87, 1, 'Glimcy', '获取当前用户信息', '无', 1, '成功', '', '127.0.0.1', '2026-09-20 16:11:38');
+INSERT INTO `operation_log` VALUES (88, 1, 'Glimcy', '获取当前用户信息', '无', 0, '成功', '', '127.0.0.1', '2026-09-20 16:11:43');
+INSERT INTO `operation_log` VALUES (89, 1, 'Glimcy', '获取当前用户信息', '无', 0, '成功', '', '127.0.0.1', '2026-09-20 16:11:46');
+INSERT INTO `operation_log` VALUES (90, 1, 'Glimcy', '获取当前用户信息', '无', 0, '成功', '', '127.0.0.1', '2026-09-20 16:17:01');
+INSERT INTO `operation_log` VALUES (91, 1, 'Glimcy', '获取当前用户信息', '无', 0, '成功', '', '127.0.0.1', '2026-09-20 16:17:15');
+INSERT INTO `operation_log` VALUES (92, 1, 'Glimcy', '创建订单', 'dto=CartFormDTO(consignee=郭名城, phone=13444444444, address=UK, remark=, itemList=[OrderItemDTO(furnitureId=974, skuId=null, quantity=1)])', 34, '成功', '', '127.0.0.1', '2026-09-20 16:23:47');
+INSERT INTO `operation_log` VALUES (93, 1, 'Glimcy', '取消订单', 'orderId=2101588117025406978', 18, '成功', '', '127.0.0.1', '2026-09-20 16:24:04');
+INSERT INTO `operation_log` VALUES (94, 1, 'Glimcy', '获取当前用户信息', '无', 0, '成功', '', '127.0.0.1', '2026-09-20 16:28:26');
+INSERT INTO `operation_log` VALUES (95, 1, 'Glimcy', '获取当前用户信息', '无', 1, '成功', '', '127.0.0.1', '2026-09-20 16:33:23');
+INSERT INTO `operation_log` VALUES (96, 1, 'Glimcy', '新增优惠券', 'dto=AdminCouponFormDTO(id=null, name=惊喜满减券, type=1, minThreshold=500, amount=20, discount=0.8, capAmount=null, scope=0, typeId=null, totalCount=5, perUserLimit=1, claimStart=2026-09-20T16:35:56, claimEnd=2026-09-30T00:00, validType=2, validStart=null, validEnd=null, validDays=15, targetType=0, targetDays=30, status=1)', 13, '成功', '新增成功', '127.0.0.1', '2026-09-20 16:36:04');
+INSERT INTO `operation_log` VALUES (97, 1, 'Glimcy', '创建订单', 'dto=CartFormDTO(consignee=郭名城, phone=13444444444, address=UK, remark=, itemList=[OrderItemDTO(furnitureId=974, skuId=null, quantity=1)], userCouponId=1)', 51, '成功', '', '127.0.0.1', '2026-09-20 16:36:38');
+INSERT INTO `operation_log` VALUES (98, 1, 'Glimcy', '支付订单', 'orderId=2101591351068631042', 16, '成功', '', '127.0.0.1', '2026-09-20 16:37:00');
+INSERT INTO `operation_log` VALUES (99, 1, 'Glimcy', '获取当前用户信息', '无', 1, '成功', '', '127.0.0.1', '2026-09-20 16:37:08');
+INSERT INTO `operation_log` VALUES (100, 1, 'Glimcy', '获取当前用户信息', '无', 0, '成功', '', '127.0.0.1', '2026-09-20 16:37:13');
+INSERT INTO `operation_log` VALUES (101, 1, 'Glimcy', '申请退款', 'dto=RefundApplyDTO(orderId=2101591351068631042, refundReason=不需要了)', 10, '成功', '', '127.0.0.1', '2026-09-20 16:37:25');
+INSERT INTO `operation_log` VALUES (102, 1, 'Glimcy', '同意退款', 'orderId=2101591351068631042', 13, '成功', '', '127.0.0.1', '2026-09-20 16:37:33');
+INSERT INTO `operation_log` VALUES (103, 1, 'Glimcy', '退款审核', 'dto=RefundAuditDTO(orderId=2101591351068631042, passed=true, remark=null)', 12, '成功', '', '127.0.0.1', '2026-09-20 16:37:35');
+INSERT INTO `operation_log` VALUES (104, 1, 'Glimcy', '获取当前用户信息', '无', 0, '成功', '', '127.0.0.1', '2026-09-20 16:37:39');
+INSERT INTO `operation_log` VALUES (105, 1, 'Glimcy', '获取当前用户信息', '无', 1, '成功', '', '127.0.0.1', '2026-09-20 16:37:52');
+INSERT INTO `operation_log` VALUES (106, 1, 'Glimcy', '获取当前用户信息', '无', 1, '成功', '', '127.0.0.1', '2026-09-20 16:37:58');
+INSERT INTO `operation_log` VALUES (107, 1, 'Glimcy', '获取当前用户信息', '无', 0, '成功', '', '127.0.0.1', '2026-09-20 16:38:10');
+INSERT INTO `operation_log` VALUES (108, 1, 'Glimcy', '编辑优惠券', 'dto=AdminCouponFormDTO(id=1, name=惊喜满减券, type=1, minThreshold=500, amount=20, discount=0.8, capAmount=null, scope=0, typeId=null, totalCount=5, perUserLimit=1, claimStart=2026-09-20T16:35:56, claimEnd=2026-09-30T00:00, validType=2, validStart=null, validEnd=null, validDays=15, targetType=0, targetDays=30, status=1)', 18, '成功', '修改成功', '127.0.0.1', '2026-09-20 16:46:59');
+INSERT INTO `operation_log` VALUES (109, 1, 'Glimcy', '创建订单', 'dto=CartFormDTO(consignee=郭名城, phone=13444444444, address=UK, remark=, itemList=[OrderItemDTO(furnitureId=974, skuId=null, quantity=1)], userCouponId=null)', 42, '成功', '', '127.0.0.1', '2026-09-20 16:48:10');
+INSERT INTO `operation_log` VALUES (110, 1, 'Glimcy', '取消订单', 'orderId=2101594249617903617', 16, '成功', '', '127.0.0.1', '2026-09-20 16:48:14');
+INSERT INTO `operation_log` VALUES (111, 1, 'Glimcy', '编辑优惠券', 'dto=AdminCouponFormDTO(id=1, name=惊喜满减券, type=1, minThreshold=500, amount=20, discount=0.8, capAmount=null, scope=0, typeId=null, totalCount=null, perUserLimit=10, claimStart=2026-09-20T16:35:56, claimEnd=2026-09-30T00:00, validType=2, validStart=null, validEnd=null, validDays=15, targetType=0, targetDays=30, status=1)', 8, '成功', '修改成功', '127.0.0.1', '2026-09-20 16:52:12');
+INSERT INTO `operation_log` VALUES (112, 1, 'Glimcy', '创建订单', 'dto=CartFormDTO(consignee=郭名城, phone=13444444444, address=UK, remark=, itemList=[OrderItemDTO(furnitureId=974, skuId=null, quantity=1)], userCouponId=4)', 21, '成功', '', '127.0.0.1', '2026-09-20 16:53:08');
+INSERT INTO `operation_log` VALUES (113, 1, 'Glimcy', '支付订单', 'orderId=2101595503018545153', 9, '成功', '', '127.0.0.1', '2026-09-20 16:53:17');
+INSERT INTO `operation_log` VALUES (114, 1, 'Glimcy', '获取当前用户信息', '无', 0, '成功', '', '127.0.0.1', '2026-09-20 16:53:26');
+INSERT INTO `operation_log` VALUES (115, 1, 'Glimcy', '获取当前用户信息', '无', 0, '成功', '', '127.0.0.1', '2026-09-20 16:53:34');
+INSERT INTO `operation_log` VALUES (116, 1, 'Glimcy', '申请退款', 'dto=RefundApplyDTO(orderId=2101595503018545153, refundReason=不需要了)', 9, '成功', '', '127.0.0.1', '2026-09-20 16:53:45');
+INSERT INTO `operation_log` VALUES (117, 1, 'Glimcy', '同意退款', 'orderId=2101595503018545153', 8, '成功', '', '127.0.0.1', '2026-09-20 16:53:50');
+INSERT INTO `operation_log` VALUES (118, 1, 'Glimcy', '退款审核', 'dto=RefundAuditDTO(orderId=2101595503018545153, passed=true, remark=null)', 13, '成功', '', '127.0.0.1', '2026-09-20 16:53:51');
+INSERT INTO `operation_log` VALUES (119, 1, 'Glimcy', '获取当前用户信息', '无', 0, '成功', '', '127.0.0.1', '2026-09-20 16:53:54');
 
 -- ----------------------------
 -- Table structure for order
@@ -3018,6 +3116,8 @@ CREATE TABLE `order`  (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '订单ID，自增主键',
   `user_id` bigint NOT NULL COMMENT '下单用户ID',
   `total_price` decimal(10, 2) NULL DEFAULT NULL COMMENT '订单总金额(元)',
+  `coupon_id` bigint NULL DEFAULT NULL COMMENT '使用的优惠券模板ID',
+  `coupon_discount` decimal(10, 2) NULL DEFAULT 0.00 COMMENT '优惠金额',
   `status` int NULL DEFAULT NULL COMMENT '订单状态：0待支付、1已支付、2已发货、3已完成、4已取消、5已评价、6申请退款中、7退款审核中、8已退款',
   `consignee` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL COMMENT '收货人姓名',
   `phone` varchar(15) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL COMMENT '收货人电话',
@@ -3039,39 +3139,43 @@ CREATE TABLE `order`  (
   PRIMARY KEY (`id`) USING BTREE,
   INDEX `user_id`(`user_id` ASC) USING BTREE,
   INDEX `idx_status`(`status` ASC) USING BTREE,
-  INDEX `idx_timeout_query`(`status` ASC, `create_time` ASC) USING BTREE COMMENT '超时未支付订单扫描优化(status=0 且 create_time 早于截止时间)',
+  INDEX `idx_timeout_query`(`status` ASC, `create_time` ASC) USING BTREE,
   CONSTRAINT `order_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `user` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT
-) ENGINE = InnoDB AUTO_INCREMENT = 2086819430708658179 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '订单表' ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB AUTO_INCREMENT = 2101595503018545154 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '订单表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of order
 -- ----------------------------
-INSERT INTO `order` VALUES (2037108025407328258, 1, 380.00, 3, 'LOPS', '13483005180', '河北省邯郸市永年区西苏乡北贾葛村', '', '2026-03-27 02:02:56', '2026-04-14 00:40:27', '2026-04-14 00:43:04', NULL, '2026-08-10 19:31:40', 0, 0, NULL, NULL, NULL, NULL, NULL, NULL);
-INSERT INTO `order` VALUES (2037125264768618498, 1, 380.00, 3, 'LOPS', '13483005180', '河北省邯郸市永年区西苏乡北贾葛村', '', '2026-03-27 03:11:26', NULL, '2026-03-30 22:55:40', NULL, '2026-08-10 19:31:40', 0, 0, NULL, NULL, NULL, NULL, NULL, NULL);
-INSERT INTO `order` VALUES (2037403055074365442, 1, 380.00, 3, 'LOPS', '13483005180', '河北省邯郸市永年区西苏乡北贾葛村', '', '2026-03-27 21:35:16', NULL, NULL, NULL, '2026-08-10 19:31:40', 0, 0, NULL, NULL, NULL, NULL, NULL, NULL);
-INSERT INTO `order` VALUES (2037405128662761473, 1, 380.00, 4, 'LOPS', '13483005180', '河北省邯郸市永年区西苏乡北贾葛村', '', '2026-03-27 21:43:30', NULL, NULL, NULL, '2026-08-10 19:31:40', 0, 0, NULL, NULL, NULL, NULL, NULL, NULL);
-INSERT INTO `order` VALUES (2050112715682291714, 1, 380.00, 3, 'LOPS', '13483005180', '河北省邯郸市永年区西苏乡北贾葛村', '', '2026-05-01 23:18:55', '2026-05-01 23:19:07', '2026-05-01 23:19:30', NULL, '2026-08-10 19:31:40', 0, 0, NULL, NULL, NULL, NULL, NULL, NULL);
-INSERT INTO `order` VALUES (2056279154531528705, 1, 380.00, 5, 'LOPS', '13483005180', '河北省邯郸市永年区西苏乡北贾葛村', '', '2026-05-18 23:42:09', '2026-05-18 23:42:20', '2026-05-19 00:06:14', NULL, '2026-08-10 19:31:40', 0, 0, NULL, NULL, NULL, NULL, NULL, NULL);
-INSERT INTO `order` VALUES (2057053960734547970, 1, 3680.00, 4, 'LOPS', '13483005180', '河北省邯郸市永年区西苏乡北贾葛村', '', '2026-05-21 03:00:57', NULL, NULL, NULL, '2026-08-10 19:31:40', 0, 0, NULL, NULL, NULL, NULL, NULL, NULL);
-INSERT INTO `order` VALUES (2057678224726740993, 1, 5680.00, 3, 'LOPS', '13483005180', '河北省邯郸市永年区西苏乡北贾葛村', '', '2026-05-22 20:21:33', '2026-05-22 20:21:47', '2026-05-22 20:22:16', '2026-05-22 20:22:32', '2026-08-10 19:31:40', 0, 0, NULL, NULL, NULL, NULL, NULL, NULL);
-INSERT INTO `order` VALUES (2059155009276502018, 2, 380.00, 5, 'LOPS', '13483005181', '河北省邯郸市', '', '2026-05-26 22:09:46', '2026-05-26 22:09:51', NULL, NULL, '2026-08-10 19:31:40', 0, 0, NULL, NULL, NULL, NULL, NULL, NULL);
-INSERT INTO `order` VALUES (2066819535757152258, 1, 2580.00, 8, '郭晨阳', '13483005180', '河北省邯郸市永年区西苏乡北贾葛村', '', '2026-06-17 01:45:52', '2026-06-17 01:45:57', '2026-06-17 02:05:48', '2026-07-10 22:57:31', '2026-08-10 19:31:40', 0, 0, '123', 3, '2026-08-06 19:27:54', '2026-08-06 19:28:34', '2026-08-06 19:28:57', NULL);
-INSERT INTO `order` VALUES (2066823026185637890, 1, 380.00, 4, '郭名城', '13444444444', 'UK', '', '2026-06-17 01:59:44', NULL, NULL, NULL, '2026-08-10 19:31:40', 0, 0, NULL, NULL, NULL, NULL, NULL, NULL);
-INSERT INTO `order` VALUES (2066823965957197826, 1, 3280.00, 4, '郭名城', '13444444444', 'UK', '', '2026-06-17 02:03:28', NULL, NULL, NULL, '2026-08-10 19:31:40', 0, 0, NULL, NULL, NULL, NULL, NULL, NULL);
-INSERT INTO `order` VALUES (2066824117648396289, 1, 3000.00, 4, '郭名城', '13444444444', 'UK', '', '2026-06-17 02:04:04', NULL, NULL, NULL, '2026-08-10 19:31:40', 0, 0, NULL, NULL, NULL, NULL, NULL, NULL);
-INSERT INTO `order` VALUES (2066824489049821185, 1, 3000.00, 4, '郭名城', '13444444444', 'UK', '', '2026-06-17 02:05:33', NULL, NULL, NULL, '2026-08-10 19:31:40', 0, 1, NULL, NULL, NULL, NULL, NULL, NULL);
-INSERT INTO `order` VALUES (2068906960379793409, 1, 2580.00, 5, 'Glimcy', '13483005180', 'UK', '', '2026-06-22 20:00:32', '2026-06-22 20:00:39', '2026-06-22 20:01:12', '2026-06-22 20:01:31', '2026-08-10 19:31:40', 0, 0, NULL, NULL, NULL, NULL, NULL, NULL);
-INSERT INTO `order` VALUES (2068931536669130754, 1, 380.00, 5, '郭名城', '13444444444', 'UK', '', '2026-06-22 21:38:12', '2026-06-22 21:38:16', '2026-06-22 21:38:26', '2026-06-22 21:38:33', '2026-08-10 19:31:40', 0, 0, NULL, NULL, NULL, NULL, NULL, NULL);
-INSERT INTO `order` VALUES (2068932766556504066, 1, 380.00, 5, '郭名城', '13444444444', 'UK', '', '2026-06-22 21:43:05', '2026-06-22 21:43:11', '2026-06-22 21:43:22', '2026-06-22 21:43:28', '2026-08-10 19:31:40', 0, 0, NULL, NULL, NULL, NULL, NULL, NULL);
-INSERT INTO `order` VALUES (2068937957070610434, 1, 380.00, 5, '郭名城', '13444444444', 'UK', '', '2026-06-22 22:03:43', '2026-06-22 22:03:46', '2026-06-22 22:03:51', '2026-06-22 22:04:04', '2026-08-10 19:31:40', 0, 0, NULL, NULL, NULL, NULL, NULL, NULL);
-INSERT INTO `order` VALUES (2068957884301307905, 2, 380.00, 5, 'LOPS', '13483005181', '邯郸市', '', '2026-06-22 23:22:54', '2026-06-22 23:22:58', '2026-06-22 23:23:08', '2026-06-22 23:23:20', '2026-08-10 19:31:40', 0, 0, NULL, NULL, NULL, NULL, NULL, NULL);
-INSERT INTO `order` VALUES (2074016455911972865, 1, 380.00, 4, '郭名城', '13444444444', 'UK', '', '2026-07-06 22:23:51', NULL, NULL, NULL, '2026-08-10 19:31:40', 0, 1, NULL, NULL, NULL, NULL, NULL, NULL);
-INSERT INTO `order` VALUES (2074021113363607553, 1, 480.00, 4, '郭名城', '13444444444', 'UK', '', '2026-07-06 22:42:22', NULL, NULL, NULL, '2026-08-10 19:31:40', 0, 1, NULL, NULL, NULL, NULL, NULL, NULL);
-INSERT INTO `order` VALUES (2074021187003002881, 1, 380.00, 4, '郭名城', '13444444444', 'UK', '', '2026-07-06 22:42:39', NULL, NULL, NULL, '2026-08-10 19:31:40', 0, 1, NULL, NULL, NULL, NULL, NULL, NULL);
-INSERT INTO `order` VALUES (2074027699771478017, 1, 510.00, 4, '郭名城', '13444444444', 'UK', '', '2026-07-06 23:08:32', NULL, NULL, NULL, '2026-08-10 19:31:40', 0, 1, NULL, NULL, NULL, NULL, NULL, NULL);
-INSERT INTO `order` VALUES (2076560543258877953, 1, 200.00, 4, '郭名城', '13444444444', 'UK', '', '2026-07-13 22:53:09', NULL, NULL, NULL, '2026-08-10 19:31:40', 0, 0, NULL, NULL, NULL, NULL, NULL, NULL);
-INSERT INTO `order` VALUES (2086819018983194626, 1, 800.00, 4, '郭名城', '13444444444', 'UK', '', '2026-08-10 22:16:40', NULL, NULL, NULL, '2026-08-10 22:16:46', 0, 0, NULL, NULL, NULL, NULL, NULL, NULL);
-INSERT INTO `order` VALUES (2086819430708658178, 1, 100.00, 4, '郭名城', '13444444444', 'UK', '', '2026-08-10 22:18:18', NULL, NULL, NULL, '2026-08-10 22:20:04', 0, 0, NULL, NULL, NULL, NULL, NULL, NULL);
+INSERT INTO `order` VALUES (2037108025407328258, 1, 380.00, NULL, 0.00, 3, 'LOPS', '13483005180', '河北省邯郸市永年区西苏乡北贾葛村', '', '2026-03-27 02:02:56', '2026-04-14 00:40:27', '2026-04-14 00:43:04', NULL, '2026-08-10 19:31:40', 0, 0, NULL, NULL, NULL, NULL, NULL, NULL);
+INSERT INTO `order` VALUES (2037125264768618498, 1, 380.00, NULL, 0.00, 3, 'LOPS', '13483005180', '河北省邯郸市永年区西苏乡北贾葛村', '', '2026-03-27 03:11:26', NULL, '2026-03-30 22:55:40', NULL, '2026-08-10 19:31:40', 0, 0, NULL, NULL, NULL, NULL, NULL, NULL);
+INSERT INTO `order` VALUES (2037403055074365442, 1, 380.00, NULL, 0.00, 3, 'LOPS', '13483005180', '河北省邯郸市永年区西苏乡北贾葛村', '', '2026-03-27 21:35:16', NULL, NULL, NULL, '2026-08-10 19:31:40', 0, 0, NULL, NULL, NULL, NULL, NULL, NULL);
+INSERT INTO `order` VALUES (2037405128662761473, 1, 380.00, NULL, 0.00, 4, 'LOPS', '13483005180', '河北省邯郸市永年区西苏乡北贾葛村', '', '2026-03-27 21:43:30', NULL, NULL, NULL, '2026-08-10 19:31:40', 0, 0, NULL, NULL, NULL, NULL, NULL, NULL);
+INSERT INTO `order` VALUES (2050112715682291714, 1, 380.00, NULL, 0.00, 3, 'LOPS', '13483005180', '河北省邯郸市永年区西苏乡北贾葛村', '', '2026-05-01 23:18:55', '2026-05-01 23:19:07', '2026-05-01 23:19:30', NULL, '2026-08-10 19:31:40', 0, 0, NULL, NULL, NULL, NULL, NULL, NULL);
+INSERT INTO `order` VALUES (2056279154531528705, 1, 380.00, NULL, 0.00, 5, 'LOPS', '13483005180', '河北省邯郸市永年区西苏乡北贾葛村', '', '2026-05-18 23:42:09', '2026-05-18 23:42:20', '2026-05-19 00:06:14', NULL, '2026-08-10 19:31:40', 0, 0, NULL, NULL, NULL, NULL, NULL, NULL);
+INSERT INTO `order` VALUES (2057053960734547970, 1, 3680.00, NULL, 0.00, 4, 'LOPS', '13483005180', '河北省邯郸市永年区西苏乡北贾葛村', '', '2026-05-21 03:00:57', NULL, NULL, NULL, '2026-08-10 19:31:40', 0, 0, NULL, NULL, NULL, NULL, NULL, NULL);
+INSERT INTO `order` VALUES (2057678224726740993, 1, 5680.00, NULL, 0.00, 3, 'LOPS', '13483005180', '河北省邯郸市永年区西苏乡北贾葛村', '', '2026-05-22 20:21:33', '2026-05-22 20:21:47', '2026-05-22 20:22:16', '2026-05-22 20:22:32', '2026-08-10 19:31:40', 0, 0, NULL, NULL, NULL, NULL, NULL, NULL);
+INSERT INTO `order` VALUES (2059155009276502018, 2, 380.00, NULL, 0.00, 5, 'LOPS', '13483005181', '河北省邯郸市', '', '2026-05-26 22:09:46', '2026-05-26 22:09:51', NULL, NULL, '2026-08-10 19:31:40', 0, 0, NULL, NULL, NULL, NULL, NULL, NULL);
+INSERT INTO `order` VALUES (2066819535757152258, 1, 2580.00, NULL, 0.00, 8, '郭晨阳', '13483005180', '河北省邯郸市永年区西苏乡北贾葛村', '', '2026-06-17 01:45:52', '2026-06-17 01:45:57', '2026-06-17 02:05:48', '2026-07-10 22:57:31', '2026-08-10 19:31:40', 0, 0, '123', 3, '2026-08-06 19:27:54', '2026-08-06 19:28:34', '2026-08-06 19:28:57', NULL);
+INSERT INTO `order` VALUES (2066823026185637890, 1, 380.00, NULL, 0.00, 4, '郭名城', '13444444444', 'UK', '', '2026-06-17 01:59:44', NULL, NULL, NULL, '2026-08-10 19:31:40', 0, 0, NULL, NULL, NULL, NULL, NULL, NULL);
+INSERT INTO `order` VALUES (2066823965957197826, 1, 3280.00, NULL, 0.00, 4, '郭名城', '13444444444', 'UK', '', '2026-06-17 02:03:28', NULL, NULL, NULL, '2026-08-10 19:31:40', 0, 0, NULL, NULL, NULL, NULL, NULL, NULL);
+INSERT INTO `order` VALUES (2066824117648396289, 1, 3000.00, NULL, 0.00, 4, '郭名城', '13444444444', 'UK', '', '2026-06-17 02:04:04', NULL, NULL, NULL, '2026-08-10 19:31:40', 0, 0, NULL, NULL, NULL, NULL, NULL, NULL);
+INSERT INTO `order` VALUES (2066824489049821185, 1, 3000.00, NULL, 0.00, 4, '郭名城', '13444444444', 'UK', '', '2026-06-17 02:05:33', NULL, NULL, NULL, '2026-08-10 19:31:40', 0, 1, NULL, NULL, NULL, NULL, NULL, NULL);
+INSERT INTO `order` VALUES (2068906960379793409, 1, 2580.00, NULL, 0.00, 5, 'Glimcy', '13483005180', 'UK', '', '2026-06-22 20:00:32', '2026-06-22 20:00:39', '2026-06-22 20:01:12', '2026-06-22 20:01:31', '2026-08-10 19:31:40', 0, 0, NULL, NULL, NULL, NULL, NULL, NULL);
+INSERT INTO `order` VALUES (2068931536669130754, 1, 380.00, NULL, 0.00, 5, '郭名城', '13444444444', 'UK', '', '2026-06-22 21:38:12', '2026-06-22 21:38:16', '2026-06-22 21:38:26', '2026-06-22 21:38:33', '2026-08-10 19:31:40', 0, 0, NULL, NULL, NULL, NULL, NULL, NULL);
+INSERT INTO `order` VALUES (2068932766556504066, 1, 380.00, NULL, 0.00, 5, '郭名城', '13444444444', 'UK', '', '2026-06-22 21:43:05', '2026-06-22 21:43:11', '2026-06-22 21:43:22', '2026-06-22 21:43:28', '2026-08-10 19:31:40', 0, 0, NULL, NULL, NULL, NULL, NULL, NULL);
+INSERT INTO `order` VALUES (2068937957070610434, 1, 380.00, NULL, 0.00, 5, '郭名城', '13444444444', 'UK', '', '2026-06-22 22:03:43', '2026-06-22 22:03:46', '2026-06-22 22:03:51', '2026-06-22 22:04:04', '2026-08-10 19:31:40', 0, 0, NULL, NULL, NULL, NULL, NULL, NULL);
+INSERT INTO `order` VALUES (2068957884301307905, 2, 380.00, NULL, 0.00, 5, 'LOPS', '13483005181', '邯郸市', '', '2026-06-22 23:22:54', '2026-06-22 23:22:58', '2026-06-22 23:23:08', '2026-06-22 23:23:20', '2026-08-10 19:31:40', 0, 0, NULL, NULL, NULL, NULL, NULL, NULL);
+INSERT INTO `order` VALUES (2074016455911972865, 1, 380.00, NULL, 0.00, 4, '郭名城', '13444444444', 'UK', '', '2026-07-06 22:23:51', NULL, NULL, NULL, '2026-08-10 19:31:40', 0, 1, NULL, NULL, NULL, NULL, NULL, NULL);
+INSERT INTO `order` VALUES (2074021113363607553, 1, 480.00, NULL, 0.00, 4, '郭名城', '13444444444', 'UK', '', '2026-07-06 22:42:22', NULL, NULL, NULL, '2026-08-10 19:31:40', 0, 1, NULL, NULL, NULL, NULL, NULL, NULL);
+INSERT INTO `order` VALUES (2074021187003002881, 1, 380.00, NULL, 0.00, 4, '郭名城', '13444444444', 'UK', '', '2026-07-06 22:42:39', NULL, NULL, NULL, '2026-08-10 19:31:40', 0, 1, NULL, NULL, NULL, NULL, NULL, NULL);
+INSERT INTO `order` VALUES (2074027699771478017, 1, 510.00, NULL, 0.00, 4, '郭名城', '13444444444', 'UK', '', '2026-07-06 23:08:32', NULL, NULL, NULL, '2026-08-10 19:31:40', 0, 1, NULL, NULL, NULL, NULL, NULL, NULL);
+INSERT INTO `order` VALUES (2076560543258877953, 1, 200.00, NULL, 0.00, 4, '郭名城', '13444444444', 'UK', '', '2026-07-13 22:53:09', NULL, NULL, NULL, '2026-08-10 19:31:40', 0, 0, NULL, NULL, NULL, NULL, NULL, NULL);
+INSERT INTO `order` VALUES (2086819018983194626, 1, 800.00, NULL, 0.00, 4, '郭名城', '13444444444', 'UK', '', '2026-08-10 22:16:40', NULL, NULL, NULL, '2026-08-10 22:16:46', 0, 0, NULL, NULL, NULL, NULL, NULL, NULL);
+INSERT INTO `order` VALUES (2086819430708658178, 1, 100.00, NULL, 0.00, 4, '郭名城', '13444444444', 'UK', '', '2026-08-10 22:18:18', NULL, NULL, NULL, '2026-08-10 22:20:04', 0, 0, NULL, NULL, NULL, NULL, NULL, NULL);
+INSERT INTO `order` VALUES (2101588117025406978, 1, 1366.78, NULL, 0.00, 4, '郭名城', '13444444444', 'UK', '', '2026-09-20 16:23:47', NULL, NULL, NULL, '2026-09-20 16:24:03', 0, 0, NULL, NULL, NULL, NULL, NULL, NULL);
+INSERT INTO `order` VALUES (2101591351068631042, 1, 1346.78, 1, 20.00, 8, '郭名城', '13444444444', 'UK', '', '2026-09-20 16:36:38', '2026-09-20 16:37:00', NULL, NULL, '2026-09-20 16:37:35', 0, 0, '不需要了', 1, '2026-09-20 16:37:25', '2026-09-20 16:37:33', '2026-09-20 16:37:35', NULL);
+INSERT INTO `order` VALUES (2101594249617903617, 1, 1366.78, NULL, 0.00, 4, '郭名城', '13444444444', 'UK', '', '2026-09-20 16:48:09', NULL, NULL, NULL, '2026-09-20 16:48:14', 0, 0, NULL, NULL, NULL, NULL, NULL, NULL);
+INSERT INTO `order` VALUES (2101595503018545153, 1, 1346.78, 1, 20.00, 8, '郭名城', '13444444444', 'UK', '', '2026-09-20 16:53:08', '2026-09-20 16:53:17', NULL, NULL, '2026-09-20 16:53:51', 0, 0, '不需要了', 1, '2026-09-20 16:53:45', '2026-09-20 16:53:50', '2026-09-20 16:53:51', NULL);
 
 -- ----------------------------
 -- Table structure for order_item
@@ -3098,7 +3202,7 @@ CREATE TABLE `order_item`  (
   CONSTRAINT `fk_order_item_sku` FOREIGN KEY (`sku_id`) REFERENCES `sku` (`id`) ON DELETE SET NULL ON UPDATE RESTRICT,
   CONSTRAINT `order_item_ibfk_1` FOREIGN KEY (`order_id`) REFERENCES `order` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT,
   CONSTRAINT `order_item_ibfk_2` FOREIGN KEY (`furniture_id`) REFERENCES `furniture` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT
-) ENGINE = InnoDB AUTO_INCREMENT = 2086819430708658180 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '订单明细表' ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB AUTO_INCREMENT = 2101595503018545155 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '订单明细表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of order_item
@@ -3130,6 +3234,10 @@ INSERT INTO `order_item` VALUES (2074027699771478019, 2074027699771478017, 1, 29
 INSERT INTO `order_item` VALUES (2076560543313403905, 2076560543258877953, 9, 127, 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/05/19/cdaec05fc761442c919e2ea20460eb5c.jpg', '书架', 200.00, 1, '颜色:黑色', 200.00, 0, '2026-07-13 22:53:08', '2026-07-13 22:53:08');
 INSERT INTO `order_item` VALUES (2086819019129995266, 2086819018983194626, 2, 62, 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/05/19/927db786745d4e0cbbfdec0db54a993e.jpg', '真皮沙发', 800.00, 1, '颜色:黑色,人数:三人位', 800.00, 0, '2026-08-10 22:16:40', '2026-08-10 22:16:40');
 INSERT INTO `order_item` VALUES (2086819430708658179, 2086819430708658178, 3, 72, 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/05/19/bc7ca24b2a414907b4fa663436178e51.jpg', '席梦思床垫', 100.00, 1, '质地:硬,尺寸（米）:1.5 × 1.8', 100.00, 0, '2026-08-10 22:18:18', '2026-08-10 22:18:18');
+INSERT INTO `order_item` VALUES (2101588117025406979, 2101588117025406978, 974, NULL, 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/46cc793ad71c4d62acb0d09459b3aa4b.jpg', '白色文件柜', 1366.78, 1, NULL, 1366.78, 0, '2026-09-20 16:23:47', '2026-09-20 16:23:47');
+INSERT INTO `order_item` VALUES (2101591351068631043, 2101591351068631042, 974, NULL, 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/46cc793ad71c4d62acb0d09459b3aa4b.jpg', '白色文件柜', 1366.78, 1, NULL, 1366.78, 0, '2026-09-20 16:36:38', '2026-09-20 16:36:38');
+INSERT INTO `order_item` VALUES (2101594249617903618, 2101594249617903617, 974, NULL, 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/46cc793ad71c4d62acb0d09459b3aa4b.jpg', '白色文件柜', 1366.78, 1, NULL, 1366.78, 0, '2026-09-20 16:48:09', '2026-09-20 16:48:09');
+INSERT INTO `order_item` VALUES (2101595503018545154, 2101595503018545153, 974, NULL, 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/46cc793ad71c4d62acb0d09459b3aa4b.jpg', '白色文件柜', 1366.78, 1, NULL, 1366.78, 0, '2026-09-20 16:53:08', '2026-09-20 16:53:08');
 
 -- ----------------------------
 -- Table structure for review_comment
@@ -3172,7 +3280,7 @@ INSERT INTO `review_comment` VALUES (15, 3, 1, '必须好', 2, 9, 1, NULL, NULL,
 INSERT INTO `review_comment` VALUES (16, 11, 2, '嗯嗯', 1, 4, 1, NULL, NULL, '2026-07-11 01:47:11', 0, 0);
 INSERT INTO `review_comment` VALUES (17, 2, 1, 'OK', 2, NULL, 1, NULL, NULL, '2026-07-11 18:44:55', 0, 0);
 INSERT INTO `review_comment` VALUES (18, 11, 1, '你个臭傻逼', 2, NULL, 2, NULL, NULL, '2026-08-17 11:34:41', 1, 0);
-INSERT INTO `review_comment` VALUES (19, 11, 1, '臭狗屎', 2, NULL, 3, '包含辱骂内容', NULL, '2026-08-17 12:52:38', 0, 0);
+INSERT INTO `review_comment` VALUES (19, 11, 1, '臭狗屎', 2, NULL, 2, '包含辱骂内容', '包含辱骂或人身攻击', '2026-08-17 12:52:38', 0, 0);
 
 -- ----------------------------
 -- Table structure for review_reject_reason
@@ -3223,11 +3331,10 @@ CREATE TABLE `site_content`  (
 -- ----------------------------
 -- Records of site_content
 -- ----------------------------
-INSERT INTO `site_content` VALUES (1, 'hero_1', 'carousel', '热销家具精选', '爆款单品超值低价，好物一站直达', NULL, '/type/0', '{\"bg\": \"#f5ece0\", \"cta\": \"立即抢购\", \"tag\": \"🔥 热销爆款\"}', 1, 1, '2026-07-14 00:17:55', 0);
-INSERT INTO `site_content` VALUES (2, 'hero_2', 'carousel', '打造你的梦想客厅', '真皮沙发 + 茶几成套购买更省心', NULL, '/type/1', '{\"bg\": \"#eef1f5\", \"cta\": \"查看客厅系列\", \"tag\": \"🏠 客厅焕新\"}', 2, 1, '2026-07-14 00:17:33', 0);
-INSERT INTO `site_content` VALUES (3, 'hero_3', 'carousel', '小智智能帮你选家具', '不知道选什么风格？问问 AI 客服小智，获取专业搭配建议', NULL, '/ai-chat', '{\"bg\": \"#eefbf5\", \"cta\": \"开始对话\", \"tag\": \"🤖 AI 导购\"}', 3, 1, '2026-07-31 18:59:11', 0);
-INSERT INTO `site_content` VALUES (4, 'brand_intro', 'story', '用心打造每一件家具', '名城家具城 创立于 2026 年，专注于将自然材质与现代设计完美融合。\n我们相信，好的家具不仅是功能性的存在，更是承载生活记忆与情感的空间伴侣。\n每一件作品背后，都凝聚着匠人对细节的执着与对美的追求。\n\n从最初的三人设计工作室，到如今服务超过 50,000 个家庭，我们始终坚守初心——将自然材质与现代设计完美融合，为每一个家打造可以传承的经典之作。', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/site/2026/07/13/9ca4b865e476449787ddae6956145221.jpg', '/about', '{\"linkText\": \"了解更多关于我们的故事\"}', 1, 1, '2026-07-14 00:45:51', 0);
-INSERT INTO `site_content` VALUES (5, 'brand_image', 'story', NULL, NULL, 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/site/2026/07/13/dc7725262bb7466fad64522748713a47.webp', NULL, '{\"border\": \"1px solid rgba(255,255,255,0.1)\", \"bgColor\": \"rgba(255,255,255,0.06)\"}', 2, 1, '2026-07-14 00:44:55', 0);
+INSERT INTO `site_content` VALUES (-1789891359762, 'hero_4', 'carousel', '领取大额优惠券', '超大额优惠券一键领取', '', '/coupons', '{\"bg\": \"#f7e5e5\", \"cta\": \"立即领取\", \"tag\": \"大额优惠\"}', 4, 1, '2026-09-20 16:11:13', 0);
+INSERT INTO `site_content` VALUES (1, 'hero_1', 'carousel', '热销家具精选', '爆款单品超值低价，好物一站直达', NULL, '/type/0', '{\"bg\": \"#f5ece0\", \"cta\": \"立即抢购\", \"tag\": \"🔥 热销爆款\"}', 1, 1, '2026-09-20 16:11:12', 0);
+INSERT INTO `site_content` VALUES (2, 'hero_2', 'carousel', '打造你的梦想家庭', '真皮沙发 + 茶几成套购买更省心', NULL, '/type/0', '{\"bg\": \"#eef1f5\", \"cta\": \"查看全部家具\", \"tag\": \"🏠 客厅焕新\"}', 2, 1, '2026-09-20 16:11:13', 0);
+INSERT INTO `site_content` VALUES (3, 'hero_3', 'carousel', '小智智能帮你选家具', '不知道选什么风格？问问 AI 客服小智，获取专业搭配建议', NULL, '/ai-chat', '{\"bg\": \"#eefbf5\", \"cta\": \"开始对话\", \"tag\": \"🤖 AI 导购\"}', 3, 1, '2026-09-20 16:11:13', 0);
 INSERT INTO `site_content` VALUES (6, 'value_1', 'story', '正品保障', '官方授权品牌入驻，所有商品假一赔十', NULL, NULL, '{\"icon\": \"✓\"}', 10, 1, '2026-07-14 00:15:56', 0);
 INSERT INTO `site_content` VALUES (7, 'value_2', 'story', '极速发货', '工作日 48 小时内安排出库发货', NULL, NULL, '{\"icon\": \"🚚\"}', 11, 1, '2026-07-14 00:15:56', 0);
 INSERT INTO `site_content` VALUES (8, 'value_3', 'story', '7 天无理由', '收到货后 7 天内支持无理由退换', NULL, NULL, '{\"icon\": \"↩️\"}', 12, 1, '2026-07-14 00:15:56', 0);
@@ -3569,15 +3676,40 @@ CREATE TABLE `user_address`  (
   PRIMARY KEY (`id`) USING BTREE,
   INDEX `idx_user_id`(`user_id` ASC) USING BTREE,
   CONSTRAINT `fk_user_address_user` FOREIGN KEY (`user_id`) REFERENCES `user` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT
-) ENGINE = InnoDB AUTO_INCREMENT = 15 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '用户收货地址表' ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB AUTO_INCREMENT = 16 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '用户收货地址表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of user_address
 -- ----------------------------
 INSERT INTO `user_address` VALUES (1, 1, '郭名城', '13444444444', 'USA', 0, '2026-05-26 22:31:07');
 INSERT INTO `user_address` VALUES (2, 1, '郭名城', '13444444444', 'UK', 1, '2026-05-26 22:31:24');
-INSERT INTO `user_address` VALUES (13, 1, '', '', '', 0, '2026-08-10 22:16:40');
-INSERT INTO `user_address` VALUES (14, 1, '', '', '', 0, '2026-08-10 22:18:18');
+
+-- ----------------------------
+-- Table structure for user_coupon
+-- ----------------------------
+DROP TABLE IF EXISTS `user_coupon`;
+CREATE TABLE `user_coupon`  (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '记录ID（自增主键）',
+  `user_id` bigint NOT NULL COMMENT '用户ID',
+  `coupon_id` bigint NOT NULL COMMENT '优惠券模板ID',
+  `status` tinyint NOT NULL DEFAULT 0 COMMENT '状态：0-未用，1-已用，2-已过期',
+  `expire_time` datetime NULL DEFAULT NULL COMMENT '过期时间（领券时按有效期模式算好）',
+  `got_time` datetime NULL DEFAULT CURRENT_TIMESTAMP COMMENT '领取时间',
+  `use_time` datetime NULL DEFAULT NULL COMMENT '使用时间（可空）',
+  `order_id` bigint NULL DEFAULT NULL COMMENT '使用的订单ID（可空）',
+  PRIMARY KEY (`id`) USING BTREE,
+  INDEX `idx_user_coupon`(`user_id` ASC, `status` ASC) USING BTREE,
+  INDEX `idx_coupon_id`(`coupon_id` ASC) USING BTREE
+) ENGINE = InnoDB AUTO_INCREMENT = 6 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '用户领取优惠券记录表' ROW_FORMAT = DYNAMIC;
+
+-- ----------------------------
+-- Records of user_coupon
+-- ----------------------------
+INSERT INTO `user_coupon` VALUES (1, 1, 1, 1, '2026-10-05 16:36:10', '2026-09-20 16:36:10', '2026-09-20 16:36:38', 2101591351068631042);
+INSERT INTO `user_coupon` VALUES (2, 1, 1, 0, '2026-10-05 16:52:19', '2026-09-20 16:52:19', NULL, NULL);
+INSERT INTO `user_coupon` VALUES (3, 1, 1, 0, '2026-10-05 16:52:27', '2026-09-20 16:52:27', NULL, NULL);
+INSERT INTO `user_coupon` VALUES (4, 1, 1, 0, '2026-10-05 16:52:27', '2026-09-20 16:52:27', NULL, NULL);
+INSERT INTO `user_coupon` VALUES (5, 1, 1, 0, '2026-10-05 16:52:28', '2026-09-20 16:52:28', NULL, NULL);
 
 -- ----------------------------
 -- Table structure for user_notification
@@ -3597,7 +3729,7 @@ CREATE TABLE `user_notification`  (
   INDEX `idx_user_deleted`(`user_id` ASC, `is_deleted` ASC) USING BTREE,
   CONSTRAINT `fk_notification_read_notification` FOREIGN KEY (`notification_id`) REFERENCES `notification` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT,
   CONSTRAINT `fk_notification_read_user` FOREIGN KEY (`user_id`) REFERENCES `user` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT
-) ENGINE = InnoDB AUTO_INCREMENT = 19 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '用户通知关联表' ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB AUTO_INCREMENT = 20 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '用户通知关联表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of user_notification
@@ -3620,5 +3752,6 @@ INSERT INTO `user_notification` VALUES (15, 19, 2, '2026-07-11 18:53:00', 1, 0, 
 INSERT INTO `user_notification` VALUES (16, 20, 2, '2026-08-18 14:42:15', 1, 0, '2026-08-18 14:42:15', '2026-08-18 14:42:15');
 INSERT INTO `user_notification` VALUES (17, 21, 2, '2026-08-18 14:48:08', 1, 0, '2026-08-18 14:48:07', '2026-08-18 14:48:08');
 INSERT INTO `user_notification` VALUES (18, 22, 2, '2026-08-18 14:55:03', 1, 0, '2026-08-18 14:55:02', '2026-08-18 14:55:03');
+INSERT INTO `user_notification` VALUES (19, 23, 1, NULL, 0, 1, '2026-09-20 15:55:13', '2026-09-20 15:55:13');
 
 SET FOREIGN_KEY_CHECKS = 1;
