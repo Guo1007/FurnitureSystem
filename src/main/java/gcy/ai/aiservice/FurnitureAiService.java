@@ -32,5 +32,4 @@ public interface FurnitureAiService {
      */
     @SystemMessage(fromResource = "system.txt")
     Flux<String> streamChat(@MemoryId String memoryId, @UserMessage String message);
-
 }
