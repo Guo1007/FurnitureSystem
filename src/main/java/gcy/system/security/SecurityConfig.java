@@ -43,7 +43,7 @@ public class SecurityConfig {
     /**
      * 构造器注入 Token 认证过滤器与匿名接口匹配器。
      *
-     * @param tokenAuthFilter         Token 认证过滤器，用于在每次请求中校验用户身份
+     * @param tokenAuthFilter          Token 认证过滤器，用于在每次请求中校验用户身份
      * @param anonymousEndpointMatcher 匿名接口匹配器，扫描 {@link Anonymous} 注解放行公开接口
      */
     public SecurityConfig(TokenAuthFilter tokenAuthFilter, AnonymousEndpointMatcher anonymousEndpointMatcher) {

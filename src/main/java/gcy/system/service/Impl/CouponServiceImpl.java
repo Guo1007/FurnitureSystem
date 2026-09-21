@@ -62,14 +62,14 @@ public class CouponServiceImpl implements ICouponService {
      */
     private static final String CLAIM_LUA =
             "local count = tonumber(redis.call('GET', KEYS[1]) or '0');" +
-            "local total = tonumber(ARGV[1]);" +
-            "if total > 0 and count >= total then return -1 end;" +
-            "local uc = tonumber(redis.call('GET', KEYS[2]) or '0');" +
-            "local limit = tonumber(ARGV[2]);" +
-            "if uc >= limit then return -2 end;" +
-            "redis.call('SET', KEYS[1], count + 1);" +
-            "redis.call('SET', KEYS[2], uc + 1);" +
-            "return 1;";
+                    "local total = tonumber(ARGV[1]);" +
+                    "if total > 0 and count >= total then return -1 end;" +
+                    "local uc = tonumber(redis.call('GET', KEYS[2]) or '0');" +
+                    "local limit = tonumber(ARGV[2]);" +
+                    "if uc >= limit then return -2 end;" +
+                    "redis.call('SET', KEYS[1], count + 1);" +
+                    "redis.call('SET', KEYS[2], uc + 1);" +
+                    "return 1;";
 
     /**
      * 领取 Lua 脚本对象（静态块初始化，与项目内 GET_AND_DEL_SCRIPT 同惯例）
@@ -336,11 +336,15 @@ public class CouponServiceImpl implements ICouponService {
 
     private String stateText(int state, Coupon c) {
         switch (state) {
-            case 1: return "即将开始";
-            case 2: return c.getTotalCount() != null && getClaimedCount(c.getId()) >= c.getTotalCount()
-                    ? "已领完" : "已结束";
-            case 3: return "已领取";
-            default: return "可领";
+            case 1:
+                return "即将开始";
+            case 2:
+                return c.getTotalCount() != null && getClaimedCount(c.getId()) >= c.getTotalCount()
+                        ? "已领完" : "已结束";
+            case 3:
+                return "已领取";
+            default:
+                return "可领";
         }
     }
 

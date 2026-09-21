@@ -51,7 +51,7 @@ public class ProfileReviewController {
     @Operation(summary = "拒绝昵称修改")
     @PutMapping("/nickname/reject/{userId}")
     public Result rejectNickname(@Parameter(description = "用户ID") @PathVariable Long userId,
-                                  @Parameter(description = "请求体") @RequestBody RejectRequest request) {
+                                 @Parameter(description = "请求体") @RequestBody RejectRequest request) {
         return profileReviewService.rejectNickname(userId, request.getReason());
     }
 
@@ -66,7 +66,7 @@ public class ProfileReviewController {
     @Operation(summary = "拒绝头像修改")
     @PutMapping("/icon/reject/{userId}")
     public Result rejectIcon(@Parameter(description = "用户ID") @PathVariable Long userId,
-                              @Parameter(description = "请求体") @RequestBody RejectRequest request) {
+                             @Parameter(description = "请求体") @RequestBody RejectRequest request) {
         return profileReviewService.rejectIcon(userId, request.getReason());
     }
 

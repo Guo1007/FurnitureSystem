@@ -150,7 +150,7 @@ public class FurnitureTools {
                 .collect(Collectors.toMap(SpecValue::getId, SpecValue::getValueName));
         for (Sku sku : skus) {
             sb.append(String.format("价格: ¥%s | 库存: %d件",
-                        sku.getPrice(), sku.getStock()));
+                    sku.getPrice(), sku.getStock()));
             List<SkuSpec> specs = specMap.get(sku.getId());
             if (specs != null && !specs.isEmpty()) {
                 sb.append(" | 规格: ");

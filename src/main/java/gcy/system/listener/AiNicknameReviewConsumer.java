@@ -122,7 +122,8 @@ public class AiNicknameReviewConsumer implements RocketMQListener<String> {
         }
     }
 
-    private record NicknameReviewResult(boolean pass, String rejectReason) {}
+    private record NicknameReviewResult(boolean pass, String rejectReason) {
+    }
 
     /**
      * 构建昵称审核提示词。
