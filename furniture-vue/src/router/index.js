@@ -2,6 +2,13 @@ import { createRouter, createWebHistory } from "vue-router";
 
 const router = createRouter({
   history: createWebHistory(),
+  // 新跳转回到顶部；前进/后退恢复浏览器记忆的滚动位置
+  scrollBehavior(to, from, savedPosition) {
+    if (savedPosition) {
+      return savedPosition;
+    }
+    return { top: 0 };
+  },
   routes: [
     // Standalone pages (no layout)
     {
