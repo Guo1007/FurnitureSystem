@@ -95,7 +95,7 @@ public class PaymentServiceImpl extends ServiceImpl<PaymentMapper, Payment> impl
                     "\"subject\":\"家具商城-订单#" + orderId + "\"," +
                     "\"product_code\":\"FAST_INSTANT_TRADE_PAY\"" +
                     "}");
-            AlipayTradePagePayResponse response = alipayClient.execute(request);
+            AlipayTradePagePayResponse response = alipayClient.pageExecute(request);
             if (response.isSuccess()) {
                 log.info("支付宝预下单成功: orderId={}, payNo={}", orderId, payment.getPayNo());
                 return Result.ok(response.getBody());
