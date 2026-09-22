@@ -37,6 +37,14 @@ export const payOrder = (orderId) => {
   });
 };
 
+// 支付宝预下单：返回可自动提交的付款页面 HTML
+export const prepayOrder = (orderId) => {
+  return request({
+    url: `/payment/prepay/${orderId}`,
+    method: "post",
+  });
+};
+
 export function confirmReceipt(orderId) {
   return request({
     url: `/order/confirm/${orderId}`,

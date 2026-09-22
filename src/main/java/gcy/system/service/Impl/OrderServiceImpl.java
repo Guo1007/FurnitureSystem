@@ -455,6 +455,51 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     }
 
     /**
+     * 支付成功确认订单（支付宝异步回调触发）。
+     * <p>
+     * 该方法不依赖当前登录用户，由支付网关回调验签、金额核对通过后调用，
+     * 使用 CAS 乐观锁将待支付订单更新为已支付，并记录支付时间；
+     * 若订单已支付或已发货则幂等返回成功。
+     * </p>
+     *
+     * @param orderId 待确认的订单ID
+     * @return Result 支付成功返回 ok，已支付则幂等返回成功，状态异常返回失败
+     */
+    @Override
+    @Transactional
+    public Result confirmPaid(Long orderId) {
+        Order order = getById(orderId);
+        if (order == null) {
+            return Result.fail("订单不存在！");
+        }
+        int status = order.getStatus();
+        if (status != PENDING_PAYMENT.getCode()) {
+            if (status == PAID.getCode() || status == SHIPPED.getCode()) {
+                return Result.ok();
+            }
+            return Result.fail("订单状态异常，无法确认支付！");
+        }
+        boolean success = update()
+                .set("status", PAID.getCode())
+                .set("pay_time", LocalDateTime.now())
+                .eq("id", orderId)
+                .eq("status", PENDING_PAYMENT.getCode())
+                .update();
+        if (!success) {
+            Order updated = getById(orderId);
+            if (updated.getStatus() == PAID.getCode() || updated.getStatus() == SHIPPED.getCode()) {
+                return Result.ok();
+            }
+            return Result.fail("支付确认失败，请稍后重试");
+        }
+        OrderEmailUtil.sendOrderStatus(emailService, userMapper, order, "订单支付成功",
+                "您的订单 #" + orderId + " 已支付成功，我们将尽快为您发货。",
+                "💳", null);
+        log.info("支付回调确认到账，订单已支付: orderId={}", orderId);
+        return Result.ok();
+    }
+
+    /**
      * 用户手动取消订单。
      * 仅允许订单所属用户在待支付状态下取消，取消时恢复库存并更新订单状态。
      *

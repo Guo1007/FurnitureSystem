@@ -63,6 +63,18 @@ public interface IOrderService extends IService<Order> {
     Result payOrderById(Long id);
 
     /**
+     * 支付成功确认订单（支付宝异步回调触发）。
+     * <p>
+     * 与 {@link #payOrderById(Long)} 不同，该方法不依赖当前登录用户，
+     * 仅供支付网关回调校验通过后调用，使用 CAS 乐观锁将待支付订单更新为已支付。
+     * </p>
+     *
+     * @param orderId 待确认的订单ID
+     * @return 包含确认结果的操作结果对象
+     */
+    Result confirmPaid(Long orderId);
+
+    /**
      * 根据订单ID取消指定的订单。
      *
      * @param id 待取消的订单ID

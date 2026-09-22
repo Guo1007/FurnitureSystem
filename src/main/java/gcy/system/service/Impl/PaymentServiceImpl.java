@@ -1,0 +1,181 @@
+package gcy.system.service.Impl;
+
+import com.alipay.api.AlipayClient;
+import com.alipay.api.AlipayConstants;
+import com.alipay.api.internal.util.AlipaySignature;
+import com.alipay.api.request.AlipayTradePagePayRequest;
+import com.alipay.api.response.AlipayTradePagePayResponse;
+import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import gcy.system.config.AlipayProperties;
+import gcy.system.entity.dto.Result;
+import gcy.system.entity.pojo.Order;
+import gcy.system.entity.pojo.Payment;
+import gcy.system.mapper.PaymentMapper;
+import gcy.system.service.IOrderService;
+import gcy.system.service.IPaymentService;
+import gcy.system.utils.OrderStatus;
+import jakarta.servlet.http.HttpServletRequest;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.Map;
+
+/**
+ * 支付服务实现类，负责支付宝电脑网站支付的预下单与异步回调处理。
+ * <p>
+ * 预下单生成商户外单号并回调支付网关获取付款页面；回调接口负责验签、
+ * 金额核对、幂等去重，并在到账后更新支付流水与订单状态。
+ * </p>
+ *
+ * @author 郭名城
+ * @date 2026-09-22
+ */
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class PaymentServiceImpl extends ServiceImpl<PaymentMapper, Payment> implements IPaymentService {
+
+    private final AlipayClient alipayClient;
+
+    private final AlipayProperties alipayProperties;
+
+    private final IOrderService orderService;
+
+    /**
+     * 预下单：校验订单归属与状态后，生成支付流水并调用支付宝电脑网站支付接口，
+     * 返回可自动提交的付款 HTML 表单。
+     *
+     * @param orderId 待支付订单ID
+     * @param userId  当前操作用户ID
+     * @return Result 成功时 data 为支付宝返回的付款表单 HTML
+     */
+    @Override
+    public Result createPay(Long orderId, Long userId) {
+        Order order = orderService.getById(orderId);
+        if (order == null) {
+            return Result.fail("订单不存在！");
+        }
+        if (!order.getUserId().equals(userId)) {
+            return Result.fail("无权支付该订单！");
+        }
+        if (order.getStatus() != OrderStatus.PENDING_PAYMENT.getCode()) {
+            if (order.getStatus() == OrderStatus.PAID.getCode()
+                    || order.getStatus() == OrderStatus.SHIPPED.getCode()) {
+                return Result.fail("订单已支付，无需重复支付！");
+            }
+            return Result.fail("订单状态异常，无法支付！");
+        }
+
+        // 复用已存在的待支付流水，避免重复插入触发唯一键冲突
+        Payment payment = lambdaQuery()
+                .eq(Payment::getOrderId, orderId)
+                .eq(Payment::getStatus, 0)
+                .last("LIMIT 1")
+                .one();
+        if (payment == null) {
+            payment = new Payment();
+            payment.setOrderId(orderId);
+            payment.setUserId(userId);
+            payment.setPayNo("GD" + orderId + System.currentTimeMillis());
+            payment.setTotalAmount(order.getTotalPrice());
+            payment.setStatus(0);
+            save(payment);
+        }
+
+        try {
+            AlipayTradePagePayRequest request = new AlipayTradePagePayRequest();
+            request.setNotifyUrl(alipayProperties.getNotifyUrl());
+            request.setBizContent("{" +
+                    "\"out_trade_no\":\"" + payment.getPayNo() + "\"," +
+                    "\"total_amount\":\"" + payment.getTotalAmount() + "\"," +
+                    "\"subject\":\"家具商城-订单#" + orderId + "\"," +
+                    "\"product_code\":\"FAST_INSTANT_TRADE_PAY\"" +
+                    "}");
+            AlipayTradePagePayResponse response = alipayClient.execute(request);
+            if (response.isSuccess()) {
+                log.info("支付宝预下单成功: orderId={}, payNo={}", orderId, payment.getPayNo());
+                return Result.ok(response.getBody());
+            }
+            log.warn("支付宝预下单失败: orderId={}, code={}, msg={}, subMsg={}",
+                    orderId, response.getCode(), response.getMsg(), response.getSubMsg());
+            return Result.fail("支付失败：" + (response.getSubMsg() != null ? response.getSubMsg() : response.getMsg()));
+        } catch (Exception e) {
+            log.error("支付宝预下单异常: orderId={}", orderId, e);
+            return Result.fail("支付服务异常，请稍后重试");
+        }
+    }
+
+    /**
+     * 处理支付宝异步回调。
+     * <p>
+     * 流程：验签 → 仅处理成功/完成的交易 → 按 out_trade_no 定位流水 →
+     * 幂等去重 → 金额核对 → 更新流水与订单状态。返回 "success" 告知支付宝不再重发。
+     * </p>
+     *
+     * @param request HTTP 请求，包含支付宝回传的参数
+     * @return success / failure
+     */
+    @Override
+    public String handleNotify(HttpServletRequest request) {
+        try {
+            Map<String, String> params = new HashMap<>();
+            request.getParameterMap().forEach((key, values) ->
+                    params.put(key, values != null && values.length > 0 ? values[0] : ""));
+
+            // 1. 验签（RSA2）
+            boolean signVerified = AlipaySignature.rsaCheckV1(
+                    params, alipayProperties.getAlipayPublicKey(),
+                    AlipayConstants.CHARSET_UTF8, AlipayConstants.SIGN_TYPE_RSA2);
+            if (!signVerified) {
+                log.warn("支付宝回调验签失败");
+                return "failure";
+            }
+
+            String outTradeNo = params.get("out_trade_no");
+            String tradeStatus = params.get("trade_status");
+            if (outTradeNo == null || (!"TRADE_SUCCESS".equals(tradeStatus) && !"TRADE_FINISHED".equals(tradeStatus))) {
+                return "success"; // 非最终到账状态（如待支付）可安全忽略
+            }
+
+            Payment payment = lambdaQuery().eq(Payment::getPayNo, outTradeNo).one();
+            if (payment == null) {
+                log.warn("支付宝回调找不到对应支付流水: payNo={}", outTradeNo);
+                return "failure";
+            }
+
+            // 2. 幂等：已支付直接返回成功，避免重复处理
+            if (payment.getStatus() != null && payment.getStatus() == 1) {
+                return "success";
+            }
+
+            // 3. 金额核对（以服务端订单金额为准）
+            BigDecimal notifyAmount = new BigDecimal(params.get("total_amount"));
+            if (notifyAmount.compareTo(payment.getTotalAmount()) != 0) {
+                log.warn("支付宝回调金额不匹配: payNo={}, 应={}, 实={}",
+                        outTradeNo, payment.getTotalAmount(), notifyAmount);
+                return "failure";
+            }
+
+            // 4. 更新支付流水
+            lambdaUpdate()
+                    .set(Payment::getStatus, 1)
+                    .set(Payment::getTradeNo, params.get("trade_no"))
+                    .set(Payment::getPayTime, LocalDateTime.now())
+                    .eq(Payment::getId, payment.getId())
+                    .update();
+
+            // 5. 确认订单已支付（CAS 乐观锁，幂等）
+            orderService.confirmPaid(payment.getOrderId());
+            log.info("支付宝回调处理成功: orderId={}, payNo={}", payment.getOrderId(), outTradeNo);
+            return "success";
+        } catch (Exception e) {
+            log.error("支付宝回调处理异常", e);
+            return "failure";
+        }
+    }
+
+}

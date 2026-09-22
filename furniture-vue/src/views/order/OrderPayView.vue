@@ -164,7 +164,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { ArrowLeft } from "@element-plus/icons-vue";
 import { ElMessage } from "element-plus";
-import { getOrderDetail, payOrder } from "@/api/order.js";
+import { getOrderDetail, prepayOrder } from "@/api/order.js";
 import { formatPrice } from "@/utils/format.js";
 import { logger } from "@/utils/logger.js";
 
@@ -251,15 +251,27 @@ const loadOrderInfo = async () => {
 
 const handlePay = async () => {
   paying.value = true;
+  // 在点击同步阶段打开新窗口，避免被浏览器弹窗拦截
+  const win = window.open("", "_blank");
   try {
-    const res = await payOrder(orderId.value);
+    const res = await prepayOrder(orderId.value);
     if (res.success || res.code === 200) {
-      successDialogVisible.value = true;
+      if (res.data) {
+        // 支付宝返回自动提交的付款表单 HTML，写入新窗口并触发提交
+        win.document.write(res.data);
+        win.document.close();
+      } else {
+        if (win) win.close();
+        ElMessage.error("未获取到支付页面，请重试");
+      }
     } else {
+      if (win) win.close();
       ElMessage.error(res.msg || "支付失败");
     }
   } catch (error) {
-    logger.error("支付失败:", error);
+    if (win) win.close();
+    logger.error("发起支付失败:", error);
+    ElMessage.error("发起支付失败");
   } finally {
     paying.value = false;
   }

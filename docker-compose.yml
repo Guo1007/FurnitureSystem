@@ -99,6 +99,11 @@ services:
       OSS_SECRET_KEY: ${OSS_SECRET_KEY}
       OSS_BUCKET: ${OSS_BUCKET}
       OSS_URL: ${OSS_URL}
+      ALIPAY_APP_ID: ${ALIPAY_APP_ID}
+      ALIPAY_APP_PRIVATE_KEY: ${ALIPAY_APP_PRIVATE_KEY}
+      ALIPAY_ALIPAY_PUBLIC_KEY: ${ALIPAY_ALIPAY_PUBLIC_KEY}
+      ALIPAY_GATEWAY: ${ALIPAY_GATEWAY:-https://openapi-sandbox.dl.alipaydev.com/gateway.do}
+      ALIPAY_NOTIFY_URL: ${ALIPAY_NOTIFY_URL}
       # 2G 服务器 JVM 内存优化
       JAVA_OPTS: "-Xms128m -Xmx256m -XX:+UseSerialGC"
     ports:

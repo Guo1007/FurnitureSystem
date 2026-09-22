@@ -119,6 +119,14 @@ rocketmq:
 order:
   payment-timeout-minutes: 1440  # 未支付订单超时自动取消（分钟），默认 24 小时
 
+# ==================== 支付宝支付配置 ====================
+alipay:
+  app-id: ${ALIPAY_APP_ID}
+  app-private-key: ${ALIPAY_APP_PRIVATE_KEY}
+  alipay-public-key: ${ALIPAY_ALIPAY_PUBLIC_KEY}
+  gateway: https://openapi-sandbox.dl.alipaydev.com/gateway.do
+  notify-url: ${ALIPAY_NOTIFY_URL}
+
 server:
   port: 8081
 
