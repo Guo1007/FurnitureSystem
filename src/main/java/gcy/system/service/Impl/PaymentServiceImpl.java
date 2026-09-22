@@ -97,7 +97,8 @@ public class PaymentServiceImpl extends ServiceImpl<PaymentMapper, Payment> impl
                     "}");
             AlipayTradePagePayResponse response = alipayClient.pageExecute(request);
             if (response.isSuccess()) {
-                log.info("支付宝预下单成功: orderId={}, payNo={}", orderId, payment.getPayNo());
+                log.info("支付宝预下单成功: orderId={}, payNo={}, notifyUrl={}",
+                        orderId, payment.getPayNo(), alipayProperties.getNotifyUrl());
                 return Result.ok(response.getBody());
             }
             log.warn("支付宝预下单失败: orderId={}, code={}, msg={}, subMsg={}",
@@ -126,10 +127,19 @@ public class PaymentServiceImpl extends ServiceImpl<PaymentMapper, Payment> impl
             request.getParameterMap().forEach((key, values) ->
                     params.put(key, values != null && values.length > 0 ? values[0] : ""));
 
+            // 回调入口：记录收到的关键参数（不含签名明文）
+            log.info("支付宝回调入口: keys={}, out_trade_no={}, trade_status={}, total_amount={}, app_id={}",
+                    params.keySet(),
+                    params.get("out_trade_no"),
+                    params.get("trade_status"),
+                    params.get("total_amount"),
+                    params.get("app_id"));
+
             // 1. 验签（RSA2）
             boolean signVerified = AlipaySignature.rsaCheckV1(
                     params, alipayProperties.getAlipayPublicKey(),
                     AlipayConstants.CHARSET_UTF8, AlipayConstants.SIGN_TYPE_RSA2);
+            log.info("支付宝回调验签结果: signVerified={}", signVerified);
             if (!signVerified) {
                 log.warn("支付宝回调验签失败");
                 return "failure";
@@ -138,6 +148,7 @@ public class PaymentServiceImpl extends ServiceImpl<PaymentMapper, Payment> impl
             String outTradeNo = params.get("out_trade_no");
             String tradeStatus = params.get("trade_status");
             if (outTradeNo == null || (!"TRADE_SUCCESS".equals(tradeStatus) && !"TRADE_FINISHED".equals(tradeStatus))) {
+                log.info("支付宝回调非最终到账状态，忽略: trade_status={}", tradeStatus);
                 return "success"; // 非最终到账状态（如待支付）可安全忽略
             }
 
@@ -146,14 +157,18 @@ public class PaymentServiceImpl extends ServiceImpl<PaymentMapper, Payment> impl
                 log.warn("支付宝回调找不到对应支付流水: payNo={}", outTradeNo);
                 return "failure";
             }
+            log.info("支付宝回调命中流水: paymentId={}, orderId={}, payNo={}, payStatus={}",
+                    payment.getId(), payment.getOrderId(), outTradeNo, payment.getStatus());
 
             // 2. 幂等：已支付直接返回成功，避免重复处理
             if (payment.getStatus() != null && payment.getStatus() == 1) {
+                log.info("支付宝回调幂等命中，已支付，直接返回 success: payNo={}", outTradeNo);
                 return "success";
             }
 
             // 3. 金额核对（以服务端订单金额为准）
             BigDecimal notifyAmount = new BigDecimal(params.get("total_amount"));
+            log.info("支付宝回调金额核对: 通知={}, 应有={}", notifyAmount, payment.getTotalAmount());
             if (notifyAmount.compareTo(payment.getTotalAmount()) != 0) {
                 log.warn("支付宝回调金额不匹配: payNo={}, 应={}, 实={}",
                         outTradeNo, payment.getTotalAmount(), notifyAmount);
@@ -167,9 +182,12 @@ public class PaymentServiceImpl extends ServiceImpl<PaymentMapper, Payment> impl
                     .set(Payment::getPayTime, LocalDateTime.now())
                     .eq(Payment::getId, payment.getId())
                     .update();
+            log.info("支付宝回调已更新支付流水为已支付: paymentId={}", payment.getId());
 
             // 5. 确认订单已支付（CAS 乐观锁，幂等）
-            orderService.confirmPaid(payment.getOrderId());
+            Result confirmResult = orderService.confirmPaid(payment.getOrderId());
+            log.info("支付宝回调确认订单结果: orderId={}, result={}",
+                    payment.getOrderId(), confirmResult == null ? "null" : confirmResult.getSuccess());
             log.info("支付宝回调处理成功: orderId={}, payNo={}", payment.getOrderId(), outTradeNo);
             return "success";
         } catch (Exception e) {
