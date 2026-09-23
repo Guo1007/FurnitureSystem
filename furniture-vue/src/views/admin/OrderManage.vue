@@ -141,7 +141,7 @@
             发货
           </el-button>
           <el-button type="success" size="small" plain @click="handlePayments(row)"
-            >支付</el-button
+            >支付流水</el-button
           >
           <el-button type="danger" size="small" @click="handleDelete(row.id)"
             >删除</el-button
@@ -164,63 +164,107 @@
     </div>
 
     <!-- 商品明细弹窗 -->
-    <el-dialog v-model="dialogVisible" title="🛒 商品明细" width="750px">
+    <el-dialog v-model="dialogVisible" title="🛒 商品明细" width="920px" top="6vh">
+      <template v-if="currentOrder">
+        <el-descriptions :column="4" border size="small" class="order-desc">
+          <el-descriptions-item label="订单号">{{ currentOrder.id }}</el-descriptions-item>
+          <el-descriptions-item label="状态">
+            <el-tag size="small" :type="getStatusType(currentOrder.status)">{{
+              getStatusText(currentOrder.status)
+            }}</el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item label="商品件数">
+            <el-tag type="primary" size="small"
+              >{{ currentOrder.itemList?.length || 0 }} 件</el-tag
+            >
+          </el-descriptions-item>
+          <el-descriptions-item label="订单总额"
+            ><b class="price-text">¥{{ currentOrder.totalPrice }}</b></el-descriptions-item
+          >
+          <el-descriptions-item label="收货人">{{ currentOrder.consignee }}</el-descriptions-item>
+          <el-descriptions-item label="联系电话">{{ currentOrder.phone }}</el-descriptions-item>
+          <el-descriptions-item label="创建时间">{{ currentOrder.createTime }}</el-descriptions-item>
+          <el-descriptions-item label="收货地址" :span="4">{{ currentOrder.address }}</el-descriptions-item>
+        </el-descriptions>
+      </template>
+      <div class="dialog-subtitle">
+        商品明细
+        <span class="subtitle-count">共 {{ currentOrderItems.length }} 件</span>
+      </div>
       <el-table :data="currentOrderItems" border size="small">
-        <el-table-column
-          prop="furnitureName"
-          label="商品名称"
-          min-width="130"
-        />
-        <el-table-column label="规格" width="160">
+        <el-table-column type="index" label="#" width="50" align="center" />
+        <el-table-column prop="furnitureName" label="商品名称" min-width="180" show-overflow-tooltip />
+        <el-table-column label="规格" width="170">
           <template #default="{ row }">
-            <span v-if="row.skuSpec" style="font-size: 12px; color: #666">{{
-              row.skuSpec
-            }}</span>
-            <el-tag v-else type="info" size="small">默认规格</el-tag>
+            <el-tag v-if="row.skuSpec" type="info" size="small" effect="plain">{{ row.skuSpec }}</el-tag>
+            <span v-else style="color:#999">默认规格</span>
           </template>
         </el-table-column>
-        <el-table-column prop="price" label="单价" width="90">
+        <el-table-column label="单价" width="110" align="right">
           <template #default="{ row }"> ¥{{ row.price }} </template>
         </el-table-column>
-        <el-table-column prop="quantity" label="数量" width="70" />
-        <el-table-column label="小计" width="100">
-          <template #default="{ row }"> ¥{{ row.itemTotalPrice }} </template>
+        <el-table-column label="数量" width="80" align="center">
+          <template #default="{ row }"> ×{{ row.quantity }} </template>
+        </el-table-column>
+        <el-table-column label="小计" width="120" align="right">
+          <template #default="{ row }"><b class="price-text">¥{{ row.itemTotalPrice }}</b></template>
         </el-table-column>
       </el-table>
+      <div class="dialog-total">
+        合计：<b class="price-text">¥{{ itemsTotal }}</b>（共 {{ currentOrderItems.length }} 件商品）
+      </div>
+      <template #footer>
+        <el-button @click="dialogVisible = false">关闭</el-button>
+      </template>
     </el-dialog>
 
     <!-- 支付流水弹窗 -->
-    <el-dialog v-model="paymentDialogVisible" title="💳 支付流水" width="760px">
+    <el-dialog v-model="paymentDialogVisible" title="💳 支付流水" width="960px" top="6vh">
+      <el-descriptions v-if="currentPayments.length" :column="3" border size="small" class="order-desc">
+        <el-descriptions-item label="关联订单">#{{ currentPayments[0]?.orderId }}</el-descriptions-item>
+        <el-descriptions-item label="支付渠道">
+          <el-tag size="small" type="primary">支付宝</el-tag>
+        </el-descriptions-item>
+        <el-descriptions-item label="流水条数">{{ currentPayments.length }} 条</el-descriptions-item>
+      </el-descriptions>
+      <div class="dialog-subtitle" v-if="currentPayments.length">
+        支付记录
+        <span class="subtitle-count">共 {{ currentPayments.length }} 笔</span>
+      </div>
       <el-table :data="currentPayments" border size="small" v-loading="paymentLoading">
-        <el-table-column prop="payNo" label="商户单号" min-width="180" />
-        <el-table-column label="渠道" width="90">
+        <el-table-column type="index" label="#" width="50" align="center" />
+        <el-table-column prop="payNo" label="商户单号" min-width="230" show-overflow-tooltip />
+        <el-table-column label="渠道" width="90" align="center">
           <template #default="{ row }">
             <el-tag v-if="row.channel === 'alipay'" size="small" type="primary">支付宝</el-tag>
             <el-tag v-else size="small">{{ row.channel }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="totalAmount" label="金额(元)" width="100">
-          <template #default="{ row }">¥{{ row.totalAmount }}</template>
+        <el-table-column label="支付金额" width="120" align="right">
+          <template #default="{ row }"><b class="price-text">¥{{ row.totalAmount }}</b></template>
         </el-table-column>
-        <el-table-column label="状态" width="90">
+        <el-table-column label="状态" width="90" align="center">
           <template #default="{ row }">
             <el-tag v-if="row.status === 1" type="success" size="small">已支付</el-tag>
             <el-tag v-else-if="row.status === 0" type="warning" size="small">待支付</el-tag>
             <el-tag v-else type="info" size="small">已关闭</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="tradeNo" label="支付宝交易号" min-width="180">
+        <el-table-column prop="tradeNo" label="支付宝交易号" min-width="240" show-overflow-tooltip>
           <template #default="{ row }">
             <span v-if="row.tradeNo">{{ row.tradeNo }}</span>
             <el-tag v-else type="info" size="small">未回填</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="payTime" label="支付时间" width="170">
+        <el-table-column label="支付时间" width="180">
           <template #default="{ row }">
             <span v-if="row.payTime">{{ row.payTime }}</span>
             <span v-else style="color:#999">-</span>
           </template>
         </el-table-column>
+        <template #empty>
+          <el-empty description="暂无支付流水记录" :image-size="60" />
+        </template>
       </el-table>
       <template #footer>
         <el-button type="primary" @click="paymentDialogVisible = false">关闭</el-button>
@@ -230,7 +274,7 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import {
   batchDeleteOrders,
@@ -269,10 +313,19 @@ const total = ref(0);
 
 const dialogVisible = ref(false);
 const currentOrderItems = ref([]);
+const currentOrder = ref(null); // 当前查看的商品明细所属订单（用于展示订单概要）
 const pendingShipCount = ref(0);
 const paymentDialogVisible = ref(false);
 const paymentLoading = ref(false);
 const currentPayments = ref([]);
+
+// 商品明细合计金额
+const itemsTotal = computed(() =>
+  (currentOrderItems.value || []).reduce(
+    (sum, item) => sum + Number(item.itemTotalPrice || 0),
+    0,
+  ),
+);
 
 const searchForm = ref({
   userId: null,
@@ -417,6 +470,7 @@ const handleDelete = async (orderId) => {
 };
 
 const handleViewItems = (row) => {
+  currentOrder.value = row;
   currentOrderItems.value = row.itemList || [];
   dialogVisible.value = true;
 };
@@ -470,4 +524,35 @@ onMounted(() => {
 
 <style scoped lang="scss">
 @import "@/styles/views/order-manage.scss";
+
+.price-text {
+  color: var(--el-color-danger);
+}
+
+.order-desc {
+  margin-bottom: 14px;
+}
+
+.dialog-subtitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--el-text-color-primary);
+
+  .subtitle-count {
+    font-weight: 400;
+    font-size: 12px;
+    color: var(--el-text-color-secondary);
+  }
+}
+
+.dialog-total {
+  margin-top: 12px;
+  text-align: right;
+  font-size: 14px;
+  color: var(--el-text-color-regular);
+}
 </style>
