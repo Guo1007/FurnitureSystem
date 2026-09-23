@@ -10,8 +10,8 @@ import gcy.system.entity.pojo.Payment;
 import gcy.system.entity.vo.OrderVO;
 import gcy.system.mapper.OrderItemMapper;
 import gcy.system.mapper.OrderMapper;
+import gcy.system.mapper.PaymentMapper;
 import gcy.system.service.IOrderItemService;
-import gcy.system.service.IPaymentService;
 import gcy.system.utils.UserHolder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -31,7 +31,7 @@ public class OrderItemServiceImpl extends ServiceImpl<OrderItemMapper, OrderItem
 
     private final OrderMapper orderMapper;
 
-    private final IPaymentService paymentService;
+    private final PaymentMapper paymentMapper;
 
     /**
      * 根据订单ID获取订单详情，包含订单基本信息及其关联的订单项列表。
@@ -55,15 +55,14 @@ public class OrderItemServiceImpl extends ServiceImpl<OrderItemMapper, OrderItem
                 new LambdaQueryWrapper<OrderItem>().eq(OrderItem::getOrderId, orderId));
         OrderVO vo = OrderVO.from(order, items);
         // 回填支付信息（渠道 + 支付宝交易号），供前端展示
-        paymentService.lambdaQuery()
+        Payment pay = paymentMapper.selectOne(new LambdaQueryWrapper<Payment>()
                 .eq(Payment::getOrderId, orderId)
                 .orderByDesc(Payment::getId)
-                .last("LIMIT 1")
-                .oneOpt()
-                .ifPresent(p -> {
-                    vo.setChannel(p.getChannel());
-                    vo.setTradeNo(p.getTradeNo());
-                });
+                .last("LIMIT 1"));
+        if (pay != null) {
+            vo.setChannel(pay.getChannel());
+            vo.setTradeNo(pay.getTradeNo());
+        }
         return Result.ok(vo);
     }
 
