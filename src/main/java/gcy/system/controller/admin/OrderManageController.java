@@ -4,6 +4,8 @@ import gcy.system.aspect.OperationLog;
 import gcy.system.entity.dto.RefundAuditDTO;
 import gcy.system.entity.dto.RefundHandleDTO;
 import gcy.system.entity.dto.Result;
+import gcy.system.entity.pojo.Payment;
+import gcy.system.service.IPaymentService;
 import gcy.system.service.admin.IOrderManageService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -32,6 +34,8 @@ import java.util.List;
 public class OrderManageController {
 
     private final IOrderManageService orderManageService;
+
+    private final IPaymentService paymentService;
 
     /**
      * 分页查询订单列表
@@ -124,6 +128,16 @@ public class OrderManageController {
     @DeleteMapping("/batch")
     public Result batchDelete(@Parameter(description = "请求体") @RequestBody List<Long> ids) {
         return orderManageService.batchDeleteOrders(ids);
+    }
+
+    @OperationLog("查看支付流水")
+    @Operation(summary = "查询订单支付流水")
+    @GetMapping("/{orderId}/payment")
+    public Result getOrderPayment(@Parameter(description = "订单ID") @PathVariable Long orderId) {
+        return Result.ok(paymentService.lambdaQuery()
+                .eq(Payment::getOrderId, orderId)
+                .orderByDesc(Payment::getId)
+                .list());
     }
 
     /**

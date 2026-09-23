@@ -130,7 +130,7 @@
         </template>
       </el-table-column>
       <el-table-column prop="createTime" label="创建时间" width="180" />
-      <el-table-column label="操作" width="150" fixed="right">
+      <el-table-column label="操作" width="210" fixed="right">
         <template #default="{ row }">
           <el-button
             v-if="row.status === 1"
@@ -140,6 +140,9 @@
           >
             发货
           </el-button>
+          <el-button type="success" size="small" plain @click="handlePayments(row)"
+            >支付</el-button
+          >
           <el-button type="danger" size="small" @click="handleDelete(row.id)"
             >删除</el-button
           >
@@ -185,6 +188,44 @@
         </el-table-column>
       </el-table>
     </el-dialog>
+
+    <!-- 支付流水弹窗 -->
+    <el-dialog v-model="paymentDialogVisible" title="💳 支付流水" width="760px">
+      <el-table :data="currentPayments" border size="small" v-loading="paymentLoading">
+        <el-table-column prop="payNo" label="商户单号" min-width="180" />
+        <el-table-column label="渠道" width="90">
+          <template #default="{ row }">
+            <el-tag v-if="row.channel === 'alipay'" size="small" type="primary">支付宝</el-tag>
+            <el-tag v-else size="small">{{ row.channel }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="totalAmount" label="金额(元)" width="100">
+          <template #default="{ row }">¥{{ row.totalAmount }}</template>
+        </el-table-column>
+        <el-table-column label="状态" width="90">
+          <template #default="{ row }">
+            <el-tag v-if="row.status === 1" type="success" size="small">已支付</el-tag>
+            <el-tag v-else-if="row.status === 0" type="warning" size="small">待支付</el-tag>
+            <el-tag v-else type="info" size="small">已关闭</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="tradeNo" label="支付宝交易号" min-width="180">
+          <template #default="{ row }">
+            <span v-if="row.tradeNo">{{ row.tradeNo }}</span>
+            <el-tag v-else type="info" size="small">未回填</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="payTime" label="支付时间" width="170">
+          <template #default="{ row }">
+            <span v-if="row.payTime">{{ row.payTime }}</span>
+            <span v-else style="color:#999">-</span>
+          </template>
+        </el-table-column>
+      </el-table>
+      <template #footer>
+        <el-button type="primary" @click="paymentDialogVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -196,6 +237,7 @@ import {
   deleteOrder,
   exportOrders,
   getOrderList,
+  getOrderPayments,
   getPendingOrderCount,
   shipOrder,
 } from "@/api/admin/order.js";
@@ -228,6 +270,9 @@ const total = ref(0);
 const dialogVisible = ref(false);
 const currentOrderItems = ref([]);
 const pendingShipCount = ref(0);
+const paymentDialogVisible = ref(false);
+const paymentLoading = ref(false);
+const currentPayments = ref([]);
 
 const searchForm = ref({
   userId: null,
@@ -374,6 +419,26 @@ const handleDelete = async (orderId) => {
 const handleViewItems = (row) => {
   currentOrderItems.value = row.itemList || [];
   dialogVisible.value = true;
+};
+
+// 查看订单支付流水
+const handlePayments = async (row) => {
+  paymentDialogVisible.value = true;
+  paymentLoading.value = true;
+  currentPayments.value = [];
+  try {
+    const res = await getOrderPayments(row.id);
+    if (res.success || res.code === 200) {
+      currentPayments.value = res.data || [];
+    } else {
+      ElMessage.error(res.msg || "获取支付流水失败");
+    }
+  } catch (e) {
+    logger.error("获取支付流水异常:", e);
+    ElMessage.error("获取支付流水失败");
+  } finally {
+    paymentLoading.value = false;
+  }
 };
 
 const handleSizeChange = (val) => {

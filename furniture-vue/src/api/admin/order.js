@@ -45,6 +45,14 @@ export function getPendingOrderCount() {
   });
 }
 
+// 查询某订单的支付流水
+export function getOrderPayments(orderId) {
+  return request({
+    url: `/admin/order/${orderId}/payment`,
+    method: "get",
+  });
+}
+
 export function approveRefund(orderId) {
   return request({
     url: `/admin/order/refund/approve/${orderId}`,

@@ -132,6 +132,12 @@
             取消支付
           </el-button>
         </div>
+
+        <!-- 等待支付结果提示 -->
+        <div v-if="waitTipVisible" class="wait-tip">
+          <span class="wait-spinner"></span>
+          <span>已拉起支付宝收银台，请在新窗口完成付款，本页将自动确认支付结果…</span>
+        </div>
       </el-card>
 
       <!-- 支付成功弹窗 -->
@@ -149,10 +155,15 @@
           <p class="success-tip">感谢您的购买，我们将尽快为您发货</p>
         </div>
         <template #footer>
-          <el-button type="primary" @click="goToOrders" size="large">
-            查看订单
-          </el-button>
-          <el-button @click="goHome" size="large">返回首页</el-button>
+          <div class="success-footer">
+            <span class="success-redirect">{{ successRedirect }} 秒后自动跳转订单列表…</span>
+            <div>
+              <el-button type="primary" @click="goToOrders" size="large">
+                查看订单
+              </el-button>
+              <el-button @click="goHome" size="large">返回首页</el-button>
+            </div>
+          </div>
         </template>
       </el-dialog>
     </div>
@@ -160,7 +171,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { ArrowLeft } from "@element-plus/icons-vue";
 import { ElMessage } from "element-plus";
@@ -179,8 +190,12 @@ const payMethod = ref("wechat");
 const paying = ref(false);
 const successDialogVisible = ref(false);
 const remainingMs = ref(0); // 剩余毫秒数
+const waitTipVisible = ref(false); // 是否显示"等待支付结果"提示
 let countdownTimer = null;
 let redirectTimer = null;
+let pollTimer = null; // 轮询订单状态定时器
+let successRedirectTimer = null; // 支付成功自动跳转定时器
+const successRedirect = ref(3); // 支付成功后倒计时秒数
 
 // 计算倒计时截止时间
 const deadline = computed(() => {
@@ -260,6 +275,8 @@ const handlePay = async () => {
         // 支付宝返回自动提交的付款表单 HTML，写入新窗口并触发提交
         win.document.write(res.data);
         win.document.close();
+        // 拉起支付宝后，本页轮询等待支付结果
+        startPolling();
       } else {
         if (win) win.close();
         ElMessage.error("未获取到支付页面，请重试");
@@ -277,7 +294,57 @@ const handlePay = async () => {
   }
 };
 
+// 停止轮询并隐藏等待提示
+const stopPolling = () => {
+  if (pollTimer) {
+    clearInterval(pollTimer);
+    pollTimer = null;
+  }
+  waitTipVisible.value = false;
+};
+
+// 付款后每 2 秒轮询一次订单状态，付款成功自动弹窗并跳转
+const startPolling = () => {
+  stopPolling();
+  waitTipVisible.value = true;
+  pollTimer = setInterval(async () => {
+    try {
+      const res = await getOrderDetail(orderId.value);
+      if (res.success || res.code === 200) {
+        const status = res.data?.status;
+        if (typeof status === "number" && status >= 1) {
+          stopPolling();
+          orderInfo.value = res.data;
+          successDialogVisible.value = true;
+        }
+      }
+    } catch (error) {
+      logger.error("轮询订单状态失败:", error);
+    }
+  }, 2000);
+};
+
+// 支付成功弹窗出现后，启动跳转倒计时
+const startSuccessRedirect = () => {
+  successRedirect.value = 3;
+  successRedirectTimer = setInterval(() => {
+    successRedirect.value -= 1;
+    if (successRedirect.value <= 0) {
+      stopSuccessRedirect();
+      goToOrders();
+    }
+  }, 1000);
+};
+
+const stopSuccessRedirect = () => {
+  if (successRedirectTimer) {
+    clearInterval(successRedirectTimer);
+    successRedirectTimer = null;
+  }
+};
+
 const cancelPay = () => {
+  stopPolling();
   ElMessage.info("您已取消支付");
   router.push("/user/orders");
 };
@@ -287,17 +354,30 @@ const goBack = () => {
 };
 
 const goToOrders = () => {
+  stopPolling();
+  stopSuccessRedirect();
   successDialogVisible.value = false;
   router.push("/user/orders");
 };
 
 const goHome = () => {
+  stopPolling();
+  stopSuccessRedirect();
   successDialogVisible.value = false;
   router.push("/");
 };
 
 onMounted(() => {
   loadOrderInfo();
+});
+
+// 支付成功弹窗弹出时启动自动跳转倒计时
+watch(successDialogVisible, (visible) => {
+  if (visible) {
+    startSuccessRedirect();
+  } else {
+    stopSuccessRedirect();
+  }
 });
 
 onBeforeUnmount(() => {
@@ -309,10 +389,55 @@ onBeforeUnmount(() => {
     clearTimeout(redirectTimer);
     redirectTimer = null;
   }
+  stopPolling();
+  stopSuccessRedirect();
 });
 </script>
 
 <style scoped lang="scss">
 @import "@/styles/views/payView.scss";
 @import "@/styles/views/order-pay-view.scss";
+
+.wait-tip {
+  margin-top: 16px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: var(--el-color-primary-light-9);
+  color: var(--el-color-primary);
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  .wait-spinner {
+    width: 14px;
+    height: 14px;
+    border: 2px solid currentColor;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: wait-spin 0.8s linear infinite;
+    flex-shrink: 0;
+  }
+}
+
+@keyframes wait-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.success-footer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+
+  .success-redirect {
+    font-size: 13px;
+    color: var(--el-text-color-secondary);
+  }
+}
 </style>

@@ -91,6 +91,16 @@ public class OrderVO {
     private LocalDateTime payTime;
 
     /**
+     * 支付渠道（如 alipay）
+     */
+    private String channel;
+
+    /**
+     * 支付宝交易号（trade_no）
+     */
+    private String tradeNo;
+
+    /**
      * 发货时间
      */
     private LocalDateTime shipTime;
