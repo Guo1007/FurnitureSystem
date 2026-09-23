@@ -166,7 +166,7 @@
     </div>
 
     <!-- 商品明细弹窗 -->
-    <el-dialog v-model="dialogVisible" title="🛒 商品明细" width="920px" top="6vh">
+    <el-dialog v-model="dialogVisible" title="🛒 商品明细" width="1040px" top="6vh">
       <template v-if="currentOrder">
         <el-descriptions :column="4" border size="small" class="order-desc">
           <el-descriptions-item label="订单号">{{ currentOrder.id }}</el-descriptions-item>
@@ -213,15 +213,23 @@
         </el-table-column>
       </el-table>
       <div class="dialog-total">
-        合计：<b class="price-text">¥{{ itemsTotal }}</b>（共 {{ currentOrderItems.length }} 件商品）
-      </div>
+          <span class="total-count"
+            >共 {{ currentOrderItems.length }} 件商品 · 商品原价 <b>¥{{ itemsTotal }}</b></span
+          >
+          <span v-if="Number(currentOrder?.couponDiscount || 0) > 0" class="coupon-discount">
+            优惠券抵扣 <b>¥{{ currentOrder.couponDiscount }}</b>
+          </span>
+          <span class="pay-amount"
+            >实付金额 <b class="price-text">¥{{ currentOrder?.totalPrice }}</b></span
+          >
+        </div>
       <template #footer>
         <el-button @click="dialogVisible = false">关闭</el-button>
       </template>
     </el-dialog>
 
     <!-- 支付流水弹窗 -->
-    <el-dialog v-model="paymentDialogVisible" title="💳 支付流水" width="960px" top="6vh">
+    <el-dialog v-model="paymentDialogVisible" title="💳 支付流水" width="1120px" top="6vh">
       <el-descriptions v-if="currentPayments.length" :column="3" border size="small" class="order-desc">
         <el-descriptions-item label="关联订单">#{{ currentPayments[0]?.orderId }}</el-descriptions-item>
         <el-descriptions-item label="支付渠道">
@@ -564,9 +572,40 @@ onMounted(() => {
 }
 
 .dialog-total {
-  margin-top: 12px;
-  text-align: right;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 10px 14px;
+  border-radius: 6px;
+  background: var(--el-fill-color-lighter, #f5f7fa);
   font-size: 14px;
   color: var(--el-text-color-regular);
+
+  .total-count {
+    color: var(--el-text-color-secondary);
+
+    b {
+      color: var(--el-text-color-primary);
+    }
+  }
+
+  .coupon-discount {
+    color: var(--el-color-success);
+
+    b {
+      color: var(--el-color-success);
+    }
+  }
+
+  .pay-amount {
+    font-weight: 600;
+    color: var(--el-text-color-primary);
+
+    .price-text {
+      font-size: 16px;
+    }
+  }
 }
 </style>
