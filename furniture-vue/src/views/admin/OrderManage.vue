@@ -130,22 +130,24 @@
         </template>
       </el-table-column>
       <el-table-column prop="createTime" label="创建时间" width="180" />
-      <el-table-column label="操作" width="210" fixed="right">
+      <el-table-column label="操作" width="250" fixed="right">
         <template #default="{ row }">
-          <el-button
-            v-if="row.status === 1"
-            type="primary"
-            size="small"
-            @click="handleShip(row)"
-          >
-            发货
-          </el-button>
-          <el-button type="success" size="small" plain @click="handlePayments(row)"
-            >支付流水</el-button
-          >
-          <el-button type="danger" size="small" @click="handleDelete(row.id)"
-            >删除</el-button
-          >
+          <div class="op-cell">
+            <el-button
+              v-if="row.status === 1"
+              type="primary"
+              size="small"
+              @click="handleShip(row)"
+            >
+              发货
+            </el-button>
+            <el-button type="success" size="small" plain @click="handlePayments(row)"
+              >支付流水</el-button
+            >
+            <el-button type="danger" size="small" @click="handleDelete(row.id)"
+              >删除</el-button
+            >
+          </div>
         </template>
       </el-table-column>
     </el-table>
@@ -524,6 +526,18 @@ onMounted(() => {
 
 <style scoped lang="scss">
 @import "@/styles/views/order-manage.scss";
+
+.op-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+
+  // 覆盖 Element 按钮之间的默认外边距，避免换行错乱
+  :deep(.el-button + .el-button) {
+    margin-left: 0;
+  }
+}
 
 .price-text {
   color: var(--el-color-danger);
