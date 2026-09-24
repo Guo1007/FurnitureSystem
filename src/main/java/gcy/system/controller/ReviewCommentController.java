@@ -9,6 +9,7 @@ import gcy.system.utils.UserHolder;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -62,7 +63,7 @@ public class ReviewCommentController {
      */
     @Operation(summary = "新增评论")
     @PostMapping("/add")
-    public Result add(@Parameter(description = "请求体") @RequestBody ReviewComment comment) {
+    public Result add(@Parameter(description = "请求体") @Valid @RequestBody ReviewComment comment) {
         Long userId = UserHolder.getUser().getId();
         return reviewCommentService.addComment(comment, userId);
     }

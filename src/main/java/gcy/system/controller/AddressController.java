@@ -7,6 +7,7 @@ import gcy.system.utils.UserHolder;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -56,7 +57,7 @@ public class AddressController {
      */
     @Operation(summary = "新增或更新收货地址")
     @PostMapping("/save")
-    public Result save(@Parameter(description = "请求体") @RequestBody UserAddress addr) {
+    public Result save(@Parameter(description = "请求体") @Valid @RequestBody UserAddress addr) {
         Long userId = UserHolder.getUser().getId();
         return addressService.saveAddress(addr, userId);
     }

@@ -175,7 +175,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { ArrowLeft } from "@element-plus/icons-vue";
 import { ElMessage } from "element-plus";
-import { getOrderDetail, prepayOrder } from "@/api/order.js";
+import { getOrderDetail, prepayOrder, queryPayStatus } from "@/api/order.js";
 import { formatPrice } from "@/utils/format.js";
 import { logger } from "@/utils/logger.js";
 
@@ -303,23 +303,37 @@ const stopPolling = () => {
   waitTipVisible.value = false;
 };
 
-// 付款后每 2 秒轮询一次订单状态，付款成功自动弹窗并跳转
+// 付款后每 2 秒主动查单一次，付款成功自动弹窗并跳转；最多查 30 次(60秒)
 const startPolling = () => {
   stopPolling();
   waitTipVisible.value = true;
+  let ticks = 0;
   pollTimer = setInterval(async () => {
+    ticks += 1;
+    // 超过 60 秒仍未确认，停止轮询并提示去订单列表查看（回调可能延迟）
+    if (ticks > 30) {
+      stopPolling();
+      ElMessage.info("支付结果确认中，请稍后在订单列表查看");
+      return;
+    }
     try {
-      const res = await getOrderDetail(orderId.value);
+      const res = await queryPayStatus(orderId.value);
       if (res.success || res.code === 200) {
-        const status = res.data?.status;
-        if (typeof status === "number" && status >= 1) {
+        if (res.data === true) {
           stopPolling();
-          orderInfo.value = res.data;
+          try {
+            const detail = await getOrderDetail(orderId.value);
+            if (detail.success || detail.code === 200) {
+              orderInfo.value = detail.data;
+            }
+          } catch (e) {
+            logger.error("刷新订单详情失败:", e);
+          }
           successDialogVisible.value = true;
         }
       }
     } catch (error) {
-      logger.error("轮询订单状态失败:", error);
+      logger.error("主动查单失败:", error);
     }
   }, 2000);
 };

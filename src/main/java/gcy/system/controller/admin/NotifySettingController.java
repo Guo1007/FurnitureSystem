@@ -6,6 +6,9 @@ import gcy.system.service.admin.INotifySettingService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -49,7 +52,7 @@ public class NotifySettingController {
     @OperationLog("保存通知设置")
     @Operation(summary = "保存管理员通知配置")
     @PutMapping
-    public Result saveSetting(@Parameter(description = "请求体") @RequestBody SaveSettingDTO dto) {
+    public Result saveSetting(@Parameter(description = "请求体") @Valid @RequestBody SaveSettingDTO dto) {
         return notifySettingService.saveSetting(dto.getNotifyType(), dto.getEnabled(), dto.getAdminIds());
     }
 
@@ -61,10 +64,12 @@ public class NotifySettingController {
         /**
          * 通知类型：new_order-新订单、refund-售后退款、stock_alert-库存预警
          */
+        @NotBlank(message = "通知类型不能为空")
         private String notifyType;
         /**
          * 是否开启通知
          */
+        @NotNull(message = "开关状态不能为空")
         private Boolean enabled;
         /**
          * 接收通知的管理员ID列表

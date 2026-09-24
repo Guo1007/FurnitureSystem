@@ -6,6 +6,8 @@ import gcy.system.service.admin.IProfileReviewService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -51,7 +53,7 @@ public class ProfileReviewController {
     @Operation(summary = "拒绝昵称修改")
     @PutMapping("/nickname/reject/{userId}")
     public Result rejectNickname(@Parameter(description = "用户ID") @PathVariable Long userId,
-                                 @Parameter(description = "请求体") @RequestBody RejectRequest request) {
+                                 @Parameter(description = "请求体") @Valid @RequestBody RejectRequest request) {
         return profileReviewService.rejectNickname(userId, request.getReason());
     }
 
@@ -66,7 +68,7 @@ public class ProfileReviewController {
     @Operation(summary = "拒绝头像修改")
     @PutMapping("/icon/reject/{userId}")
     public Result rejectIcon(@Parameter(description = "用户ID") @PathVariable Long userId,
-                             @Parameter(description = "请求体") @RequestBody RejectRequest request) {
+                             @Parameter(description = "请求体") @Valid @RequestBody RejectRequest request) {
         return profileReviewService.rejectIcon(userId, request.getReason());
     }
 
@@ -84,6 +86,7 @@ public class ProfileReviewController {
 
     @Data
     public static class RejectRequest {
+        @NotBlank(message = "拒绝原因不能为空")
         private String reason;
     }
 }

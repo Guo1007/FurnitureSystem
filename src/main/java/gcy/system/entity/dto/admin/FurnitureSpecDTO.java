@@ -1,6 +1,7 @@
 package gcy.system.entity.dto.admin;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -23,6 +24,7 @@ import java.util.List;
 public class FurnitureSpecDTO {
 
     @Schema(description = "商品ID")
+    @NotNull(message = "商品ID不能为空")
     private Long furnitureId;
 
     @Schema(description = "规格组列表，包含每组下的规格值")

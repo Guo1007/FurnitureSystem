@@ -11,6 +11,7 @@ import gcy.system.utils.UserHolder;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -89,7 +90,7 @@ public class CommentController {
      */
     @Operation(summary = "新增商品评论")
     @PostMapping("/add")
-    public Result add(@Parameter(description = "请求体") @RequestBody GoodsComment comment) {
+    public Result add(@Parameter(description = "请求体") @Valid @RequestBody GoodsComment comment) {
         Long userId = UserHolder.getUser().getId();
         return commentService.addComment(comment, userId);
     }
@@ -105,7 +106,7 @@ public class CommentController {
      */
     @Operation(summary = "追加评论")
     @PostMapping("/append")
-    public Result append(@Parameter(description = "请求体") @RequestBody CommentAppend append) {
+    public Result append(@Parameter(description = "请求体") @Valid @RequestBody CommentAppend append) {
         Long userId = UserHolder.getUser().getId();
         return commentService.appendComment(append, userId);
     }

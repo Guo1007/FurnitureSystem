@@ -6,6 +6,8 @@ import gcy.system.service.admin.ICommentManageService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -68,7 +70,7 @@ public class CommentManageController {
     @Operation(summary = "驳回指定评论")
     @PutMapping("/reject/{id}")
     public Result rejectComment(@Parameter(description = "评论ID") @PathVariable Long id,
-                                @Parameter(description = "请求体") @RequestBody RejectRequest request) {
+                                @Parameter(description = "请求体") @Valid @RequestBody RejectRequest request) {
         return commentManageService.rejectComment(id, request.getRejectReason());
     }
 
@@ -110,7 +112,7 @@ public class CommentManageController {
     @Operation(summary = "驳回指定追评")
     @PutMapping("/append/reject/{id}")
     public Result rejectAppend(@Parameter(description = "追评ID") @PathVariable Long id,
-                               @Parameter(description = "请求体") @RequestBody RejectRequest request) {
+                               @Parameter(description = "请求体") @Valid @RequestBody RejectRequest request) {
         return commentManageService.rejectAppend(id, request.getRejectReason());
     }
 
@@ -152,7 +154,7 @@ public class CommentManageController {
     @Operation(summary = "驳回指定审核评论")
     @PutMapping("/review-comment/reject/{id}")
     public Result rejectReviewComment(@Parameter(description = "审核评论ID") @PathVariable Long id,
-                                      @Parameter(description = "请求体") @RequestBody RejectRequest request) {
+                                      @Parameter(description = "请求体") @Valid @RequestBody RejectRequest request) {
         return commentManageService.rejectReviewComment(id, request.getRejectReason());
     }
 
@@ -268,6 +270,7 @@ public class CommentManageController {
         /**
          * 拒绝原因
          */
+        @NotBlank(message = "拒绝原因不能为空")
         private String rejectReason;
     }
 }

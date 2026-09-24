@@ -4,6 +4,8 @@ import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -32,6 +34,7 @@ public class ReviewComment {
     /**
      * 关联的评价/评测ID
      */
+    @NotNull(message = "关联评价ID不能为空")
     private Long reviewId;
 
     /**
@@ -42,6 +45,7 @@ public class ReviewComment {
     /**
      * 评论内容
      */
+    @NotBlank(message = "评论内容不能为空")
     private String content;
 
     /**

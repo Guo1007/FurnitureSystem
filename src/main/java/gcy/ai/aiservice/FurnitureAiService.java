@@ -32,4 +32,14 @@ public interface FurnitureAiService {
      */
     @SystemMessage(fromResource = "system.txt")
     Flux<String> streamChat(@MemoryId String memoryId, @UserMessage String message);
+
+    /**
+     * 保活心跳方法（流式响应）。
+     * <p>
+     * 使用专用探针提示词，仅返回 pong 单词，用于定时保活任务预热
+     * 模型实例和本地HTTP连接池，消除空闲冷启动问题。
+     * </p>
+     */
+    @SystemMessage("你是健康检查探针。无论用户输入什么，只回复pong一个词，禁止输出任何其他内容。")
+    Flux<String> ping(@MemoryId String memoryId, @UserMessage String message);
 }

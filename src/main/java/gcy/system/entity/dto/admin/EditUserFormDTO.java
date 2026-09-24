@@ -1,6 +1,7 @@
 package gcy.system.entity.dto.admin;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -18,8 +19,10 @@ import lombok.NoArgsConstructor;
 public class EditUserFormDTO {
 
     @Schema(description = "用户ID")
+    @NotNull(message = "用户ID不能为空")
     private Long id;
 
     @Schema(description = "是否为管理员（1-是，0-否）")
+    @NotNull(message = "管理员标识不能为空")
     private Integer isAdmin;
 }

@@ -4,7 +4,9 @@ import com.alipay.api.AlipayClient;
 import com.alipay.api.AlipayConstants;
 import com.alipay.api.internal.util.AlipaySignature;
 import com.alipay.api.request.AlipayTradePagePayRequest;
+import com.alipay.api.request.AlipayTradeQueryRequest;
 import com.alipay.api.response.AlipayTradePagePayResponse;
+import com.alipay.api.response.AlipayTradeQueryResponse;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import gcy.system.config.AlipayProperties;
 import gcy.system.entity.dto.Result;
@@ -194,6 +196,84 @@ public class PaymentServiceImpl extends ServiceImpl<PaymentMapper, Payment> impl
             log.error("支付宝回调处理异常", e);
             return "failure";
         }
+    }
+
+    /**
+     * 主动查询订单支付状态（对账兜底）。
+     * <p>
+     * 订单仍在待支付时，主动用支付宝 {@code alipay.trade.query} 查询该订单商户单号的
+     * 真实交易状态；若支付宝已扣款成功，则本地更新流水并确认订单已支付，返回 true。
+     * </p>
+     *
+     * @param orderId 待查订单ID
+     * @param userId  当前操作用户ID
+     * @return Result.data 为 true 表示已支付，false 表示仍待支付
+     */
+    @Override
+    public Result queryPayStatus(Long orderId, Long userId) {
+        Order order = orderService.getById(orderId);
+        if (order == null) {
+            return Result.fail("订单不存在！");
+        }
+        if (!order.getUserId().equals(userId)) {
+            return Result.fail("无权查看该订单！");
+        }
+        // 非待支付状态：已支付类状态返回 true，其余返回 false
+        if (order.getStatus() != OrderStatus.PENDING_PAYMENT.getCode()) {
+            boolean paid = order.getStatus() == OrderStatus.PAID.getCode()
+                    || order.getStatus() == OrderStatus.SHIPPED.getCode()
+                    || order.getStatus() == OrderStatus.COMPLETED.getCode()
+                    || order.getStatus() == OrderStatus.REVIEWED.getCode()
+                    || order.getStatus() == OrderStatus.REFUNDED.getCode();
+            return Result.ok(paid);
+        }
+
+        // 取该订单最近一条支付流水（含 payNo）
+        Payment payment = lambdaQuery()
+                .eq(Payment::getOrderId, orderId)
+                .orderByDesc(Payment::getId)
+                .last("LIMIT 1")
+                .one();
+        if (payment == null) {
+            return Result.ok(false);
+        }
+
+        try {
+            AlipayTradeQueryRequest req = new AlipayTradeQueryRequest();
+            req.setBizContent("{\"out_trade_no\":\"" + payment.getPayNo() + "\"}");
+            AlipayTradeQueryResponse resp = alipayClient.execute(req);
+            if (resp.isSuccess()) {
+                String tradeStatus = resp.getTradeStatus();
+                log.info("主动查单成功: orderId={}, payNo={}, tradeStatus={}, tradeNo={}",
+                        orderId, payment.getPayNo(), tradeStatus, resp.getTradeNo());
+                if ("TRADE_SUCCESS".equals(tradeStatus) || "TRADE_FINISHED".equals(tradeStatus)) {
+                    // 金额核对，避免查询到异常交易
+                    String totalAmt = resp.getTotalAmount();
+                    BigDecimal amt = totalAmt == null ? BigDecimal.ZERO : new BigDecimal(totalAmt);
+                    if (amt.compareTo(payment.getTotalAmount()) != 0) {
+                        log.warn("主动查单金额不匹配: orderId={}, 应={}, 实={}",
+                                orderId, payment.getTotalAmount(), amt);
+                        return Result.ok(false);
+                    }
+                    // 更新流水为已支付并回填交易号
+                    lambdaUpdate()
+                            .set(Payment::getStatus, 1)
+                            .set(Payment::getTradeNo, resp.getTradeNo())
+                            .set(Payment::getPayTime, LocalDateTime.now())
+                            .eq(Payment::getId, payment.getId())
+                            .update();
+                    // 确认订单已支付（CAS 幂等）
+                    orderService.confirmPaid(orderId);
+                    return Result.ok(true);
+                }
+            } else {
+                log.warn("主动查单未成功: orderId={}, payNo={}, code={}, subMsg={}",
+                        orderId, payment.getPayNo(), resp.getCode(), resp.getSubMsg());
+            }
+        } catch (Exception e) {
+            log.error("主动查单异常: orderId={}", orderId, e);
+        }
+        return Result.ok(false);
     }
 
 }

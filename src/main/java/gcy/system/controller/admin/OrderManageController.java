@@ -11,6 +11,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -168,7 +169,7 @@ public class OrderManageController {
     @Operation(summary = "拒绝退款申请")
     @PutMapping("/refund/reject/{orderId}")
     public Result rejectRefund(@Parameter(description = "订单ID") @PathVariable Long orderId,
-                               @Parameter(description = "请求体") @RequestBody RefundHandleDTO dto) {
+                               @Parameter(description = "请求体") @Valid @RequestBody RefundHandleDTO dto) {
         return orderManageService.rejectRefund(orderId, dto.getRemark());
     }
 
@@ -183,7 +184,7 @@ public class OrderManageController {
     @OperationLog("退款审核")
     @Operation(summary = "管理员审核退款")
     @PutMapping("/refund/audit")
-    public Result auditRefund(@Parameter(description = "请求体") @RequestBody RefundAuditDTO dto) {
+    public Result auditRefund(@Parameter(description = "请求体") @Valid @RequestBody RefundAuditDTO dto) {
         return orderManageService.auditRefund(dto.getOrderId(), dto.getPassed(), dto.getRemark());
     }
 

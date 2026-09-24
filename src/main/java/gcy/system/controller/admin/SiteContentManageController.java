@@ -8,6 +8,7 @@ import gcy.system.service.ISiteContentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -59,7 +60,7 @@ public class SiteContentManageController {
     @OperationLog("保存网站内容")
     @Operation(summary = "保存网站内容")
     @PostMapping
-    public Result save(@Parameter(description = "请求体") @RequestBody SiteContent form) {
+    public Result save(@Parameter(description = "请求体") @Valid @RequestBody SiteContent form) {
         return siteContentService.saveOrUpdateContent(form);
     }
 

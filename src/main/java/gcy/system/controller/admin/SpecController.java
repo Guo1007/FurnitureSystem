@@ -7,6 +7,7 @@ import gcy.system.service.ISpecService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -57,7 +58,7 @@ public class SpecController {
     @OperationLog("保存规格和SKU")
     @Operation(summary = "保存家具的规格和SKU信息")
     @PostMapping("/save")
-    public Result saveSpecAndSku(@Parameter(description = "请求体") @RequestBody FurnitureSpecDTO dto) {
+    public Result saveSpecAndSku(@Parameter(description = "请求体") @Valid @RequestBody FurnitureSpecDTO dto) {
         return specService.saveSpecAndSku(dto);
     }
 }

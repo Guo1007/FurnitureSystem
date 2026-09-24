@@ -14,6 +14,8 @@ import gcy.system.utils.UserHolder;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -69,7 +71,7 @@ public class AiChatController {
      */
     @Operation(summary = "AI流式聊天")
     @PostMapping(value = "/chat/stream", produces = "text/event-stream;charset=utf-8")
-    public Flux<String> chatStream(@Parameter(description = "请求体") @RequestBody ChatRequest request) {
+    public Flux<String> chatStream(@Parameter(description = "请求体") @Valid @RequestBody ChatRequest request) {
         String message = request.getMessage();
         if (message == null || message.trim().isEmpty()) {
             return Flux.just(errorJson("消息内容不能为空"));
@@ -94,8 +96,16 @@ public class AiChatController {
                 .map(this::contentJson)
                 .concatWith(Flux.just("[DONE]"))
                 .onErrorResume(e -> {
-                    log.error("AI聊天流式调用失败: {}", e.getMessage(), e);
-                    return Flux.just(errorJson("AI客服暂时无法响应，请稍后再试"));
+                    // 首次失败多为冷启动（模型唤醒/连接重建），第一次请求已触发唤醒，
+                    // 立即自动重试一次大概率成功，用户无感知，无需用户手动"再问一次"
+                    log.error("AI聊天流式调用失败，触发自动重试（冷启动唤醒）: {}", e.getMessage(), e);
+                    return furnitureAiService.streamChat(memoryId, enhancedMessage)
+                            .map(this::contentJson)
+                            .concatWith(Flux.just("[DONE]"))
+                            .onErrorResume(e2 -> {
+                                log.error("AI自动重试仍失败: {}", e2.getMessage(), e2);
+                                return Flux.just(errorJson("AI客服暂时无法响应，请稍后再试"));
+                            });
                 });
 
         return Flux.concat(metaEvent, chatStream);
@@ -201,6 +211,7 @@ public class AiChatController {
         /**
          * 用户输入的消息内容
          */
+        @NotBlank(message = "消息内容不能为空")
         private String message;
         /**
          * 会话唯一标识，首次请求时可为空，服务端将自动生成

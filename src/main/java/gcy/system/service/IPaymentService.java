@@ -30,4 +30,18 @@ public interface IPaymentService extends IService<Payment> {
      */
     String handleNotify(HttpServletRequest request);
 
+    /**
+     * 主动查询订单支付状态（对账兜底）。
+     * <p>
+     * 当订单处于待支付时，主动调用支付宝 {@code alipay.trade.query} 查询该订单
+     * 对应商户单号的真实交易状态；若支付宝侧已成功，则本地落库并确认订单已支付。
+     * 用于规避支付宝异步通知偶发延迟/丢失导致的订单状态不一致。
+     * </p>
+     *
+     * @param orderId 待查订单ID
+     * @param userId  当前操作用户ID
+     * @return Result.data 为 true 表示已支付，false 表示仍待支付
+     */
+    Result queryPayStatus(Long orderId, Long userId);
+
 }

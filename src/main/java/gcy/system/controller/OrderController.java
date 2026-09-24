@@ -10,6 +10,7 @@ import gcy.system.utils.UserHolder;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -45,7 +46,7 @@ public class OrderController {
     @OperationLog("创建订单")
     @Operation(summary = "创建订单")
     @PostMapping("/create")
-    public Result createOrder(@Parameter(description = "请求体") @RequestBody CartFormDTO dto) {
+    public Result createOrder(@Parameter(description = "请求体") @Valid @RequestBody CartFormDTO dto) {
         return orderService.createOrder(dto);
     }
 
@@ -147,7 +148,7 @@ public class OrderController {
     @OperationLog("申请退款")
     @Operation(summary = "申请退款")
     @PostMapping("/refund/apply")
-    public Result applyRefund(@Parameter(description = "请求体") @RequestBody RefundApplyDTO dto) {
+    public Result applyRefund(@Parameter(description = "请求体") @Valid @RequestBody RefundApplyDTO dto) {
         Long userId = UserHolder.getUser().getId();
         return orderService.applyRefund(dto.getOrderId(), dto.getRefundReason(), userId);
     }

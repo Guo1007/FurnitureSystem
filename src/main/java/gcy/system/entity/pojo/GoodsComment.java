@@ -5,6 +5,8 @@ import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -32,6 +34,7 @@ public class GoodsComment {
     /**
      * 关联的订单ID
      */
+    @NotNull(message = "订单ID不能为空")
     private Long orderId;
 
     /**
@@ -42,6 +45,7 @@ public class GoodsComment {
     /**
      * 关联的商品ID
      */
+    @NotNull(message = "商品ID不能为空")
     private Long goodsId;
 
     /**
@@ -52,11 +56,13 @@ public class GoodsComment {
     /**
      * 评分（星级）
      */
+    @NotNull(message = "评分不能为空")
     private Integer score;
 
     /**
      * 评论文字内容
      */
+    @NotBlank(message = "评价内容不能为空")
     private String content;
 
     /**

@@ -80,7 +80,7 @@ public class UserManageController {
     @OperationLog("编辑用户")
     @Operation(summary = "编辑用户信息")
     @PutMapping("/edit")
-    public Result editUser(@Parameter(description = "请求体") @RequestBody EditUserFormDTO dto) {
+    public Result editUser(@Parameter(description = "请求体") @Valid @RequestBody EditUserFormDTO dto) {
         return userManageService.editUser(dto);
     }
 

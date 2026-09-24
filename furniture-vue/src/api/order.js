@@ -45,6 +45,14 @@ export const prepayOrder = (orderId) => {
   });
 };
 
+// 主动查询订单支付状态（对账兜底，data 为 true 表示已支付）
+export const queryPayStatus = (orderId) => {
+  return request({
+    url: `/payment/status/${orderId}`,
+    method: "get",
+  });
+};
+
 export function confirmReceipt(orderId) {
   return request({
     url: `/order/confirm/${orderId}`,

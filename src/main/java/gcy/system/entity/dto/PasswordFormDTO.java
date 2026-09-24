@@ -1,6 +1,7 @@
 package gcy.system.entity.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.NotBlank;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -27,12 +28,14 @@ public class PasswordFormDTO {
      * 用户要设置的新密码。
      */
     @Schema(description = "新密码")
+    @NotBlank(message = "新密码不能为空")
     private String newPassword;
 
     /**
      * 新密码的二次确认输入，用于校验两次输入是否一致。
      */
     @Schema(description = "确认密码")
+    @NotBlank(message = "确认密码不能为空")
     private String confirmPassword;
 
 }

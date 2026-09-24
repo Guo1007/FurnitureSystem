@@ -45,6 +45,23 @@ public class PaymentController {
     }
 
     /**
+     * 主动查询订单支付状态（对账兜底）。
+     * <p>
+     * 前端付款页轮询调用，主动向支付宝查单，规避异步通知偶发延迟/丢失导致的订单状态不一致。
+     * </p>
+     *
+     * @param orderId 订单ID
+     * @return Result.data 为 true 表示已支付，false 表示仍待支付
+     */
+    @OperationLog("查询支付状态")
+    @Operation(summary = "主动查询订单支付状态")
+    @GetMapping("/status/{orderId}")
+    public Result queryStatus(@Parameter(description = "订单ID") @PathVariable Long orderId) {
+        Long userId = UserHolder.getUser().getId();
+        return paymentService.queryPayStatus(orderId, userId);
+    }
+
+    /**
      * 支付宝异步回调接口（支付宝服务器主动调用）。
      * <p>
      * 该接口匿名放行，返回固定文本 success/failure 供支付宝解析；

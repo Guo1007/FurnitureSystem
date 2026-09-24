@@ -3,6 +3,7 @@ package gcy.system.entity.pojo;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import jakarta.validation.constraints.NotBlank;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -30,6 +31,7 @@ public class SiteContent {
     /**
      * 版块标识键，用于定位具体内容区域（如 home_banner、about_intro）
      */
+    @NotBlank(message = "sectionKey 不能为空")
     private String sectionKey;
 
     /**

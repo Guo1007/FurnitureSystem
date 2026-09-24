@@ -11,6 +11,7 @@ import gcy.system.utils.UserHolder;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
@@ -46,7 +47,7 @@ public class UserController {
     @Operation(summary = "发送注册验证码")
     @Anonymous
     @PostMapping("/r_code")
-    public Result sendRegisterCode(@Parameter(description = "请求体") @RequestBody RegisterFormDTO registerFormDTO) {
+    public Result sendRegisterCode(@Parameter(description = "请求体") @Valid @RequestBody RegisterFormDTO registerFormDTO) {
         return userService.sendRegisterCode(registerFormDTO);
     }
 
@@ -61,7 +62,7 @@ public class UserController {
     @Operation(summary = "发送登录验证码")
     @Anonymous
     @PostMapping("/code")
-    public Result sendLoginCode(@Parameter(description = "请求体") @RequestBody LoginFormDTO loginFormDTO) {
+    public Result sendLoginCode(@Parameter(description = "请求体") @Valid @RequestBody LoginFormDTO loginFormDTO) {
         return userService.sendLoginCode(loginFormDTO);
     }
 
@@ -83,7 +84,7 @@ public class UserController {
     @Operation(summary = "发送重置密码验证码")
     @Anonymous
     @PostMapping("/reset-code")
-    public Result sendResetCode(@Parameter(description = "请求体") @RequestBody ResetPasswordFormDTO dto) {
+    public Result sendResetCode(@Parameter(description = "请求体") @Valid @RequestBody ResetPasswordFormDTO dto) {
         return userService.sendResetCode(dto);
     }
 
@@ -99,7 +100,7 @@ public class UserController {
     @Operation(summary = "重置密码")
     @Anonymous
     @PostMapping("/reset-password")
-    public Result resetPassword(@Parameter(description = "请求体") @RequestBody ResetPasswordFormDTO dto) {
+    public Result resetPassword(@Parameter(description = "请求体") @Valid @RequestBody ResetPasswordFormDTO dto) {
         return userService.resetPassword(dto);
     }
 
@@ -115,7 +116,7 @@ public class UserController {
     @Operation(summary = "用户登录")
     @Anonymous
     @PostMapping("/login")
-    public Result login(@Parameter(description = "请求体") @RequestBody LoginFormDTO loginFormDTO) {
+    public Result login(@Parameter(description = "请求体") @Valid @RequestBody LoginFormDTO loginFormDTO) {
         return userService.login(loginFormDTO);
     }
 
@@ -161,7 +162,7 @@ public class UserController {
     @Operation(summary = "用户注册")
     @Anonymous
     @PostMapping("/register")
-    public Result register(@Parameter(description = "请求体") @RequestBody RegisterFormDTO registerFormDTO) {
+    public Result register(@Parameter(description = "请求体") @Valid @RequestBody RegisterFormDTO registerFormDTO) {
         return userService.register(registerFormDTO);
     }
 
@@ -192,7 +193,7 @@ public class UserController {
     @OperationLog("修改密码")
     @Operation(summary = "修改密码")
     @PutMapping("/password")
-    public Result updatePassword(@Parameter(description = "请求体") @RequestBody PasswordFormDTO dto) {
+    public Result updatePassword(@Parameter(description = "请求体") @Valid @RequestBody PasswordFormDTO dto) {
         return userService.updatePassword(dto);
     }
 

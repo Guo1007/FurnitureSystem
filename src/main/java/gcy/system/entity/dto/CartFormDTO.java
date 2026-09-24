@@ -1,6 +1,8 @@
 package gcy.system.entity.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -23,18 +25,21 @@ public class CartFormDTO {
      * 收货人姓名
      */
     @Schema(description = "收货人姓名")
+    @NotBlank(message = "收货人不能为空")
     private String consignee;
 
     /**
      * 收货人联系电话
      */
     @Schema(description = "收货人联系电话")
+    @NotBlank(message = "联系电话不能为空")
     private String phone;
 
     /**
      * 收货地址
      */
     @Schema(description = "收货地址")
+    @NotBlank(message = "收货地址不能为空")
     private String address;
 
     /**
@@ -47,6 +52,7 @@ public class CartFormDTO {
      * 订单项明细列表
      */
     @Schema(description = "订单项明细列表")
+    @NotEmpty(message = "订单商品明细不能为空")
     private List<OrderItemDTO> itemList;
 
     /**
