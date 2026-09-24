@@ -20,8 +20,18 @@
 
     <!-- 表格 -->
     <el-table :data="tableData" v-loading="loading" border>
-      <el-table-column prop="id" label="ID" width="76" />
       <el-table-column prop="name" label="券名称" min-width="150" show-overflow-tooltip />
+      <el-table-column label="叠加" width="100">
+        <template #default="{ row }">
+          <el-tag
+            size="small"
+            :type="row.stackable === 1 ? 'success' : 'info'"
+            :effect="row.stackable === 1 ? 'light' : 'plain'"
+          >
+            {{ row.stackable === 1 ? "可叠加" : "不可叠加" }}
+          </el-tag>
+        </template>
+      </el-table-column>
       <el-table-column label="类型" width="100">
         <template #default="{ row }">
           <el-tag size="small" :type="typeTag(row.type)">{{ typeText(row.type) }}</el-tag>
@@ -200,6 +210,16 @@
         <el-form-item label="启用状态">
           <el-switch v-model="formData.statusOn" active-text="启用" inactive-text="停用" />
         </el-form-item>
+        <el-form-item label="叠加使用">
+          <el-switch
+            v-model="formData.stackable"
+            :active-value="1"
+            :inactive-value="0"
+            active-text="可叠加"
+            inactive-text="不可叠加"
+          />
+          <div class="form-tip">可叠加券可多张同时使用；不可叠加券一单只能用一张</div>
+        </el-form-item>
       </el-form>
       <template #footer>
         <span class="dialog-footer">
@@ -260,6 +280,7 @@ const emptyForm = () => ({
   validDays: 7,
   targetType: 0,
   targetDays: 30,
+  stackable: 0,
   statusOn: true,
 });
 
@@ -453,4 +474,12 @@ onMounted(() => {
 
 <style scoped lang="scss">
 @import "@/styles/views/coupon-manage.scss";
+
+.form-tip {
+  width: 100%;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary, #999);
+  line-height: 1.4;
+}
 </style>

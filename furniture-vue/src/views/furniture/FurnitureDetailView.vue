@@ -1019,8 +1019,8 @@
         <div class="coupon-select-hd">
           <span class="label">优惠券</span>
           <button class="picker" @click="toggleBuyCoupon">
-            <span v-if="bgCoupon">
-              {{ bgCoupon.name }}
+            <span v-if="selectedBuyCoupons.length">
+              {{ buyCouponText }}
               <em class="picker-save">-{{ formatPrice(buyDiscountEstimate) }}</em>
             </span>
             <span v-else>{{ buyAvailableCoupons.length ? "选择优惠券" : "暂无可用优惠券" }}</span>
@@ -1028,12 +1028,14 @@
           </button>
         </div>
         <div v-if="showBuyCoupon" class="coupon-panel">
-          <div class="coupon-opt" @click="selectBuyCoupon(null)">不使用优惠券</div>
+          <div class="coupon-opt" :class="{ on: !selectedBuyCoupons.length }" @click="selectBuyCoupon(null)">
+            不使用优惠券
+          </div>
           <div
             v-for="c in buyAvailableCoupons"
             :key="c.userCouponId"
             class="coupon-opt"
-            :class="{ on: bgCoupon?.userCouponId === c.userCouponId }"
+            :class="{ on: isCouponOn(c) }"
             @click="selectBuyCoupon(c)"
           >
             <div class="opt-info">
@@ -1042,7 +1044,10 @@
               <span v-if="Number(c.minThreshold) > 0" class="opt-threshold"
                 >满{{ c.minThreshold }}可用</span
               >
+              <span v-if="isStackable(c)" class="opt-stackable">可叠加</span>
+              <span v-else class="opt-exclusive">不可叠加</span>
             </div>
+            <span v-if="isCouponOn(c)" class="opt-check">✓</span>
             <div class="opt-discount">-{{ formatPrice(buyEstimate(c)) }}</div>
           </div>
           <div v-if="!buyAvailableCoupons.length" class="coupon-none">暂无可用优惠券</div>
@@ -1239,13 +1244,14 @@ const {
 const { goBack } = useBackNavigation();
 const { requireLogin } = useRequireLogin();
 
-// ========== 立即购买 - 优惠券 ==========
+// ========== 立即购买 - 优惠券（支持多选叠加） ==========
 const buyCoupons = ref([]);
-const bgCoupon = ref(null);
+const selectedBuyCoupons = ref([]);
 const showBuyCoupon = ref(false);
 const buyGoodsTotal = computed(() =>
   Math.round(Number(displayPrice.value || 0) * Number(quantity.value || 1) * 100) / 100,
 );
+const isStackable = (c) => c && Number(c.stackable) === 1;
 
 const buyAvailableCoupons = computed(() =>
   buyCoupons.value.filter((c) => {
@@ -1261,19 +1267,36 @@ const buyAvailableCoupons = computed(() =>
   }),
 );
 
-const buyEstimate = (c) => {
-  const total = buyGoodsTotal.value;
+const isCouponOn = (c) =>
+  selectedBuyCoupons.value.some((s) => s.userCouponId === c.userCouponId);
+
+// 单张券在给定基数上的预估优惠
+const buyEstimate = (c, base = buyGoodsTotal.value) => {
   let d = 0;
-  if (c.type === 2 && c.discount) d = total * (1 - Number(c.discount));
+  if (c.type === 2 && c.discount) d = base * (1 - Number(c.discount));
   else if (c.amount) d = Number(c.amount);
   if (c.capAmount && d > Number(c.capAmount)) d = Number(c.capAmount);
-  d = Math.min(d, total);
+  d = Math.min(d, base);
   return Math.max(0, Math.round(d * 100) / 100);
 };
 
-const buyDiscountEstimate = computed(() =>
-  bgCoupon.value ? buyEstimate(bgCoupon.value) : 0,
-);
+// 多张券总优惠（按剩余应付依次抵扣，与后端一致）
+const buyDiscountEstimate = computed(() => {
+  let payable = buyGoodsTotal.value;
+  let total = 0;
+  for (const c of selectedBuyCoupons.value) {
+    const d = buyEstimate(c, payable);
+    total += d;
+    payable = Math.max(0, payable - d);
+  }
+  return Math.round(Math.min(total, buyGoodsTotal.value) * 100) / 100;
+});
+
+const buyCouponText = computed(() => {
+  if (!selectedBuyCoupons.value.length) return "选择优惠券";
+  if (selectedBuyCoupons.value.length === 1) return selectedBuyCoupons.value[0].name;
+  return `已选 ${selectedBuyCoupons.value.length} 张券`;
+});
 
 const loadBuyCoupons = async () => {
   if (!localStorage.getItem("token")) return;
@@ -1285,11 +1308,32 @@ const toggleBuyCoupon = () => {
   showBuyCoupon.value = !showBuyCoupon.value;
 };
 const selectBuyCoupon = (c) => {
-  bgCoupon.value = c;
+  if (!c) {
+    selectedBuyCoupons.value = [];
+    showBuyCoupon.value = false;
+    return;
+  }
+  if (isStackable(c)) {
+    // 可叠加券：先移除已选中的不可叠加券（可叠加不能和不可叠加共存）
+    selectedBuyCoupons.value = selectedBuyCoupons.value.filter((s) => isStackable(s));
+    if (isCouponOn(c)) {
+      selectedBuyCoupons.value = selectedBuyCoupons.value.filter(
+        (s) => s.userCouponId !== c.userCouponId,
+      );
+    } else {
+      selectedBuyCoupons.value.push(c);
+    }
+  } else {
+    // 不可叠加券：只能单独用一张，清空其它
+    selectedBuyCoupons.value = isCouponOn(c) ? [] : [c];
+  }
   showBuyCoupon.value = false;
 };
 watch(buyDialogVisible, (open) => {
-  if (open) loadBuyCoupons();
+  if (open) {
+    selectedBuyCoupons.value = [];
+    loadBuyCoupons();
+  }
 });
 
 // 重写 buyNow，在打开对话框时填入已选地址
@@ -1374,7 +1418,7 @@ const goToAddresses = () => {
 };
 
 const handleSubmitBuy = async () => {
-  const success = await submitBuy(bgCoupon.value?.userCouponId);
+  const success = await submitBuy(selectedBuyCoupons.value.map((c) => c.userCouponId));
   if (success) {
     // 订单创建成功后，自动保存地址（静默处理，不打扰用户）
     try {
@@ -1830,6 +1874,159 @@ const handleSummaryImgError = (e) => {
 .buy-coupon {
   margin: 4px 0 12px;
   padding: 0 2px;
+
+  .coupon-select-hd {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+
+    .label {
+      font-size: 14px;
+      color: #666;
+      flex-shrink: 0;
+    }
+
+    .picker {
+      flex: 1;
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      border: 1px solid #e6e1da;
+      border-radius: 6px;
+      background: #fff;
+      font-size: 14px;
+      color: #333;
+      cursor: pointer;
+      transition: border-color 0.2s;
+
+      &:hover {
+        border-color: #c5554a;
+      }
+
+      .picker-save {
+        color: #c5554a;
+        font-style: normal;
+        font-weight: 600;
+      }
+
+      .arrow {
+        color: #999;
+        margin-left: 6px;
+        font-size: 12px;
+      }
+    }
+  }
+
+  .coupon-panel {
+    margin-top: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 4px;
+    border: 1px solid #eee8e1;
+    border-radius: 8px;
+    max-height: 220px;
+    overflow-y: auto;
+    background: #fff;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+  }
+
+  .coupon-opt {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.15s;
+
+    &:hover {
+      background: #faf6f2;
+    }
+
+    &.on {
+      background: #fff5f2;
+      box-shadow: inset 3px 0 0 0 #c5554a;
+    }
+
+    .opt-info {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+
+      b {
+        font-size: 16px;
+        color: #c5554a;
+      }
+
+      span {
+        font-size: 13px;
+        color: #555;
+      }
+
+      .opt-threshold {
+        font-size: 12px;
+        color: #999;
+      }
+
+      .opt-stackable {
+        align-self: flex-start;
+        margin-top: 3px;
+        font-size: 11px;
+        line-height: 1;
+        padding: 3px 6px;
+        border-radius: 4px;
+        color: #389e6d;
+        background: #e9f7f0;
+      }
+
+      .opt-exclusive {
+        align-self: flex-start;
+        margin-top: 3px;
+        font-size: 11px;
+        line-height: 1;
+        padding: 3px 6px;
+        border-radius: 4px;
+        color: #b4883f;
+        background: #fbf4e6;
+      }
+
+      &.on .opt-exclusive {
+        color: #c5554a;
+        background: #fbeae7;
+      }
+
+      .opt-check {
+        font-size: 15px;
+        font-weight: 700;
+        color: #c5554a;
+        flex-shrink: 0;
+      }
+
+      .opt-discount {
+        font-size: 14px;
+        font-weight: 600;
+        color: #c5554a;
+        flex-shrink: 0;
+      }
+    }
+
+    .coupon-opt + .coupon-opt {
+      margin-top: 2px;
+    }
+  }
+
+  .coupon-none {
+    padding: 14px;
+    text-align: center;
+    color: #999;
+    font-size: 13px;
+  }
 }
 .buy-total {
   display: flex;

@@ -55,4 +55,10 @@ public class CartFormDTO {
     @Schema(description = "用户优惠券记录ID")
     private Long userCouponId;
 
+    /**
+     * 使用的用户优惠券记录ID列表（支持多张可叠加券，不选为空；优先于 userCouponId）
+     */
+    @Schema(description = "用户优惠券记录ID列表(多张可叠加)")
+    private List<Long> userCouponIds;
+
 }

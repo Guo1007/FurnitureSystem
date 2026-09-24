@@ -116,6 +116,7 @@ public class CouponManageServiceImpl implements ICouponManageService {
         c.setValidDays(dto.getValidDays());
         c.setTargetType(dto.getTargetType() == null ? 0 : dto.getTargetType());
         c.setTargetDays(dto.getTargetDays());
+        c.setStackable(dto.getStackable() == null ? 0 : dto.getStackable());
         c.setStatus(dto.getStatus() == null ? 1 : dto.getStatus());
     }
 }

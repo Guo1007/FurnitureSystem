@@ -92,4 +92,7 @@ public class AdminCouponFormDTO {
 
     @Schema(description = "状态：0-停用，1-启用")
     private Integer status;
+
+    @Schema(description = "是否可叠加使用：0-不可叠加，1-可叠加")
+    private Integer stackable;
 }

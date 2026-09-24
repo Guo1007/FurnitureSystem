@@ -202,6 +202,7 @@ public class CouponServiceImpl implements ICouponService {
                     vo.setAmount(c != null ? c.getAmount() : null);
                     vo.setDiscount(c != null ? c.getDiscount() : null);
                     vo.setCapAmount(c != null ? c.getCapAmount() : null);
+                    vo.setStackable(c != null && c.getStackable() != null ? c.getStackable() : 0);
                     vo.setStatus(uc.getStatus());
                     vo.setStatusText(statusText(uc.getStatus()));
                     vo.setExpireTime(uc.getExpireTime());

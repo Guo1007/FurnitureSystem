@@ -31,6 +31,7 @@ CREATE TABLE `coupon`  (
   `valid_days` int NULL DEFAULT NULL COMMENT '领取后有效天数（valid_type=2时使用）',
   `target_type` tinyint NOT NULL DEFAULT 0 COMMENT '领取人群：0-不限，1-新用户，2-老用户',
   `target_days` int NULL DEFAULT NULL COMMENT '新/老用户判定天数阈值',
+  `stackable` tinyint NOT NULL DEFAULT 0 COMMENT '是否可叠加使用：0-不可叠加(只能单独用)，1-可叠加(可与其他可叠加券同用)',
   `status` tinyint NOT NULL DEFAULT 1 COMMENT '状态：0-停用，1-启用',
   `deleted` tinyint(1) NOT NULL DEFAULT 0 COMMENT '逻辑删除（0未删/1已删）',
   `create_time` datetime NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -57,10 +58,3 @@ CREATE TABLE `user_coupon`  (
 ) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '用户领取优惠券记录表' ROW_FORMAT = DYNAMIC;
 
 SET FOREIGN_KEY_CHECKS = 1;
-
--- ----------------------------
--- 订单表增加优惠券相关字段（用于下单抵扣与归券）
--- ----------------------------
-ALTER TABLE `order`
-  ADD COLUMN `coupon_id` bigint NULL COMMENT '使用的优惠券模板ID' AFTER `total_price`,
-  ADD COLUMN `coupon_discount` decimal(10, 2) NULL DEFAULT 0.00 COMMENT '优惠金额' AFTER `coupon_id`;

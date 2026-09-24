@@ -32,6 +32,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
@@ -195,15 +196,14 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
             }
             order.setTotalPrice(totalAmount);
             LocalDateTime now = LocalDateTime.now();
-            // 优惠券抵扣
-            if (dto.getUserCouponId() != null) {
-                Coupon usedCoupon = validateCoupon(userId, dto.getUserCouponId(), totalAmount, itemTypeIds, now);
-                if (usedCoupon != null) {
-                    BigDecimal discount = calcCouponDiscount(usedCoupon, totalAmount);
-                    order.setCouponId(usedCoupon.getId());
-                    order.setCouponDiscount(discount);
-                    order.setTotalPrice(totalAmount.subtract(discount).max(BigDecimal.ZERO));
-                }
+            // 优惠券抵扣（支持多张：可叠加的券可同时使用，不可叠加的券只能单独用）
+            List<Long> userCouponIds = collectCouponIds(dto);
+            if (!userCouponIds.isEmpty()) {
+                List<Coupon> usedCoupons = validateCoupons(userId, userCouponIds, totalAmount, itemTypeIds, now);
+                BigDecimal discount = calcCouponsDiscount(usedCoupons, totalAmount);
+                order.setCouponId(usedCoupons.get(0).getId());
+                order.setCouponDiscount(discount);
+                order.setTotalPrice(totalAmount.subtract(discount).max(BigDecimal.ZERO));
             }
             save(order);
             Long orderId = order.getId();
@@ -215,8 +215,8 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
                 throw new BusinessException("订单明细保存失败");
             }
             // 订单创建成功后，将已用优惠券置为已用并关联订单
-            if (dto.getUserCouponId() != null) {
-                markCouponUsed(dto.getUserCouponId(), orderId, now);
+            for (Long userCouponId : userCouponIds) {
+                markCouponUsed(userCouponId, orderId, now);
             }
             log.info("订单创建成功: orderId={}, userId={}, amount={}", orderId, userId, totalAmount);
             // 通知管理员有新订单
@@ -292,15 +292,59 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     }
 
     /**
+     * 从下单表单提取优惠券ID列表：优先 userCouponIds（多张），否则回退 userCouponId（单张）。
+     */
+    private List<Long> collectCouponIds(CartFormDTO dto) {
+        if (dto.getUserCouponIds() != null && !dto.getUserCouponIds().isEmpty()) {
+            return dto.getUserCouponIds().stream().distinct().collect(Collectors.toList());
+        }
+        return dto.getUserCouponId() == null ? new ArrayList<>() : List.of(dto.getUserCouponId());
+    }
+
+    /**
+     * 批量校验多张优惠券，并施加叠加规则：不可叠加券只能单独用一张；可叠加券可与其他可叠加券同用。
+     */
+    private List<Coupon> validateCoupons(Long userId, List<Long> userCouponIds, BigDecimal goodsTotal,
+                                         Set<Long> itemTypeIds, LocalDateTime now) {
+        List<Coupon> coupons = new ArrayList<>();
+        boolean hasExclusive = false;
+        for (Long id : userCouponIds) {
+            Coupon c = validateCoupon(userId, id, goodsTotal, itemTypeIds, now);
+            boolean stackable = c.getStackable() != null && c.getStackable() == 1;
+            if (!stackable) {
+                hasExclusive = true;
+            }
+            coupons.add(c);
+        }
+        if (coupons.size() > 1 && hasExclusive) {
+            throw new BusinessException("不可叠加类优惠券不能与其他优惠券同时使用");
+        }
+        return coupons;
+    }
+
+    /**
+     * 计算多张券的总抵扣：按顺序对剩余应付金额逐个抵扣（可叠加太简单稳步累加），总抵扣不超过商品总额。
+     */
+    private BigDecimal calcCouponsDiscount(List<Coupon> coupons, BigDecimal goodsTotal) {
+        BigDecimal payable = goodsTotal;
+        BigDecimal total = BigDecimal.ZERO;
+        for (Coupon c : coupons) {
+            BigDecimal discount = calcCouponDiscount(c, payable);
+            total = total.add(discount);
+            payable = payable.subtract(discount).max(BigDecimal.ZERO);
+        }
+        return total.max(BigDecimal.ZERO).min(goodsTotal).setScale(2, RoundingMode.HALF_UP);
+    }
+
+    /**
      * 订单取消/超时/退款等环节归还已用优惠券。
      */
     private void returnCoupon(Order order) {
-        if (order == null || order.getCouponId() == null) {
+        if (order == null) {
             return;
         }
         List<UserCoupon> list = userCouponMapper.selectList(new LambdaQueryWrapper<UserCoupon>()
                 .eq(UserCoupon::getUserId, order.getUserId())
-                .eq(UserCoupon::getCouponId, order.getCouponId())
                 .eq(UserCoupon::getOrderId, order.getId())
                 .eq(UserCoupon::getStatus, 1));
         for (UserCoupon uc : list) {

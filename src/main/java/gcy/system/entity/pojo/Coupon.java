@@ -120,6 +120,11 @@ public class Coupon {
     private Integer targetDays;
 
     /**
+     * 是否可叠加使用：0-不可叠加(只能单独用一张)，1-可叠加(可与其他可叠加券同用)
+     */
+    private Integer stackable;
+
+    /**
      * 状态：0-停用，1-启用
      */
     private Integer status;

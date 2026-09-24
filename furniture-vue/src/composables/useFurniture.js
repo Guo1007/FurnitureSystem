@@ -162,7 +162,7 @@ export function useFurnitureDetail() {
   };
 
   // 立即购买 - 提交订单
-  const submitBuy = async (couponId) => {
+  const submitBuy = async (couponIds) => {
     // 表单验证
     if (!buyForm.value.consignee || !buyForm.value.consignee.trim()) {
       ElMessage.warning("请输入收货人姓名");
@@ -183,7 +183,8 @@ export function useFurnitureDetail() {
       phone: buyForm.value.phone,
       address: buyForm.value.address,
       remark: buyForm.value.remark,
-      userCouponId: couponId || undefined,
+      userCouponIds:
+        Array.isArray(couponIds) && couponIds.length ? couponIds : undefined,
       itemList: [
         {
           furnitureId: furniture.value.id,

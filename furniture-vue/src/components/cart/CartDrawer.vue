@@ -101,8 +101,8 @@
         <div class="coupon-select-hd">
           <span class="label">优惠券</span>
           <button class="picker" @click="toggleCouponPanel">
-            <span v-if="selectedCoupon">
-              {{ selectedCoupon.name }}
+            <span v-if="selectedCoupons.length">
+              {{ couponText }}
               <em class="picker-save">-{{ formatPrice(discountEstimate) }}</em>
             </span>
             <span v-else>{{ availableCoupons.length ? "选择优惠券" : "暂无可用优惠券" }}</span>
@@ -110,12 +110,18 @@
           </button>
         </div>
         <div v-if="showCouponPanel" class="coupon-panel">
-          <div class="coupon-opt" @click="selectCoupon(null)">不使用优惠券</div>
+          <div
+            class="coupon-opt"
+            :class="{ on: !selectedCoupons.length }"
+            @click="selectCoupon(null)"
+          >
+            不使用优惠券
+          </div>
           <div
             v-for="c in availableCoupons"
             :key="c.userCouponId"
             class="coupon-opt"
-            :class="{ on: selectedCoupon?.userCouponId === c.userCouponId }"
+            :class="{ on: isCouponOn(c) }"
             @click="selectCoupon(c)"
           >
             <div class="opt-info">
@@ -124,7 +130,10 @@
               <span v-if="Number(c.minThreshold) > 0" class="opt-threshold"
                 >满{{ c.minThreshold }}可用</span
               >
+              <span v-if="isStackable(c)" class="opt-stackable">可叠加</span>
+              <span v-else class="opt-exclusive">不可叠加</span>
             </div>
+            <span v-if="isCouponOn(c)" class="opt-check">✓</span>
             <div class="opt-discount">-{{ formatPrice(estimateCoupon(c)) }}</div>
           </div>
           <div v-if="!availableCoupons.length" class="coupon-none">
@@ -279,7 +288,7 @@ const { requireLogin } = useRequireLogin();
 
 // ========== 优惠券 ==========
 const mineCoupons = ref([]);
-const selectedCoupon = ref(null);
+const selectedCoupons = ref([]);
 const showCouponPanel = ref(false);
 
 const loadCoupons = async () => {
@@ -303,9 +312,12 @@ const availableCoupons = computed(() => {
   });
 });
 
+const isStackable = (c) => c && Number(c.stackable) === 1;
+const isCouponOn = (c) =>
+  selectedCoupons.value.some((s) => s.userCouponId === c.userCouponId);
+
 // 预估优惠额（与服务端口径一致，最终以服务端为准）
-const estimateCoupon = (c) => {
-  const total = Number(cartStore.totalPrice || 0);
+const estimateCoupon = (c, total = Number(cartStore.totalPrice || 0)) => {
   let d = 0;
   if (c.type === 2 && c.discount) d = total * (1 - Number(c.discount));
   else if (c.amount) d = Number(c.amount);
@@ -314,16 +326,48 @@ const estimateCoupon = (c) => {
   return Math.max(0, Math.round(d * 100) / 100);
 };
 
-const discountEstimate = computed(() =>
-  selectedCoupon.value ? estimateCoupon(selectedCoupon.value) : 0,
-);
+// 多张券总优惠：按剩余应付金额依次抵扣（与后端一致）
+const discountEstimate = computed(() => {
+  let payable = Number(cartStore.totalPrice || 0);
+  let total = 0;
+  for (const c of selectedCoupons.value) {
+    const d = estimateCoupon(c, payable);
+    total += d;
+    payable = Math.max(0, payable - d);
+  }
+  return Math.round(Math.min(total, Number(cartStore.totalPrice || 0)) * 100) / 100;
+});
+
+const couponText = computed(() => {
+  if (!selectedCoupons.value.length) return "选择优惠券";
+  if (selectedCoupons.value.length === 1) return selectedCoupons.value[0].name;
+  return `已选 ${selectedCoupons.value.length} 张券`;
+});
 
 const toggleCouponPanel = () => {
   showCouponPanel.value = !showCouponPanel.value;
 };
 
 const selectCoupon = (c) => {
-  selectedCoupon.value = c;
+  if (!c) {
+    selectedCoupons.value = [];
+    showCouponPanel.value = false;
+    return;
+  }
+  if (isStackable(c)) {
+    // 可叠加券：先剔除已选中的不可叠加券（二者不能共存）
+    selectedCoupons.value = selectedCoupons.value.filter((s) => isStackable(s));
+    if (isCouponOn(c)) {
+      selectedCoupons.value = selectedCoupons.value.filter(
+        (s) => s.userCouponId !== c.userCouponId,
+      );
+    } else {
+      selectedCoupons.value.push(c);
+    }
+  } else {
+    // 不可叠加券：只能单独用一张，清空其它
+    selectedCoupons.value = isCouponOn(c) ? [] : [c];
+  }
   showCouponPanel.value = false;
 };
 
@@ -544,7 +588,10 @@ const checkout = async () => {
       phone: selectedAddress.value.phone,
       address: selectedAddress.value.address,
       remark: "",
-      userCouponId: selectedCoupon.value?.userCouponId || undefined,
+      userCouponIds:
+        selectedCoupons.value.length
+          ? selectedCoupons.value.map((c) => c.userCouponId)
+          : undefined,
       // 优先结算购物车页勾选的商品；从顶部图标直接打开抽屉时为空，则结算全部
       itemList: cartStore.getCartData(cartStore.checkoutIds),
     };
@@ -568,4 +615,38 @@ const checkout = async () => {
 <style scoped lang="scss">
 @import "@/styles/views/cart.scss";
 @import "@/styles/views/cart-drawer.scss";
+
+.opt-stackable {
+  align-self: flex-start;
+  margin-top: 3px;
+  font-size: 11px;
+  line-height: 1;
+  padding: 3px 6px;
+  border-radius: 4px;
+  color: #389e6d;
+  background: #e9f7f0;
+}
+
+.opt-exclusive {
+  align-self: flex-start;
+  margin-top: 3px;
+  font-size: 11px;
+  line-height: 1;
+  padding: 3px 6px;
+  border-radius: 4px;
+  color: #b4883f;
+  background: #fbf4e6;
+}
+
+.coupon-opt.on .opt-exclusive {
+  color: #c5554a;
+  background: #fbeae7;
+}
+
+.opt-check {
+  font-size: 15px;
+  font-weight: 700;
+  color: #c5554a;
+  flex-shrink: 0;
+}
 </style>

@@ -46,6 +46,9 @@ public class UserCouponVO {
     @Schema(description = "折扣券最高优惠上限")
     private BigDecimal capAmount;
 
+    @Schema(description = "是否可叠加使用：0-不可叠加，1-可叠加")
+    private Integer stackable;
+
     @Schema(description = "状态：0-未用，1-已用，2-已过期")
     private Integer status;
 
