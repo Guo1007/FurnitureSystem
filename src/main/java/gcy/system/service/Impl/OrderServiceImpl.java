@@ -85,6 +85,13 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     private final RedissonClient redissonClient;
 
     /**
+     * 发货后自动确认收货的天数，取自 {@code order.auto-receive-days}（与 AutoReceiveScheduler 同源）。
+     * 仅用于向前端下发「预计自动收货时间」，真正的自动收货仍由调度器执行。
+     */
+    @org.springframework.beans.factory.annotation.Value("${order.auto-receive-days:10}")
+    private int autoReceiveDays;
+
+    /**
      * 事务管理器。用于显式控制下单事务边界，使「加锁 → 开事务 → 提交 → 解锁」顺序可控。
      * 注意：本类内部方法互调不会经过 Spring 代理，@Transactional 会失效，故不使用注解。
      */
@@ -549,7 +556,11 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
             itemMap.putAll(allItems.stream().collect(Collectors.groupingBy(OrderItem::getOrderId)));
         }
         List<OrderVO> voList = orders.stream()
-                .map(order -> OrderVO.from(order, itemMap.getOrDefault(order.getId(), Collections.emptyList())))
+                .map(order -> {
+                    OrderVO vo = OrderVO.from(order, itemMap.getOrDefault(order.getId(), Collections.emptyList()));
+                    vo.fillAutoReceiveTime(autoReceiveDays);
+                    return vo;
+                })
                 .collect(Collectors.toList());
         Page<OrderVO> voPage = new Page<>();
         voPage.setRecords(voList);

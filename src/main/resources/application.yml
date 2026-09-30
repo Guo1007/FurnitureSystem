@@ -124,6 +124,7 @@ rocketmq:
 # 订单配置
 order:
   payment-timeout-minutes: 1440  # 未支付订单超时自动取消（分钟），默认 24 小时
+  auto-receive-days: 10          # 发货后多少天自动确认收货（AutoReceiveScheduler 用，前端提示同源）
 
 # ==================== 支付宝支付配置 ====================
 alipay:

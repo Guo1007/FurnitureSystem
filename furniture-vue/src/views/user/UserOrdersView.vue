@@ -86,6 +86,21 @@
             <span v-else>订单已超时，即将自动取消...</span>
           </div>
 
+          <!-- 已发货：自动确认收货提示 -->
+          <div
+            v-else-if="order.status === 2 && order.autoReceiveTime"
+            class="order-autotip"
+          >
+            <el-icon>
+              <Clock />
+            </el-icon>
+            <span>
+              已发货，若未主动确认，系统将于
+              <strong>{{ formatAutoReceiveTime(order.autoReceiveTime) }}</strong>
+              自动确认收货（还剩 {{ autoReceiveDaysLeft(order.autoReceiveTime) }} 天），需要售后请在此前申请
+            </span>
+          </div>
+
           <!-- 订单商品列表 -->
           <div class="order-items">
             <div
@@ -629,6 +644,16 @@
             <span>收货时间：</span
             >{{ formatTimeFull(currentOrder.receiveTime) }}
           </p>
+          <p
+            v-if="currentOrder.status === 2 && currentOrder.autoReceiveTime"
+            class="detail-autotip"
+          >
+            <span>自动收货：</span>
+            若未主动确认，系统将于
+            {{ formatAutoReceiveTime(currentOrder.autoReceiveTime) }}
+            自动确认收货（还剩
+            {{ autoReceiveDaysLeft(currentOrder.autoReceiveTime) }} 天）
+          </p>
         </div>
 
         <el-divider />
@@ -745,6 +770,7 @@ import { useRouter } from "vue-router";
 import {
   ArrowLeft,
   Check,
+  Clock,
   Delete,
   EditPen,
   Location,
@@ -830,7 +856,7 @@ const orderDeadline = (order) => {
   return new Date(created.getTime() + PAYMENT_TIMEOUT_MINUTES * 60 * 1000);
 };
 
-// 更新所有待支付订单的剩余毫秒数（50ms 间隔）
+// 更新所有待支付订单的剩余毫秒数（250ms 刷新，显示只精确到秒）
 const tickAll = () => {
   let hasActive = false;
   orderList.value.forEach((order) => {
@@ -854,13 +880,13 @@ const getOrderRemaining = (orderId) => orderRemaining[orderId] ?? 0;
 
 const getOrderCountdown = (orderId) => {
   const ms = orderRemaining[orderId] ?? 0;
-  if (ms <= 0) return "00:00:00.00";
+  if (ms <= 0) return "00:00:00";
   const ts = ms / 1000;
   const h = Math.floor(ts / 3600);
   const m = Math.floor((ts % 3600) / 60);
-  const s = Math.floor(ts % 60);
-  const cs = Math.floor((ts % 1) * 100);
-  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}.${String(cs).padStart(2, "0")}`;
+  // 向上取整：最后一秒显示 00:00:01 而不是 00:00:00，避免出现"还剩 0 秒却没取消"
+  const s = Math.ceil(ts % 60) === 60 ? 0 : Math.ceil(ts % 60);
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 };
 
 const isOrderUrgent = (orderId) => {
@@ -871,6 +897,29 @@ const isOrderUrgent = (orderId) => {
 const isOrderWarning = (orderId) => {
   const ms = orderRemaining[orderId] ?? 0;
   return ms > 600_000 && ms <= 3_600_000;
+};
+
+// 自动确认收货时间可能是 "yyyy-MM-dd HH:mm:ss" 字符串，iOS/Safari 不认空格格式
+const toDate = (val) => {
+  if (!val) return null;
+  const d = new Date(typeof val === "string" ? val.replace(" ", "T") : val);
+  return Number.isNaN(d.getTime()) ? null : d;
+};
+
+// 自动收货时间点：只显示到日期，避免"精确到分"给用户虚假的紧迫感
+const formatAutoReceiveTime = (val) => {
+  const d = toDate(val);
+  if (!d) return "";
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+
+// 距离自动收货还剩几天（不足一天按 1 天算）
+const autoReceiveDaysLeft = (val) => {
+  const d = toDate(val);
+  if (!d) return 0;
+  const diff = d.getTime() - Date.now();
+  if (diff <= 0) return 0;
+  return Math.max(1, Math.ceil(diff / (24 * 60 * 60 * 1000)));
 };
 
 const canReviewOrder = (order) => {
@@ -905,7 +954,8 @@ const loadOrders = async () => {
       // 订单列表越长开销越大；倒计时只显示到秒，1s 刷新完全够用，降频 20 倍。
       tickAll();
       if (!countdownTimer) {
-        countdownTimer = setInterval(tickAll, 1000);
+        // 250ms 刷新一次：显示只到秒，刷新更密保证秒数变化稳定（见 OrderPayView 同款处理）
+        countdownTimer = setInterval(tickAll, 250);
       }
     } else {
       ElMessage.error(res.msg || "获取订单失败");

@@ -145,29 +145,50 @@
 }
 
 /* ===== 支付倒计时 ===== */
+/* 原来这里是蓝底蓝字（#f0f9ff / #0369a1），与全站暖棕体系不搭，统一换成暖色阶：
+   常态暖棕、临期琥珀、紧急砖红，语义不变但配色一致。 */
 .order-countdown {
   display: flex;
   align-items: center;
   gap: 6px;
   padding: 10px 20px;
   font-size: 13px;
-  color: #0369a1;
-  background: #f0f9ff;
-  border-bottom: 1px solid #bae6fd;
+  color: var(--color-accent-hover);
+  background: var(--color-accent-subtle);
+  border-bottom: 1px solid rgba(184, 117, 62, 0.25);
   transition: all 0.3s ease;
 }
 
 .order-countdown.warning {
-  background: #fffbeb;
-  border-color: #fcd34d;
-  color: #92400e;
+  background: rgba(200, 132, 58, 0.1);
+  border-color: rgba(200, 132, 58, 0.3);
+  color: #8a5a20;
 }
 
 .order-countdown.urgent {
-  background: #fef2f2;
-  border-color: #fca5a5;
-  color: #991b1b;
+  background: rgba(197, 85, 74, 0.08);
+  border-color: rgba(197, 85, 74, 0.25);
+  color: var(--color-danger);
   animation: cd-pulse 1s ease-in-out infinite;
+}
+
+/* 已发货订单的「系统将于 X 自动确认收货」提示条：
+   属于告知性信息，用最轻的暖灰底，不与倒计时抢注意力 */
+.order-autotip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 20px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--color-text-secondary);
+  background: var(--color-bg);
+  border-bottom: 1px solid var(--color-border-light);
+
+  strong {
+    color: var(--color-accent-hover);
+    font-weight: 600;
+  }
 }
 
 .order-countdown .countdown-icon {
@@ -323,6 +344,15 @@
 
 .detail-section {
   margin-bottom: 16px;
+}
+
+/* 订单详情里的自动收货说明：比普通字段更醒目一点，但仍保持暖棕克制 */
+.detail-section p.detail-autotip {
+  color: var(--color-accent-hover);
+  background: var(--color-accent-subtle);
+  border-radius: 6px;
+  padding: 8px 10px;
+  line-height: 1.6;
 }
 
 .detail-section h4 {

@@ -4,6 +4,7 @@ import cn.hutool.core.bean.BeanUtil;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import gcy.system.entity.pojo.Order;
 import gcy.system.entity.pojo.OrderItem;
+import gcy.system.utils.OrderStatus;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -107,6 +108,17 @@ public class OrderVO {
     private LocalDateTime shipTime;
 
     /**
+     * 系统自动确认收货的时间（仅「已发货」状态有值）。
+     * <p>
+     * 后台有定时任务在发货满 {@code order.auto-receive-days} 天后代为确认收货，
+     * 但前端此前完全没有体现这条规则，用户常常是订单突然变成"已完成"才发现。
+     * 这里把这个时间点下发给前端，用于显式提示还剩多久自动收货。
+     * </p>
+     */
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private LocalDateTime autoReceiveTime;
+
+    /**
      * 订单明细列表
      */
     private List<OrderItemVO> itemList;
@@ -157,5 +169,20 @@ public class OrderVO {
         vo.setId(String.valueOf(order.getId()));
         vo.setItemList(items.stream().map(OrderItemVO::from).collect(Collectors.toList()));
         return vo;
+    }
+
+    /**
+     * 计算并填充「系统将自动确认收货」的时间点。
+     * <p>
+     * 仅对「已发货」且已记录发货时间的订单计算；其他状态该字段保持为 null，
+     * 前端据此决定是否展示提示。
+     * </p>
+     *
+     * @param autoReceiveDays 发货后自动确认收货的天数（取自 {@code order.auto-receive-days}）
+     */
+    public void fillAutoReceiveTime(int autoReceiveDays) {
+        if (this.status == OrderStatus.SHIPPED.getCode() && this.shipTime != null) {
+            this.autoReceiveTime = this.shipTime.plusDays(autoReceiveDays);
+        }
     }
 }

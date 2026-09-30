@@ -34,6 +34,12 @@ public class OrderItemServiceImpl extends ServiceImpl<OrderItemMapper, OrderItem
     private final PaymentMapper paymentMapper;
 
     /**
+     * 发货后自动确认收货的天数（与 AutoReceiveScheduler 同源），用于下发预计自动收货时间。
+     */
+    @org.springframework.beans.factory.annotation.Value("${order.auto-receive-days:10}")
+    private int autoReceiveDays;
+
+    /**
      * 根据订单ID获取订单详情，包含订单基本信息及其关联的订单项列表。
      * 实现逻辑：先查询订单并校验是否存在，再校验当前登录用户是否为订单所属用户，
      * 校验通过后查询该订单下的所有订单项，组装为OrderVO后返回成功结果。
@@ -63,6 +69,8 @@ public class OrderItemServiceImpl extends ServiceImpl<OrderItemMapper, OrderItem
             vo.setChannel(pay.getChannel());
             vo.setTradeNo(pay.getTradeNo());
         }
+        // 已发货订单下发「预计自动收货时间」，让前端能明确提示用户这条规则
+        vo.fillAutoReceiveTime(autoReceiveDays);
         return Result.ok(vo);
     }
 

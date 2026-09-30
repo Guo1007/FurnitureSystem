@@ -204,15 +204,15 @@ const deadline = computed(() => {
   return new Date(created.getTime() + PAYMENT_TIMEOUT_MINUTES * 60 * 1000);
 });
 
-// 倒计时显示文本 HH:MM:SS.XX
+// 倒计时显示文本 HH:MM:SS（只到秒：定时器间隔不可能精确对齐毫秒边界，
+// 显示百分秒会让末两位每次乱跳一个值，看起来反而不连贯）
 const countdownText = computed(() => {
-  if (remainingMs.value <= 0) return "00:00:00.00";
+  if (remainingMs.value <= 0) return "00:00:00";
   const ts = remainingMs.value / 1000;
   const h = Math.floor(ts / 3600);
   const m = Math.floor((ts % 3600) / 60);
-  const s = Math.floor(ts % 60);
-  const cs = Math.floor((ts % 1) * 100);
-  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}.${String(cs).padStart(2, "0")}`;
+  const s = Math.ceil(ts % 60) === 60 ? 0 : Math.ceil(ts % 60);
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 });
 
 // 剩余不足 10 分钟 → 紧急
@@ -224,7 +224,7 @@ const isWarning = computed(
   () => remainingMs.value > 600_000 && remainingMs.value <= 3_600_000,
 );
 
-// 定时更新倒计时（50ms 刷新一次，百分秒看得见跳动）
+// 定时更新倒计时（250ms 刷新一次，显示精确到秒）
 const tick = () => {
   if (!deadline.value) return;
   const diff = deadline.value.getTime() - Date.now();
@@ -256,7 +256,9 @@ const loadOrderInfo = async () => {
       // 重复调用会叠加出多个永不释放的定时器。改为 1000ms 并先清理再启动。
       tick();
       if (countdownTimer) clearInterval(countdownTimer);
-      countdownTimer = setInterval(tick, 1000);
+      // 250ms 刷新一次：显示只到秒，但刷新更密，保证秒数变化稳定落在整秒上，
+      // 不会因定时器漂移出现"跳 2 秒"或"卡住不动"的观感
+      countdownTimer = setInterval(tick, 250);
     } else {
       ElMessage.error(res.msg || "获取订单失败");
       router.push("/user/orders");
