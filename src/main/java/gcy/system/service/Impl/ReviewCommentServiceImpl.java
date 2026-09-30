@@ -17,6 +17,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.spring.core.RocketMQTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -179,7 +181,26 @@ public class ReviewCommentServiceImpl implements IReviewCommentService {
     private void sendAiReviewMessage(String type, Long id) {
         try {
             AiReviewMessage msg = new AiReviewMessage(type, id);
-            rocketMQTemplate.convertAndSend("comment-auto-review-topic", JSONUtil.toJsonStr(msg));
+            String json = JSONUtil.toJsonStr(msg);
+            // 与 CommentServiceImpl 一致：事务提交后再发 MQ，避免消费者查不到记录 / 回滚后消息已发出
+            if (TransactionSynchronizationManager.isSynchronizationActive()) {
+                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        doSendAiReviewMessage(json, type, id);
+                    }
+                });
+            } else {
+                doSendAiReviewMessage(json, type, id);
+            }
+        } catch (Exception e) {
+            log.error("发送AI审核消息失败: type={}, id={}", type, id, e);
+        }
+    }
+
+    private void doSendAiReviewMessage(String json, String type, Long id) {
+        try {
+            rocketMQTemplate.convertAndSend("comment-auto-review-topic", json);
             log.debug("AI审核消息已发送: type={}, id={}", type, id);
         } catch (Exception e) {
             log.error("发送AI审核消息失败: type={}, id={}", type, id, e);

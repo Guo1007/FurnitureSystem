@@ -4,7 +4,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #f5f5f5 0%, #e8e3df 100%);
+  background: var(--color-bg);
   font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
 }
 
@@ -18,10 +18,7 @@
   font-size: 140px;
   font-weight: 900;
   line-height: 1;
-  background: linear-gradient(135deg, #d98a4a 0%, #c0392b 60%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: var(--color-accent);
   letter-spacing: 8px;
   margin-bottom: -20px;
 }
@@ -46,13 +43,13 @@
 .error-title {
   font-size: 28px;
   font-weight: 700;
-  color: #333;
+  color: #3d3d3d;
   margin: 0 0 12px 0;
 }
 
 .error-desc {
   font-size: 15px;
-  color: #999;
+  color: var(--color-text-tertiary);
   line-height: 1.8;
   margin: 0 0 36px 0;
 }
@@ -83,13 +80,13 @@
 
 .suggestion-links a {
   font-size: 14px;
-  color: #d98a4a;
+  color: var(--color-accent);
   cursor: pointer;
   text-decoration: none;
   transition: color 0.2s;
 }
 
 .suggestion-links a:hover {
-  color: #b8733a;
+  color: var(--color-accent-hover);
   text-decoration: underline;
 }

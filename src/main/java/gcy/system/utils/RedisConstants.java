@@ -65,6 +65,26 @@ public final class RedisConstants {
      */
     public static final Long LOGIN_LOCK_TTL = 300L;
 
+    // ==================== 验证码 IP 级限流 ====================
+
+    /**
+     * 验证码发送 IP 限流 key，后接 类型:IP。
+     * <p>
+     * 验证码接口是匿名的，仅按「账号」节流时，换一个账号即可绕开，
+     * 可被用来遍历邮箱无限触发外发邮件，耗尽 SMTP 配额。故补 IP 维度限流。
+     */
+    public static final String CODE_IP_LIMIT_KEY = "code:ip:limit:";
+
+    /**
+     * IP 限流统计窗口（秒），1 小时
+     */
+    public static final Long CODE_IP_LIMIT_TTL = 3600L;
+
+    /**
+     * 单个 IP 在统计窗口内允许的发送次数
+     */
+    public static final Long CODE_IP_LIMIT_COUNT = 20L;
+
     // ==================== 登录 Token ====================
 
     /**
@@ -83,6 +103,21 @@ public final class RedisConstants {
      * 登录态 Hash 中的端类型字段（值：PC / MOBILE），用于同端互踢
      */
     public static final String LOGIN_CLIENT_TYPE_FIELD = "clientType";
+
+    /**
+     * 登录态 Hash 中的「首次登录时间」字段（值：毫秒时间戳），用于实现绝对过期。
+     * <p>
+     * 滑动续期意味着只要持续访问，Token 就能无限存活；一旦泄露，攻击者可长期持有。
+     * 这里记录登录时刻，续期时若已超过 {@link #LOGIN_USER_ABSOLUTE_TTL} 则强制失效。
+     * 使用 putIfAbsent 写入，保证「修改资料刷新登录态」不会重置该时间。
+     */
+    public static final String LOGIN_TIME_FIELD = "loginTime";
+
+    /**
+     * 登录态绝对有效期上限（秒），7 天。
+     * 滑动续期最多续到这个上限，超过即强制重新登录。
+     */
+    public static final Long LOGIN_USER_ABSOLUTE_TTL = 7 * 24 * 3600L;
 
     /**
      * 被踢下线标记 key，后接 token。存在即表示该会话已被同类型端登录挤下线，
@@ -153,6 +188,11 @@ public final class RedisConstants {
      * 库存预警定时任务锁（全局单实例执行）
      */
     public static final String STOCK_ALERT_TASK_KEY = "lock:stock:alert:task";
+
+    /**
+     * 自动确认收货定时任务锁（全局单实例执行）
+     */
+    public static final String ORDER_AUTO_RECEIVE_TASK_KEY = "lock:order:autoReceive:task";
 
     // ==================== 优惠券 ====================
 

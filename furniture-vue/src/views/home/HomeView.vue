@@ -35,6 +35,7 @@
               cat.icon
             }}</span>
             <img
+              loading="lazy"
               v-else-if="cat.icon"
               :src="imgUrl(cat.icon)"
               alt=""

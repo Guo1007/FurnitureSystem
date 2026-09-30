@@ -8,6 +8,7 @@
         >
         <router-link to="/" class="header-brand">
           <img
+            loading="lazy"
             v-if="sys.systemLogo"
             :src="imgUrl(sys.systemLogo)"
             class="brand-logo"

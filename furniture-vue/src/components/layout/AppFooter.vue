@@ -5,6 +5,7 @@
       <div class="footer-brand">
         <div class="footer-logo">
           <img
+            loading="lazy"
             v-if="sys.systemLogo"
             :src="imgUrl(sys.systemLogo)"
             class="footer-logo-img"

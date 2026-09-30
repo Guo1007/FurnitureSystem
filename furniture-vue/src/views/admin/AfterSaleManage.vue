@@ -32,7 +32,7 @@
       </el-table-column>
       <el-table-column prop="totalPrice" label="金额" width="110">
         <template #default="{ row }">
-          <span style="color: #d95a5a; font-weight: 600">¥{{ row.totalPrice }}</span>
+          <span style="color: var(--color-danger); font-weight: 600">¥{{ row.totalPrice }}</span>
         </template>
       </el-table-column>
       <el-table-column prop="refundReason" label="退款原因" min-width="160" show-overflow-tooltip />
@@ -45,7 +45,7 @@
       <el-table-column prop="refundHandleRemark" label="备注" min-width="120" show-overflow-tooltip>
         <template #default="{ row }">
           <span v-if="row.refundHandleRemark">{{ row.refundHandleRemark }}</span>
-          <span v-else style="color: #ccc">-</span>
+          <span v-else style="color: var(--color-text-tertiary)">-</span>
         </template>
       </el-table-column>
       <el-table-column label="操作" width="210" fixed="right">
@@ -333,7 +333,7 @@ onMounted(() => {
 @import "@/styles/views/after-sale-manage.scss";
 
 .tab-count {
-  color: #999;
+  color: var(--color-text-tertiary);
   font-size: 12px;
 }
 </style>

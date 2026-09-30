@@ -62,6 +62,7 @@
             class="media-preview"
           >
             <img
+              loading="lazy"
               v-for="(img, idx) in parseJson(row.imgUrl).slice(0, 2)"
               :key="idx"
               :src="img"
@@ -178,7 +179,7 @@
 
     <!-- 图片预览 -->
     <el-dialog v-model="imagePreviewVisible" title="图片预览" width="600px">
-      <img :src="previewImageUrl" style="width: 100%; border-radius: 6px" />
+      <img loading="lazy" :src="previewImageUrl" style="width: 100%; border-radius: 6px" />
     </el-dialog>
 
     <!-- 视频预览 -->
@@ -470,7 +471,7 @@ onMounted(() => {
 }
 
 .tab-count {
-  color: #999;
+  color: var(--color-text-tertiary);
   font-size: 12px;
 }
 </style>

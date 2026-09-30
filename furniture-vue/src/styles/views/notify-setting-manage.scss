@@ -6,29 +6,29 @@
 .page-title {
   margin-bottom: 20px;
   font-size: 20px;
-  color: #333;
+  color: #3d3d3d;
 }
 
 .func-name {
   font-size: 14px;
   font-weight: 600;
-  color: #333;
+  color: #3d3d3d;
 }
 
 .func-desc {
   font-size: 12px;
-  color: #999;
+  color: var(--color-text-tertiary);
   margin-top: 2px;
 }
 
 .empty-tip {
   font-size: 13px;
-  color: #999;
+  color: var(--color-text-tertiary);
   margin-top: 12px;
 }
 
 .save-bar {
   margin-top: 20px;
   padding-top: 16px;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--color-border-light);
 }

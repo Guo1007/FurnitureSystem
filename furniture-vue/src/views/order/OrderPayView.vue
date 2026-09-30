@@ -251,9 +251,12 @@ const loadOrderInfo = async () => {
         router.push("/user/orders");
         return;
       }
-      // 启动倒计时（50ms 刷新，百分秒可见）
+      // 启动倒计时。
+      // 原为 50ms（每秒 20 次）全量重算 + 组件 patch，且缺少「已在运行」守卫：
+      // 重复调用会叠加出多个永不释放的定时器。改为 1000ms 并先清理再启动。
       tick();
-      countdownTimer = setInterval(tick, 50);
+      if (countdownTimer) clearInterval(countdownTimer);
+      countdownTimer = setInterval(tick, 1000);
     } else {
       ElMessage.error(res.msg || "获取订单失败");
       router.push("/user/orders");
@@ -303,7 +306,9 @@ const stopPolling = () => {
   waitTipVisible.value = false;
 };
 
-// 付款后每 2 秒主动查单一次，付款成功自动弹窗并跳转；最多查 30 次(60秒)
+// 付款后每 3 秒主动查单一次，付款成功自动弹窗并跳转；最多查 20 次(60秒)
+// （原来是 2 秒 30 次：总时长一样，但用户扫码/跳支付宝通常要十几秒，
+//   2 秒一次的请求里绝大多数都是"交易还没创建"，白白打 1/3 的无效请求）
 const startPolling = () => {
   stopPolling();
   waitTipVisible.value = true;
@@ -311,7 +316,7 @@ const startPolling = () => {
   pollTimer = setInterval(async () => {
     ticks += 1;
     // 超过 60 秒仍未确认，停止轮询并提示去订单列表查看（回调可能延迟）
-    if (ticks > 30) {
+    if (ticks > 20) {
       stopPolling();
       ElMessage.info("支付结果确认中，请稍后在订单列表查看");
       return;
@@ -335,7 +340,7 @@ const startPolling = () => {
     } catch (error) {
       logger.error("主动查单失败:", error);
     }
-  }, 2000);
+  }, 3000);
 };
 
 // 支付成功弹窗出现后，启动跳转倒计时

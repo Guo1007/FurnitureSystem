@@ -96,6 +96,7 @@
                 index + 1
               }}</span>
               <img
+                loading="lazy"
                 :src="
                   imgUrl(item.furnitureIcon, '/images/default-furniture.png')
                 "
@@ -146,6 +147,7 @@
         >
           <div class="tile-thumb">
             <img
+              loading="lazy"
               :src="imgUrl(item.fIcon, '/images/default-furniture.png')"
               alt=""
               @error="handleLowStockImgError"
@@ -209,6 +211,7 @@
           >
             <div class="d-item-thumb">
               <img
+                loading="lazy"
                 :src="imgUrl(item.fIcon, '/images/default-furniture.png')"
                 alt=""
                 @error="handleLowStockImgError"

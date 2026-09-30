@@ -19,6 +19,8 @@ import org.apache.rocketmq.spring.core.RocketMQTemplate;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.LocalDateTime;
 import java.util.Collections;
@@ -169,25 +171,31 @@ public class CommentServiceImpl implements ICommentService {
                 comment.getId(), comment.getOrderId(), comment.getGoodsId(), userId);
         List<OrderItem> orderItems = orderItemMapper.selectList(
                 new LambdaQueryWrapper<OrderItem>().eq(OrderItem::getOrderId, comment.getOrderId()));
+        // 必须与 recalculateOrderStatus 口径一致：只统计未软删的评价。
+        // 此前这里漏了 user_deleted 过滤，会把用户已删除的评价也算作「已评价」，
+        // 导致订单被错误置为 REVIEWED，用户再也评不了该商品。
         List<GoodsComment> existingComments = goodsCommentMapper.selectList(
                 new LambdaQueryWrapper<GoodsComment>()
                         .eq(GoodsComment::getOrderId, comment.getOrderId())
-                        .eq(GoodsComment::getUserId, userId));
+                        .eq(GoodsComment::getUserId, userId)
+                        .eq(GoodsComment::getUserDeleted, 0));
         Set<Long> reviewedGoodsIds = existingComments.stream()
                 .map(GoodsComment::getGoodsId).collect(Collectors.toSet());
         boolean allReviewed = !orderItems.isEmpty() && orderItems.stream()
                 .allMatch(item -> reviewedGoodsIds.contains(item.getFurnitureId()));
-        if (allReviewed) {
-            orderMapper.update(null,
-                    new LambdaUpdateWrapper<Order>()
-                            .eq(Order::getId, comment.getOrderId())
-                            .set(Order::getStatus, OrderStatus.REVIEWED.getCode()));
-        } else {
-            orderMapper.update(null,
-                    new LambdaUpdateWrapper<Order>()
-                            .eq(Order::getId, comment.getOrderId())
-                            .set(Order::getStatus, OrderStatus.COMPLETED.getCode()));
-        }
+        // CAS：只允许从「已完成(3)」或「已评价(5)」推进评价状态。
+        // 无条件覆盖的话，并发下可能把用户刚提交的「申请退款中(6)」静默打回「已完成」，
+        // 用户的退款申请会凭空消失。
+        int targetStatus = allReviewed
+                ? OrderStatus.REVIEWED.getCode()
+                : OrderStatus.COMPLETED.getCode();
+        orderMapper.update(null,
+                new LambdaUpdateWrapper<Order>()
+                        .eq(Order::getId, comment.getOrderId())
+                        .in(Order::getStatus,
+                                OrderStatus.COMPLETED.getCode(),
+                                OrderStatus.REVIEWED.getCode())
+                        .set(Order::getStatus, targetStatus));
         return Result.ok();
     }
 
@@ -318,18 +326,19 @@ public class CommentServiceImpl implements ICommentService {
      */
     private void doDeleteReview(GoodsComment review) {
         Long reviewId = review.getId();
-        commentAppendMapper.update(null,
-                new LambdaUpdateWrapper<CommentAppend>()
-                        .eq(CommentAppend::getMainCommentId, reviewId)
-                        .set(CommentAppend::getUserDeleted, 1));
-        reviewCommentMapper.update(null,
-                new LambdaUpdateWrapper<ReviewComment>()
-                        .eq(ReviewComment::getReviewId, reviewId)
-                        .set(ReviewComment::getUserDeleted, 1));
-        goodsCommentMapper.update(null,
-                new LambdaUpdateWrapper<GoodsComment>()
-                        .eq(GoodsComment::getId, reviewId)
-                        .set(GoodsComment::getUserDeleted, 1));
+        // 主评价与关联数据一并物理删除。
+        //
+        // 为什么主评价不能用软删：goods_comment 上有唯一索引 uk_order_user_goods
+        // (order_id, user_id, goods_id)，软删只是把 user_deleted 置 1，记录仍然占着唯一键，
+        // 用户删除后想重新评价时 insert 必然撞索引 → 100% 失败，
+        // 而 recalculateOrderStatus 承诺的「删除后可重新评价」根本兑现不了。
+        // 追评/回复不参与该唯一键，本可软删，但主评价已物理删除，
+        // 留下它们会变成无主孤儿数据，故一并清理。
+        commentAppendMapper.delete(new LambdaQueryWrapper<CommentAppend>()
+                .eq(CommentAppend::getMainCommentId, reviewId));
+        reviewCommentMapper.delete(new LambdaQueryWrapper<ReviewComment>()
+                .eq(ReviewComment::getReviewId, reviewId));
+        goodsCommentMapper.deleteById(reviewId);
         // 清理通知中的评论引用
         notificationMapper.update(null,
                 new LambdaUpdateWrapper<Notification>()
@@ -383,7 +392,27 @@ public class CommentServiceImpl implements ICommentService {
     private void sendAiReviewMessage(String type, Long id) {
         try {
             AiReviewMessage msg = new AiReviewMessage(type, id);
-            rocketMQTemplate.convertAndSend("comment-auto-review-topic", JSONUtil.toJsonStr(msg));
+            String json = JSONUtil.toJsonStr(msg);
+            // 事务未提交就发 MQ，消费者可能查不到这条记录；一旦回滚，消息更是不可能撤回。
+            // 统一改为「提交后再发」，与 CommentManageServiceImpl 里的 afterCommit 范式保持一致。
+            if (TransactionSynchronizationManager.isSynchronizationActive()) {
+                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        doSendAiReviewMessage(json, type, id);
+                    }
+                });
+            } else {
+                doSendAiReviewMessage(json, type, id);
+            }
+        } catch (Exception e) {
+            log.error("发送AI审核消息失败: type={}, id={}", type, id, e);
+        }
+    }
+
+    private void doSendAiReviewMessage(String json, String type, Long id) {
+        try {
+            rocketMQTemplate.convertAndSend("comment-auto-review-topic", json);
             log.debug("AI审核消息已发送: type={}, id={}", type, id);
         } catch (Exception e) {
             log.error("发送AI审核消息失败: type={}, id={}", type, id, e);

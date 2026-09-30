@@ -20,8 +20,8 @@
 .spinner {
   width: 36px;
   height: 36px;
-  border: 3px solid #eee;
-  border-top-color: #999;
+  border: 3px solid var(--color-border-light);
+  border-top-color: var(--color-text-tertiary);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
   margin: 0 auto 12px;
@@ -59,7 +59,7 @@
   align-items: center;
   gap: 14px;
   cursor: pointer;
-  border: 1px solid #eee;
+  border: 1px solid var(--color-border-light);
   transition:
     box-shadow 0.2s,
     border-color 0.2s;
@@ -75,7 +75,7 @@
   height: 80px;
   border-radius: 6px;
   object-fit: cover;
-  background: #f5f5f5;
+  background: var(--color-border-light);
   flex-shrink: 0;
 }
 
@@ -86,7 +86,7 @@
 
 .fav-info h3 {
   font-size: 15px;
-  color: #333;
+  color: #3d3d3d;
   margin: 0 0 8px 0;
   white-space: nowrap;
   overflow: hidden;

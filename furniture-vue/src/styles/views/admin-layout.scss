@@ -81,18 +81,18 @@
   gap: 6px;
   padding: 6px 14px;
   font-size: 13px;
-  color: #5a6a7a;
+  color: var(--color-text-secondary);
   background: #fff;
-  border: 1px solid #d8dfe6;
+  border: 1px solid var(--color-border);
   border-radius: 8px;
   text-decoration: none;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 .header-action-btn:hover {
-  border-color: #b8c4cf;
-  background: #f5f7f9;
-  color: #3a4a5a;
+  border-color: #d5cfc7;
+  background: var(--color-bg);
+  color: var(--color-text-primary);
 }
 
 /* 退出按钮：hover 时微微泛红提示 */
@@ -168,6 +168,7 @@
 }
 
 .menu-item {
+  position: relative;
   display: flex;
   align-items: center;
   gap: var(--space-3);
@@ -184,15 +185,25 @@
   color: var(--color-text-primary);
 }
 .menu-item.active {
-  background: #e8edf2;
-  color: #3a4a5a;
+  background: var(--color-accent-subtle);
+  color: var(--color-accent-hover);
   font-weight: 600;
+}
+.menu-item.active::before {
+  content: "";
+  position: absolute;
+  left: calc(-1 * var(--space-2));
+  top: 7px;
+  bottom: 7px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--color-accent);
 }
 .menu-item.active .menu-badge {
   background: var(--color-accent);
 }
 .menu-item.active .menu-icon {
-  color: #5a6a7a;
+  color: var(--color-accent);
 }
 
 .menu-icon {
@@ -253,8 +264,8 @@
 .route-loading-spinner {
   width: 34px;
   height: 34px;
-  border: 3px solid #d8dfe6;
-  border-top-color: #5a6a7a;
+  border: 3px solid var(--color-border);
+  border-top-color: var(--color-accent);
   border-radius: 50%;
   animation: route-spin 0.8s linear infinite;
 }

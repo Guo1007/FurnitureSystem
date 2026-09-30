@@ -41,6 +41,13 @@ public class SecurityConfig {
     private final AnonymousEndpointMatcher anonymousEndpointMatcher;
 
     /**
+     * 接口文档是否对外匿名开放，取自 {@code app.swagger.enabled}。
+     * 关闭后文档路径要求 ADMIN 角色，避免生产环境把完整接口清单暴露给匿名访问者。
+     */
+    @org.springframework.beans.factory.annotation.Value("${app.swagger.enabled:true}")
+    private boolean swaggerEnabled;
+
+    /**
      * 构造器注入 Token 认证过滤器与匿名接口匹配器。
      *
      * @param tokenAuthFilter          Token 认证过滤器，用于在每次请求中校验用户身份
@@ -74,20 +81,36 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                .authorizeHttpRequests(auth -> {
+                        auth.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll();
+                        // 管理端规则必须排在任何 permitAll 之前：
+                        // 若放在 @Anonymous 放行规则之后，将来任何人在 /admin 接口上误加 @Anonymous
+                        // 都会被先行放行，形成后台未授权访问。此处前置以杜绝该顺序隐患
+                        // （另见 AnonymousEndpointMatcher 中的启动期断言）。
+                        auth.requestMatchers("/admin/**").hasRole("ADMIN");
                         // 扫描 @Anonymous 注解的公开接口，统一放行
-                        .requestMatchers(anonymousEndpointMatcher).permitAll()
-                        .requestMatchers(
-                                "/doc.html",
-                                "/swagger-ui/**",
-                                "/v3/api-docs/**",
-                                "/webjars/**"
-                        ).permitAll()
-                        .requestMatchers("/admin/**").hasRole("ADMIN")
-                        .requestMatchers("/ai/**").authenticated()
-                        .anyRequest().authenticated()
-                )
+                        auth.requestMatchers(anonymousEndpointMatcher).permitAll();
+                        // 接口文档：开发期匿名开放便于调试，生产关闭后要求 ADMIN 角色
+                        if (swaggerEnabled) {
+                            auth.requestMatchers(
+                                    "/doc.html",
+                                    "/swagger-ui/**",
+                                    "/swagger-ui.html",
+                                    "/v3/api-docs/**",
+                                    "/webjars/**"
+                            ).permitAll();
+                        } else {
+                            auth.requestMatchers(
+                                    "/doc.html",
+                                    "/swagger-ui/**",
+                                    "/swagger-ui.html",
+                                    "/v3/api-docs/**",
+                                    "/webjars/**"
+                            ).hasRole("ADMIN");
+                        }
+                        auth.requestMatchers("/ai/**").authenticated();
+                        auth.anyRequest().authenticated();
+                })
                 .addFilterBefore(tokenAuthFilter, UsernamePasswordAuthenticationFilter.class)
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint(authenticationEntryPoint())

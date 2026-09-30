@@ -54,6 +54,7 @@
       <el-table-column label="图片" width="80">
         <template #default="{ row }">
           <img
+            loading="lazy"
             v-if="row.fIcon"
             :src="imgUrl(row.fIcon)"
             class="table-img"
@@ -134,7 +135,7 @@
               :on-change="handleImageChange"
               accept="image/*"
             >
-              <img v-if="form.fIcon" :src="imgUrl(form.fIcon)" class="avatar" />
+              <img loading="lazy" v-if="form.fIcon" :src="imgUrl(form.fIcon)" class="avatar" />
               <el-icon v-else class="avatar-uploader-icon">
                 <Plus />
               </el-icon>
@@ -158,6 +159,7 @@
               :key="idx"
             >
               <img
+                loading="lazy"
                 :src="imgUrl(img)"
                 class="thumb-preview"
                 @error="(e) => (e.target.style.display = 'none')"
@@ -213,7 +215,7 @@
           <div
             v-if="isEdit && hasSku"
             class="form-item-tip"
-            style="color: #e6a23c; margin-top: 4px"
+            style="color: var(--color-warning); margin-top: 4px"
           >
             ⚠️ 该商品已配置规格，价格由规格最低价自动同步
           </div>
@@ -233,7 +235,7 @@
           <div
             v-if="isEdit && hasSku"
             class="form-item-tip"
-            style="color: #e6a23c; margin-top: 4px"
+            style="color: var(--color-warning); margin-top: 4px"
           >
             ⚠️ 该商品已配置规格，库存由各规格库存自动汇总，不可手动修改
           </div>

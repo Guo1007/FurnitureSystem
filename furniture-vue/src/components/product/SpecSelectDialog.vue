@@ -12,6 +12,7 @@
       <div class="product-summary">
         <div class="ps-img-wrap">
           <img
+            loading="lazy"
             v-if="product.fIcon"
             :src="imgUrl(product.fIcon)"
             :alt="product.fName"

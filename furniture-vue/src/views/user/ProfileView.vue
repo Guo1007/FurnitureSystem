@@ -17,6 +17,7 @@
         <div class="hero-content">
           <div class="avatar-wrapper">
             <img
+              loading="lazy"
               class="large-avatar"
               :src="imgUrl(userInfo.icon, '/images/default-avatar.png')"
               @error="(e) => (e.target.src = '/images/default-avatar.png')"
@@ -296,6 +297,7 @@
         <el-form-item label="头像">
           <div class="avatar-upload-wrapper">
             <img
+              loading="lazy"
               class="preview-img"
               :src="imgUrl(editForm.icon, '/images/default-avatar.png')"
             />

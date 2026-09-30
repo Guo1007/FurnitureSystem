@@ -146,6 +146,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
      */
     private Result sendCode(String account, CodeType type) {
         Assert.isTrue(StrUtil.isNotBlank(account), "账号不能为空");
+        // IP 维度限流：验证码接口是匿名的，只按账号节流时换一个账号即可绕开
+        checkIpRateLimit(type);
         String code = RandomUtil.randomNumbers(6);
         if (isEmail(account)) {
             Assert.isTrue(RegexUtils.isEmailValid(account), "邮箱格式有误！");
@@ -172,6 +174,56 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
             log.debug("{}验证码发送成功", type.name());
         }
         return Result.ok();
+    }
+
+    /**
+     * 验证码发送的 IP 级限流：同一 IP 在统计窗口内超过次数上限即拒绝。
+     * <p>
+     * 账号维度只能拦住「同一账号连点」，拦不住换账号遍历；且验证码接口是匿名的，
+     * 无 IP 限制时可被脚本无限触发外发邮件，直接耗尽 SMTP 配额。
+     */
+    private void checkIpRateLimit(CodeType type) {
+        String ip = resolveClientIp();
+        if (StrUtil.isBlank(ip)) {
+            return;
+        }
+        String key = CODE_IP_LIMIT_KEY + type.name() + ":" + ip;
+        Long count;
+        try {
+            count = stringRedisTemplate.opsForValue().increment(key);
+            if (count != null && count == 1) {
+                // 首次计数时设置窗口，避免 key 永久驻留
+                stringRedisTemplate.expire(key, CODE_IP_LIMIT_TTL, TimeUnit.SECONDS);
+            }
+        } catch (Exception e) {
+            // Redis 异常不应阻断正常业务，降级为不限流
+            log.warn("验证码 IP 限流不可用，跳过限制: {}", e.getMessage());
+            return;
+        }
+        if (count != null && count > CODE_IP_LIMIT_COUNT) {
+            throw new BusinessException("操作过于频繁，请稍后再试");
+        }
+    }
+
+    /**
+     * 解析客户端 IP，依次尝试代理头与直连地址。
+     * 注意 X-Forwarded-For 可被伪造，仅在可信代理之后才有意义，这里作为基础防护。
+     */
+    private String resolveClientIp() {
+        ServletRequestAttributes attrs = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+        if (attrs == null) {
+            return null;
+        }
+        jakarta.servlet.http.HttpServletRequest request = attrs.getRequest();
+        String xff = request.getHeader("X-Forwarded-For");
+        if (StrUtil.isNotBlank(xff)) {
+            return xff.split(",")[0].trim();
+        }
+        String realIp = request.getHeader("X-Real-IP");
+        if (StrUtil.isNotBlank(realIp)) {
+            return realIp.trim();
+        }
+        return request.getRemoteAddr();
     }
 
     /**
@@ -624,6 +676,11 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
                         }));
 
         stringRedisTemplate.opsForHash().putAll(LOGIN_USER_KEY + token, userMap);
+        // 首次登录时刻：仅在该 Hash 尚不存在此字段时写入。
+        // 用 putIfAbsent 是为了让「修改资料刷新登录态」不会把登录时间一并刷新，
+        // 否则用户改一次昵称就能把绝对过期时间往后推 7 天。
+        stringRedisTemplate.opsForHash()
+                .putIfAbsent(LOGIN_USER_KEY + token, LOGIN_TIME_FIELD, String.valueOf(System.currentTimeMillis()));
         stringRedisTemplate.expire(LOGIN_USER_KEY + token, LOGIN_USER_TTL, TimeUnit.SECONDS);
     }
 

@@ -1,0 +1,75 @@
+/* ============================================================
+ * 管理端统一增强（非 scoped，作用于 .admin-main 内所有管理页）
+ *
+ * 背景：12 个管理页共用同一套骨架（manage-page 白卡 + page-title +
+ * search-bar + 表格 + pagination），但样式分散在各页的 scoped scss
+ * 里，细节不统一。这里用更高优先级的全局选择器做统一收口，
+ * 避免逐文件重复修改；单页仍可用自己的 scoped 样式覆盖。
+ *
+ * 特异性说明：.admin-main .manage-page > .page-title（0,3,0）
+ * 高于 scoped 的 .page-title[data-v-x]（0,2,0），可稳定生效。
+ * ============================================================ */
+
+/* ---------- 页面容器：统一白卡 ----------
+ * 此前三套并存：售后/评论/邮件配置是「裸页无白卡」、多数页 8px 圆角、
+ * 站点内容 12px 圆角——同一后台三种容器，是"看着不舒服"的根源之一。
+ * 用 (0,3,0) 的特异性盖过所有 scoped 定义（0,2,0），全管理端统一。 */
+.admin-layout .admin-main .manage-page {
+  background: #ffffff;
+  border: 1px solid var(--color-border-light);
+  border-radius: 12px;
+  padding: 24px;
+  min-height: calc(100vh - 108px);
+}
+
+/* ---------- 页面标题：衬线 + hairline，与前台标题体系呼应 ---------- */
+.admin-main .manage-page .page-title,
+.admin-main .dashboard-page > .page-title {
+  font-family: var(--font-serif);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--color-text-primary);
+  margin: 0 0 20px 0;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+/* 标题下的副标题（昵称/头像审核页有，其他页可复用） */
+.admin-main .manage-page .page-desc {
+  margin: -12px 0 18px 0;
+  font-size: 13px;
+  color: var(--color-text-tertiary);
+}
+
+/* ---------- 分页：右对齐（管理端惯例），原来是居中 ----------
+ * 注意：各页 scoped scss 里还有 .pagination { justify-content: center }
+ *（0,2,0 且后加载会赢），所以这里必须用 .admin-layout 前缀提到 (0,3,0)。 */
+.admin-layout .admin-main .pagination,
+.admin-layout .admin-main .pagination-wrap {
+  justify-content: flex-end;
+}
+
+/* ---------- 搜索栏与表格的垂直节奏（与各页 scoped 约定一致：20px） ---------- */
+.admin-main .search-bar {
+  margin-bottom: 20px;
+}
+
+/* ---------- 管理端表格里的操作按钮组：间距统一 ---------- */
+.admin-main .el-table .el-button + .el-button {
+  margin-left: 8px;
+}
+
+/* ---------- 弹窗底部按钮：右对齐、与前台圆角一致 ---------- */
+.admin-main .el-dialog__footer {
+  border-top: 1px solid var(--color-border-light);
+  padding-top: 16px;
+}
+
+/* ---------- 移动端：白卡内边距收紧，避免内容贴边 ---------- */
+@media (max-width: 768px) {
+  .admin-layout .admin-main .manage-page {
+    padding: 16px;
+    border-radius: 10px;
+  }
+}

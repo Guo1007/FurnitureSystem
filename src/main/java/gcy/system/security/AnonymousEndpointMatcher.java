@@ -63,6 +63,16 @@ public class AnonymousEndpointMatcher implements RequestMatcher, SmartInitializi
                 continue;
             }
             Set<String> paths = extractPaths(info);
+            // 硬约束：管理端接口一律不允许匿名访问。
+            // 若放任 @Anonymous 出现在 /admin 下，且该放行规则排在 /admin/** 之前，
+            // 就会形成后台未授权访问。这里在启动期直接失败，把风险拦在编码阶段。
+            for (String path : paths) {
+                if (path != null && path.startsWith("/admin")) {
+                    throw new IllegalStateException(
+                            "管理端接口禁止使用 @Anonymous 注解放行：" + handlerMethod.getBeanType().getSimpleName()
+                                    + "#" + handlerMethod.getMethod().getName() + " -> " + path);
+                }
+            }
             Set<RequestMethod> methods = info.getMethodsCondition().getMethods();
             for (String path : paths) {
                 addMatcher(path, methods);

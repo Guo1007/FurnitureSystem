@@ -1,18 +1,18 @@
-$primary: #5a6a7a;
-$primary-dark: #4a5a6a;
-$primary-light: #7a8a9a;
-$accent: #b0b8c0;
-$bg-warm: #f8f9fa;
-$text-main: #2b2d42;
-$text-sub: #5a5a5a;
-$border: #e0e0e0;
+$primary: #b8753e;
+$primary-dark: #a0652e;
+$primary-light: #ca9162;
+$accent: #d8c3ae;
+$bg-warm: var(--color-bg);
+$text-main: #1a1a1a;
+$text-sub: #6b6b6b;
+$border: #e8e4df;
 
 .auth-container {
   min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  background: var(--color-bg);
   padding: 20px;
 }
 
@@ -167,13 +167,13 @@ $border: #e0e0e0;
   }
 
   &:disabled {
-    background: #ccc;
+    background: var(--color-border);
     cursor: not-allowed;
   }
 }
 
 .error-msg {
-  color: #d32f2f;
+  color: #c5554a;
   font-size: 12px;
   margin-top: 2px;
 }

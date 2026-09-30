@@ -223,6 +223,7 @@
             >
               <div class="list-img-wrap">
                 <img
+                  loading="lazy"
                   :src="imgUrl(item.fIcon)"
                   :alt="item.fName"
                   class="list-img"

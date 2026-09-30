@@ -8,7 +8,7 @@
 .loading {
   text-align: center;
   padding: 60px 0;
-  color: #999;
+  color: var(--color-text-tertiary);
 }
 
 .notif-card {
@@ -27,8 +27,8 @@
 }
 
 .notif-card.unread {
-  border-left-color: #5a6a7a;
-  background: #f7f8fa;
+  border-left-color: var(--color-accent);
+  background: var(--color-bg);
 }
 
 .notif-card.disabled {
@@ -69,12 +69,12 @@
 .notif-title {
   font-weight: 600;
   font-size: 15px;
-  color: #333;
+  color: #3d3d3d;
 }
 
 .notif-content {
   font-size: 14px;
-  color: #666;
+  color: var(--color-text-secondary);
   line-height: 1.6;
   margin-bottom: 8px;
   overflow: hidden;
@@ -117,13 +117,13 @@
 
 .detail-time {
   font-size: 13px;
-  color: #999;
+  color: var(--color-text-tertiary);
 }
 
 .detail-title {
   font-size: 20px;
   font-weight: 700;
-  color: #333;
+  color: #3d3d3d;
   margin: 0 0 8px 0;
   line-height: 1.4;
 }

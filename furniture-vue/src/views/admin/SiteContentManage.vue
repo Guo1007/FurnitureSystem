@@ -83,7 +83,7 @@
                 </el-form-item>
                 <el-form-item label="图片">
                   <div class="image-upload-row">
-                    <img v-if="item.imageUrl" :src="imgUrl(item.imageUrl)" class="cv-thumb" />
+                    <img loading="lazy" v-if="item.imageUrl" :src="imgUrl(item.imageUrl)" class="cv-thumb" />
                     <span v-else class="cv-thumb-none">无图片</span>
                     <input
                       type="file"
@@ -175,7 +175,7 @@
             <el-form label-width="84px" class="cv-form">
               <el-form-item v-if="hasImage(item.sectionKey)" label="图片">
                 <div class="image-upload-row">
-                  <img v-if="item.imageUrl" :src="imgUrl(item.imageUrl)" class="cv-thumb" />
+                  <img loading="lazy" v-if="item.imageUrl" :src="imgUrl(item.imageUrl)" class="cv-thumb" />
                   <span v-else class="cv-thumb-none">无图片</span>
                   <input
                     type="file"

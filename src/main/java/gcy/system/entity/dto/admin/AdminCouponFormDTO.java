@@ -38,8 +38,14 @@ public class AdminCouponFormDTO {
     @Schema(description = "减免金额（满减/无门槛券）")
     private BigDecimal amount;
 
-    @DecimalMin(value = "0", message = "折扣率不能为负")
-    @Schema(description = "折扣率（折扣券，0.80=8折）")
+    /**
+     * 折扣率，语义为「0.80 = 8 折」，抵扣额 = 基数 × (1 - discount)。
+     * 必须限制在 (0, 1]：若只校验下界，误填 0.08 会被计算成 1-0.08=0.92，
+     * 即「减 92%」（0.8 折），造成严重资损；填写大于 1 的值则优惠为负。
+     */
+    @DecimalMin(value = "0.01", message = "折扣率必须在 0.01~1 之间（0.80 表示 8 折）")
+    @DecimalMax(value = "1", message = "折扣率必须在 0.01~1 之间（0.80 表示 8 折）")
+    @Schema(description = "折扣率（折扣券，0.80=8折，取值 0.01~1）")
     private BigDecimal discount;
 
     @DecimalMin(value = "0", message = "折扣上限不能为负")

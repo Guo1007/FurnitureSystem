@@ -1,7 +1,7 @@
 <template>
-  <div class="profile-review-manage">
+  <div class="profile-review-manage manage-page">
     <div class="page-header">
-      <h2>头像审核</h2>
+      <h2 class="page-title">头像审核</h2>
       <p class="page-desc">审核用户修改的头像</p>
     </div>
 
@@ -236,18 +236,18 @@ onMounted(() => {
 .page-header h2 {
   margin: 0 0 6px 0;
   font-size: 20px;
-  color: #333;
+  color: var(--color-text-primary);
   font-weight: 600;
 }
 
 .page-desc {
   margin: 0;
-  color: #999;
+  color: var(--color-text-tertiary);
   font-size: 13px;
 }
 
 .text-muted {
-  color: #bbb;
+  color: var(--color-text-tertiary);
 }
 
 .avatar-preview-cell {
@@ -260,7 +260,7 @@ onMounted(() => {
   width: 48px;
   height: 48px;
   border-radius: 6px;
-  border: 1px solid #e8e8e8;
+  border: 1px solid var(--color-border);
   cursor: pointer;
   flex-shrink: 0;
   transition: box-shadow 0.2s;
@@ -272,18 +272,17 @@ onMounted(() => {
 
 .avatar-zoom-hint {
   font-size: 12px;
-  color: #999;
+  color: var(--color-text-tertiary);
   white-space: nowrap;
 }
 
 .tab-count {
-  color: #999;
+  color: var(--color-text-tertiary);
   font-size: 12px;
 }
 
 .pagination-wrap {
   display: flex;
-  justify-content: center;
   margin-top: 16px;
   padding-top: 12px;
 }

@@ -123,7 +123,7 @@
                   />
                 </el-select>
               </div>
-              <span v-else style="color: #999">无规格</span>
+              <span v-else style="color: var(--color-text-tertiary)">无规格</span>
             </template>
           </el-table-column>
           <el-table-column label="价格(¥)" width="120">
@@ -160,6 +160,7 @@
                 accept="image/*"
               >
                 <img
+                  loading="lazy"
                   v-if="row.skuImage"
                   :src="imgUrl(row.skuImage)"
                   class="sku-img-thumb"

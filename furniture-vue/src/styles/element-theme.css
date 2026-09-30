@@ -1,0 +1,174 @@
+/* ============================================================
+ * Element Plus 全站主题覆盖 —— Warm Minimalist（暖棕极简）
+ *
+ * 背景：项目前台是「米白 #faf8f5 + 暖棕 #b8753e + 衬线标题」的
+ * Warm Minimalist 体系，但 Element Plus 出厂主色 #409eff（蓝）
+ * 从未被覆盖过，导致管理端/弹窗/表单/分页一片出厂蓝，与前台割裂。
+ *
+ * 本文件只做一件事：把 EP 的设计令牌对齐到前台 variables.css。
+ * 所有 EP 组件（el-button / el-table / el-tabs / el-pagination /
+ * el-tag / el-form / el-dialog …）自动继承，无需逐组件修改。
+ *
+ * 引入顺序要求：必须在 element-plus 的组件样式之后加载（见 main.js）。
+ * 色值与 styles/variables.css 保持同源，改主题只改一处。
+ * ============================================================ */
+
+:root {
+  /* ---------- 主色：暖棕 ---------- */
+  --el-color-primary: #b8753e;
+  --el-color-primary-light-3: #ca9162;
+  --el-color-primary-light-5: #dcba9f;
+  --el-color-primary-light-7: #e9d2bf;
+  --el-color-primary-light-8: #f0ddcd;
+  --el-color-primary-light-9: #faf3eb;
+  --el-color-primary-dark-2: #a0652e;
+
+  /* ---------- 状态色：统一降饱和，与前台语义色同源 ---------- */
+  --el-color-success: #5b8c5a;
+  --el-color-success-light-3: #7ca47c;
+  --el-color-success-light-5: #adc6ad;
+  --el-color-success-light-7: #c9ddc8;
+  --el-color-success-light-8: #dae7d9;
+  --el-color-success-light-9: #eef3ee;
+  --el-color-success-dark-2: #497048;
+
+  --el-color-warning: #c8843a;
+  --el-color-warning-light-3: #d39d61;
+  --el-color-warning-light-5: #e4c29d;
+  --el-color-warning-light-7: #eed8bd;
+  --el-color-warning-light-8: #f3e2cd;
+  --el-color-warning-light-9: #faf3e8;
+  --el-color-warning-dark-2: #a06a2e;
+
+  --el-color-danger: #c5554a;
+  --el-color-danger-light-3: #d1776e;
+  --el-color-danger-light-5: #e2aaa5;
+  --el-color-danger-light-7: #ecc7c4;
+  --el-color-danger-light-8: #f2d6d3;
+  --el-color-danger-light-9: #faeeec;
+  --el-color-danger-dark-2: #9e443b;
+
+  --el-color-error: #c5554a;
+  --el-color-error-light-3: #d1776e;
+  --el-color-error-light-5: #e2aaa5;
+  --el-color-error-light-7: #ecc7c4;
+  --el-color-error-light-8: #f2d6d3;
+  --el-color-error-light-9: #faeeec;
+  --el-color-error-dark-2: #9e443b;
+
+  /* 信息色用暖灰，不再用 EP 默认的蓝灰 */
+  --el-color-info: #8a7f72;
+  --el-color-info-light-3: #a29a8f;
+  --el-color-info-light-5: #c5bfb5;
+  --el-color-info-light-7: #dcd7cf;
+  --el-color-info-light-8: #e6e2db;
+  --el-color-info-light-9: #f0ede8;
+  --el-color-info-dark-2: #6e665b;
+
+  /* ---------- 文字 ---------- */
+  --el-text-color-primary: #1a1a1a;
+  --el-text-color-regular: #3d3d3d;
+  --el-text-color-secondary: #6b6b6b;
+  --el-text-color-placeholder: #a3a3a3;
+  --el-text-color-disabled: #b8b8b8;
+
+  /* ---------- 边框 / 填充 / 背景（暖灰，替代 EP 冷灰） ---------- */
+  --el-border-color: #e0dcd6;
+  --el-border-color-light: #e8e4df;
+  --el-border-color-lighter: #f0ece7;
+  --el-border-color-extra-light: #f5f2ee;
+
+  --el-fill-color: #f5f2ee;
+  --el-fill-color-light: #faf8f5;
+  --el-fill-color-lighter: #fcfaf8;
+  --el-fill-color-extra-light: #fdfcfa;
+  --el-fill-color-dark: #ede9e3;
+  --el-fill-color-darker: #e5e0d9;
+  --el-fill-color-blank: #ffffff;
+
+  --el-bg-color: #ffffff;
+  --el-bg-color-page: #faf8f5;
+  --el-bg-color-overlay: #ffffff;
+
+  /* ---------- 圆角：对齐前台 6/8/12 ---------- */
+  --el-border-radius-base: 8px;
+  --el-border-radius-small: 6px;
+  --el-border-radius-round: 9999px;
+
+  /* ---------- 字体：与前台同源 ---------- */
+  --el-font-family:
+    "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC",
+    system-ui, -apple-system, sans-serif;
+  --el-font-size-base: 14px;
+
+  /* ---------- 阴影：暖调，避免 EP 默认冷灰投影 ---------- */
+  --el-box-shadow:
+    0 4px 12px rgba(60, 45, 30, 0.08),
+    0 1px 3px rgba(60, 45, 30, 0.05);
+  --el-box-shadow-light: 0 1px 3px rgba(60, 45, 30, 0.06);
+  --el-box-shadow-lighter: 0 1px 2px rgba(60, 45, 30, 0.04);
+  --el-box-shadow-dark:
+    0 8px 24px rgba(60, 45, 30, 0.1),
+    0 2px 6px rgba(60, 45, 30, 0.06);
+
+  /* ---------- 遮罩：暖黑，替代纯黑 ---------- */
+  --el-overlay-color-lighter: rgba(26, 20, 14, 0.45);
+}
+
+/* ============================================================
+ * 组件级微调（变量覆盖之外的少量补丁）
+ * 原则：只动「观感割裂点」，不改组件行为。
+ * ============================================================ */
+
+/* 表格：表头米白、行 hover 暖米、数字列等宽对齐 */
+.el-table {
+  --el-table-header-bg-color: #faf8f5;
+  --el-table-header-text-color: #6b6b6b;
+  --el-table-row-hover-bg-color: #faf3eb;
+  --el-table-border-color: #f0ece7;
+  font-size: 13px;
+}
+.el-table th.el-table__cell {
+  font-weight: 600;
+}
+
+/* 数字对齐：价格/数量/ID 类单元格统一 tabular-nums，
+   配合列上已有的类名即可生效，不影响文字列 */
+.el-table .el-table__cell {
+  font-variant-numeric: tabular-nums;
+}
+
+/* 标签：降饱和浅色底 + 深色字（EP 默认实心太白太跳） */
+.el-tag {
+  border-radius: 999px;
+}
+
+/* 分页：当前页用暖棕实心 */
+.el-pagination {
+  --el-pagination-button-bg-color: #ffffff;
+  --el-pagination-hover-color: #a0652e;
+}
+.el-pagination .el-pager li.is-active {
+  border-radius: 6px;
+}
+
+/* 按钮：主按钮 hover 用深棕而非 EP 计算色 */
+.el-button--primary {
+  --el-button-hover-bg-color: #a0652e;
+  --el-button-active-bg-color: #8f5626;
+}
+
+/* 链接：暖棕 */
+.el-link {
+  --el-link-hover-text-color: #a0652e;
+}
+
+/* 弹窗：圆角对齐前台卡片体系 */
+.el-dialog {
+  border-radius: 12px;
+}
+
+/* 消息提示：更贴合暖棕体系 */
+.el-message {
+  border-radius: 8px;
+}

@@ -1,6 +1,7 @@
 package gcy.system.controller;
 
 import gcy.system.entity.dto.Result;
+import gcy.system.service.ICouponRuleConfigService;
 import gcy.system.service.ICouponService;
 import gcy.system.utils.UserHolder;
 import io.swagger.v3.oas.annotations.Operation;
@@ -22,6 +23,8 @@ import org.springframework.web.bind.annotation.*;
 public class CouponController {
 
     private final ICouponService couponService;
+
+    private final ICouponRuleConfigService couponRuleConfigService;
 
     /**
      * 可领优惠券列表（领券中心「可领券」Tab）。
@@ -50,5 +53,20 @@ public class CouponController {
     @PostMapping("/user/coupons/{couponId}/claim")
     public Result claim(@Parameter(description = "优惠券ID") @PathVariable Long couponId) {
         return couponService.claim(UserHolder.getUser().getId(), couponId);
+    }
+
+    /**
+     * 叠加规则（选券弹窗用）。
+     * <p>
+     * 前端需要据此约束可勾选的张数并计算「最优组合」，避免与后端裁决结果不一致。
+     * 最终仍以后端下单时的校验为准。
+     * </p>
+     *
+     * @return 包含 maxStackCount（最大叠加张数）与 maxDiscountRatio（总抵扣上限比例，0~1）的结果
+     */
+    @Operation(summary = "优惠券叠加规则")
+    @GetMapping("/user/coupons/rules")
+    public Result rules() {
+        return Result.ok(couponRuleConfigService.rulesForUser());
     }
 }

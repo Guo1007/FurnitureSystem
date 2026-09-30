@@ -1,13 +1,13 @@
-$primary: #5a6a7a;
-$primary-dark: #4a5a6a;
-$secondary: #5a6a7a;
-$danger: #d95a5a;
-$success: #52c41a;
-$bg-gray: #f8f9fa;
-$text-main: #333;
-$text-sub: #666;
-$text-light: #999;
-$border-color: #ebeef5;
+$primary: #b8753e;
+$primary-dark: #a0652e;
+$secondary: #b8753e;
+$danger: #c5554a;
+$success: #5b8c5a;
+$bg-gray: var(--color-bg);
+$text-main: #3d3d3d;
+$text-sub: var(--color-text-secondary);
+$text-light: var(--color-text-tertiary);
+$border-color: #e8e4df;
 
 .pay-page {
   min-height: 100vh;
@@ -82,7 +82,7 @@ $border-color: #ebeef5;
 }
 
 .order-info {
-  background: #f8f9fa;
+  background: var(--color-bg);
   border-radius: 12px;
   padding: 20px;
   margin-bottom: 20px;
@@ -123,7 +123,7 @@ $border-color: #ebeef5;
     display: flex;
     align-items: center;
     padding: 12px 0;
-    border-bottom: 1px solid #f0f0f0;
+    border-bottom: 1px solid var(--color-border-light);
     font-size: 14px;
 
     &:last-child {
@@ -228,7 +228,7 @@ $border-color: #ebeef5;
     border-radius: 12px;
 
     &:hover:not(:disabled) {
-      background: linear-gradient(135deg, $primary-dark 0%, #3a4a5a 100%);
+      background: $primary-dark;
     }
   }
 

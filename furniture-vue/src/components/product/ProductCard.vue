@@ -2,6 +2,7 @@
   <article class="product-card" @click="goDetail">
     <div class="card-img-wrap">
       <img
+        loading="lazy"
         :src="imgUrl(product.fIcon)"
         :alt="product.fName"
         class="card-img"

@@ -279,9 +279,12 @@ const isCommentDeleted = (item) => {
 };
 
 onMounted(() => {
+  document.addEventListener("click", onClickOutside);
+  // 未登录访客不启动轮询：未读数是需鉴权接口，游客每 30 秒必然吃一次 401，
+  // 还会触发「登录已过期」的误导性提示并反复清空 localStorage。
+  if (!localStorage.getItem("token")) return;
   loadUnreadCount();
   timer = setInterval(loadUnreadCount, 30000);
-  document.addEventListener("click", onClickOutside);
 });
 
 onUnmounted(() => {

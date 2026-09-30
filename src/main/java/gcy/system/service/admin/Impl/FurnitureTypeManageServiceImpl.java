@@ -17,6 +17,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import static gcy.system.utils.RedisConstants.CACHE_FURNITURE_TYPE_KEY;
 
@@ -41,9 +43,23 @@ public class FurnitureTypeManageServiceImpl extends ServiceImpl<FurnitureTypeMap
 
     /**
      * 清除用户端家具类型列表缓存，使增删改立即生效。
+     * <p>
+     * 删除动作推迟到事务提交之后：若在提交前删除，并发请求会在缓存未命中时
+     * 读取到「尚未提交」的旧数据并回写缓存，导致提交后缓存中长期保留旧值。
+     * 若当前不在事务中则立即删除。
+     * </p>
      */
     private void clearTypeCache() {
-        stringRedisTemplate.delete(CACHE_FURNITURE_TYPE_KEY);
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    stringRedisTemplate.delete(CACHE_FURNITURE_TYPE_KEY);
+                }
+            });
+        } else {
+            stringRedisTemplate.delete(CACHE_FURNITURE_TYPE_KEY);
+        }
     }
 
     /**

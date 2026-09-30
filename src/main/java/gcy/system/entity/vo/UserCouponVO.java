@@ -1,5 +1,6 @@
 package gcy.system.entity.vo;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
@@ -34,6 +35,12 @@ public class UserCouponVO {
     @Schema(description = "适用范围文案（全场/分类）")
     private String scopeText;
 
+    @Schema(description = "适用范围：0-全场通用，1-指定分类")
+    private Integer scope;
+
+    @Schema(description = "指定分类ID（scope=1 时有效）")
+    private Long typeId;
+
     @Schema(description = "使用门槛金额（元）")
     private BigDecimal minThreshold;
 
@@ -55,12 +62,19 @@ public class UserCouponVO {
     @Schema(description = "状态文案（未使用/已使用/已过期）")
     private String statusText;
 
+    /**
+     * 过期时间。显式指定格式，与项目内其它 VO（OrderVO、Payment 等）保持一致，
+     * 避免走 Jackson 默认序列化（数组 / ISO 串）导致前端各写一套解析。
+     */
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     @Schema(description = "过期时间")
     private LocalDateTime expireTime;
 
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     @Schema(description = "领取时间")
     private LocalDateTime gotTime;
 
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     @Schema(description = "使用时间")
     private LocalDateTime useTime;
 }

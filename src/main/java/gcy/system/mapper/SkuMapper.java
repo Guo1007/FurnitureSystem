@@ -1,6 +1,7 @@
 package gcy.system.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import gcy.system.entity.dto.StockDeltaDTO;
 import gcy.system.entity.pojo.Sku;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -8,6 +9,7 @@ import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 /**
  * SKU（库存量单位）数据访问层接口。
@@ -49,6 +51,18 @@ public interface SkuMapper extends BaseMapper<Sku> {
      */
     @Update("UPDATE sku SET stock = stock + #{quantity} WHERE id = #{id}")
     int incrementStock(@Param("id") Long id, @Param("quantity") int quantity);
+
+    /**
+     * 批量回增 SKU 库存：一条 SQL 用 {@code CASE id WHEN ... THEN ...} 完成多行不同增量的更新。
+     * 用于订单取消 / 退款的库存恢复，替代循环内逐条 UPDATE。
+     *
+     * @param list 变更项（skuId + 增量）
+     */
+    @Update("<script>UPDATE sku SET stock = stock + CASE id " +
+            "<foreach collection='list' item='i'>WHEN #{i.id} THEN #{i.quantity} </foreach>" +
+            "END WHERE id IN " +
+            "<foreach collection='list' item='i' open='(' separator=',' close=')'>#{i.id}</foreach></script>")
+    void batchIncrementStock(@Param("list") List<StockDeltaDTO> list);
 
     /**
      * 查询指定家具下所有有效 SKU 的总库存数量。

@@ -1,7 +1,7 @@
 <template>
-  <div class="profile-review-manage">
+  <div class="profile-review-manage manage-page">
     <div class="page-header">
-      <h2>昵称审核</h2>
+      <h2 class="page-title">昵称审核</h2>
       <p class="page-desc">审核用户修改的昵称</p>
     </div>
 
@@ -243,37 +243,36 @@ onMounted(() => {
 .page-header h2 {
   margin: 0 0 6px 0;
   font-size: 20px;
-  color: #333;
+  color: var(--color-text-primary);
   font-weight: 600;
 }
 
 .page-desc {
   margin: 0;
-  color: #999;
+  color: var(--color-text-tertiary);
   font-size: 13px;
 }
 
 .pending-value {
-  color: #333;
+  color: var(--color-text-primary);
   font-weight: 500;
 }
 
 .text-muted {
-  color: #bbb;
+  color: var(--color-text-tertiary);
 }
 
 .text-danger {
-  color: #e35d5d;
+  color: var(--color-danger);
 }
 
 .tab-count {
-  color: #999;
+  color: var(--color-text-tertiary);
   font-size: 12px;
 }
 
 .pagination-wrap {
   display: flex;
-  justify-content: center;
   margin-top: 16px;
   padding-top: 12px;
 }

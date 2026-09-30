@@ -79,22 +79,6 @@ public class OrderController {
     }
 
     /**
-     * 支付指定订单。
-     * <p>
-     * 将订单状态变更为已支付。
-     * </p>
-     *
-     * @param orderId 待支付的订单ID
-     * @return 包含支付操作结果的统一响应对象
-     */
-    @OperationLog("支付订单")
-    @Operation(summary = "支付订单")
-    @PutMapping("/pay/{orderId}")
-    public Result payOrder(@Parameter(description = "订单ID") @PathVariable Long orderId) {
-        return orderService.payOrderById(orderId);
-    }
-
-    /**
      * 取消指定订单。
      *
      * @param orderId 待取消的订单ID
@@ -151,6 +135,24 @@ public class OrderController {
     public Result applyRefund(@Parameter(description = "请求体") @Valid @RequestBody RefundApplyDTO dto) {
         Long userId = UserHolder.getUser().getId();
         return orderService.applyRefund(dto.getOrderId(), dto.getRefundReason(), userId);
+    }
+
+    /**
+     * 用户撤销退款申请。
+     * <p>
+     * 仅「申请退款中」的订单可撤销，撤销后回退到申请退款前的状态。
+     * 已由管理员受理（审核中/已退款）的订单不能再自行撤销。
+     * </p>
+     *
+     * @param orderId 订单ID
+     * @return 包含撤销结果的统一响应对象
+     */
+    @OperationLog("撤销退款申请")
+    @Operation(summary = "撤销退款申请")
+    @PostMapping("/refund/cancel/{orderId}")
+    public Result cancelRefund(@Parameter(description = "订单ID") @PathVariable Long orderId) {
+        Long userId = UserHolder.getUser().getId();
+        return orderService.cancelRefund(orderId, userId);
     }
 
 }

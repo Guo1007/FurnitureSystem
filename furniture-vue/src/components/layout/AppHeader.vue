@@ -4,6 +4,7 @@
       <!-- Logo -->
       <router-link to="/" class="header-logo">
         <img
+          loading="lazy"
           v-if="sys.systemLogo"
           :src="imgUrl(sys.systemLogo)"
           class="logo-img"
@@ -49,6 +50,7 @@
                 >
                   <span class="mega-cat-icon">
                     <img
+                      loading="lazy"
                       v-if="isImgPath(cat.icon)"
                       :src="imgUrl(cat.icon)"
                       class="mega-cat-img"
@@ -174,6 +176,7 @@
         <div v-else class="user-menu" @click="toggleUserMenu" ref="userMenuRef">
           <div class="user-avatar-sm">
             <img
+              loading="lazy"
               :src="userAvatar"
               alt=""
               @error="(e) => (e.target.src = '/images/default-avatar.png')"
@@ -183,6 +186,7 @@
             <div class="user-dropdown" v-if="userMenuOpen" @click.stop>
               <div class="dropdown-hd">
                 <img
+                  loading="lazy"
                   :src="userAvatar"
                   alt=""
                   class="dropdown-avatar"

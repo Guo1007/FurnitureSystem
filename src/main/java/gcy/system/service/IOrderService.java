@@ -44,6 +44,17 @@ public interface IOrderService extends IService<Order> {
     Result applyRefund(Long orderId, String refundReason, Long userId);
 
     /**
+     * 用户撤销退款申请，订单回退到申请退款前的状态。
+     * <p>
+     * 此前「申请退款中」的唯一出口是管理员审核，用户误申请后无法自行撤销。
+     *
+     * @param orderId 订单ID
+     * @param userId  当前操作用户ID
+     * @return 包含撤销结果的操作结果对象
+     */
+    Result cancelRefund(Long orderId, Long userId);
+
+    /**
      * 恢复指定订单占用的库存（SKU库存 + 家具总库存），并同步更新Redis缓存。
      * <p>
      * 供退款审核通过和订单取消等场景复用。
@@ -55,18 +66,12 @@ public interface IOrderService extends IService<Order> {
     void restoreStock(Long orderId);
 
     /**
-     * 根据订单ID执行支付操作。
-     *
-     * @param id 待支付的订单ID
-     * @return 包含支付结果的操作结果对象
-     */
-    Result payOrderById(Long id);
-
-    /**
      * 支付成功确认订单（支付宝异步回调触发）。
      * <p>
-     * 与 {@link #payOrderById(Long)} 不同，该方法不依赖当前登录用户，
-     * 仅供支付网关回调校验通过后调用，使用 CAS 乐观锁将待支付订单更新为已支付。
+     * 该方法不依赖当前登录用户，
+     * 仅供支付网关回调验签与金额核对通过后调用，使用 CAS 乐观锁将待支付订单更新为已支付。
+     * 注：原 payOrderById 支付接口已下线——订单状态迁移至「已支付」必须以 payment 表中
+     * 已成交的支付流水或支付宝回调为前提，避免绕过支付网关直接改单。
      * </p>
      *
      * @param orderId 待确认的订单ID
@@ -97,6 +102,17 @@ public interface IOrderService extends IService<Order> {
      * @return 包含确认收货结果的操作结果对象
      */
     Result confirmReceipt(Long id);
+
+    /**
+     * 自动确认收货，供定时任务调用（不校验操作者身份，仅校验订单状态为已发货）。
+     * <p>
+     * 用于解决「发货后用户一直不点确认收货，订单永久停留在已发货」的问题：
+     * 该状态下订单不结算、不能评价、售后窗口也无法关闭。
+     *
+     * @param orderId 订单ID
+     * @return 操作结果
+     */
+    Result autoConfirmReceipt(Long orderId);
 
     /**
      * 根据订单ID删除当前用户的订单记录。

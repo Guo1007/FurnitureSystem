@@ -26,6 +26,7 @@
       <el-table-column label="图标" width="80">
         <template #default="{ row }">
           <img
+            loading="lazy"
             v-if="row.icon"
             :src="imgUrl(row.icon)"
             class="table-img"
@@ -96,6 +97,7 @@
               accept="image/*"
             >
               <img
+                loading="lazy"
                 v-if="formData.icon"
                 :src="imgUrl(formData.icon)"
                 class="avatar"
@@ -147,6 +149,8 @@ import {
   updateFurnitureType,
   uploadTypeIcon,
 } from "@/api/admin/furnitureType.js";
+// 分类变动后清掉前台的分类缓存，避免首页/导航栏继续读旧的 60s 缓存
+import { invalidateFurnitureTypeCache } from "@/api/furniture.js";
 
 // --- 状态定义 ---
 const loading = ref(false);
@@ -282,6 +286,7 @@ const handleDelete = async (id) => {
     const res = await deleteFurnitureType(id);
     if (res.success || res.code === 200) {
       ElMessage.success("删除成功");
+      invalidateFurnitureTypeCache();
       loadList();
     } else {
       ElMessage.error(res.msg || "删除失败");
@@ -304,6 +309,7 @@ const submitForm = async () => {
       if (res.success || res.code === 200) {
         ElMessage.success("更新成功");
         dialogVisible.value = false;
+        invalidateFurnitureTypeCache();
         loadList();
       } else {
         ElMessage.error(res.msg || "更新失败");
@@ -313,6 +319,7 @@ const submitForm = async () => {
       if (res.success || res.code === 200) {
         ElMessage.success("新增成功");
         dialogVisible.value = false;
+        invalidateFurnitureTypeCache();
         loadList();
       } else {
         ElMessage.error(res.msg || "新增失败");

@@ -56,6 +56,15 @@ public class AiConfig {
     private static final Duration EMBEDDING_TTL = Duration.ofDays(30);
 
     /**
+     * 「已摄入」标记 key 的有效期，25天，刻意短于向量本身的 30 天。
+     * <p>
+     * 两者若用同一个 TTL，标记会比向量活得更久或同时失效：
+     * 标记仍在而向量已过期时，会跳过摄入、静默退化成空知识库，
+     * AI 照常回答却检索不到任何内容。标记先过期可确保到期后重新摄入。
+     */
+    private static final Duration EMBEDDING_MARK_TTL = Duration.ofDays(25);
+
+    /**
      * Redis聊天记忆存储
      */
     private final ChatMemoryStore redisChatMemoryStore;
@@ -104,7 +113,16 @@ public class AiConfig {
             return redisEmbeddingStore;
         }
         log.info("开始摄入知识库文档到向量存储...");
-        List<Document> documents = ClassPathDocumentLoader.loadDocuments("content");
+        List<Document> documents;
+        // 知识库摄入失败不应导致整个 Spring 容器启动失败：
+        // 这是 @Bean 方法，异常直接冒泡会让整个应用起不来，
+        // 而知识库只是 AI 问答的增强项，缺了它聊天功能仍应可用。
+        try {
+            documents = ClassPathDocumentLoader.loadDocuments("content");
+        } catch (Exception e) {
+            log.error("知识库文档加载失败，跳过摄入，AI 将以无知识库模式运行", e);
+            return redisEmbeddingStore;
+        }
         // maxSegmentSizeInChars：每一段文档切片，最多允许多少个字符。
         // maxOverlapSizeInChars：相邻两块之间，重复保留多少字符。
         DocumentSplitter splitter = DocumentSplitters.recursive(500, 100);
@@ -112,7 +130,12 @@ public class AiConfig {
                 .embeddingStore(redisEmbeddingStore)
                 .documentSplitter(splitter)
                 .build();
-        ingestor.ingest(documents);
+        try {
+            ingestor.ingest(documents);
+        } catch (Exception e) {
+            log.error("知识库向量摄入失败，跳过摄入，AI 将以无知识库模式运行", e);
+            return redisEmbeddingStore;
+        }
         // 用 SCAN 遍历而非 KEYS，避免 O(N) 阻塞单线程 Redis
         Set<String> embeddingKeys = new HashSet<>();
         try (Cursor<String> cursor = stringRedisTemplate.scan(
@@ -128,8 +151,9 @@ public class AiConfig {
             log.info("已为 {} 个向量 key 设置过期时间 {} 天", embeddingKeys.size(), EMBEDDING_TTL.toDays());
         }
         stringRedisTemplate.opsForValue()
-                .set(EMBEDDING_INGESTED_KEY, String.valueOf(System.currentTimeMillis()), EMBEDDING_TTL);
-        log.info("知识库文档摄入完成，向量数据有效期 {} 天", EMBEDDING_TTL.toDays());
+                .set(EMBEDDING_INGESTED_KEY, String.valueOf(System.currentTimeMillis()), EMBEDDING_MARK_TTL);
+        log.info("知识库文档摄入完成，向量数据有效期 {} 天，摄入标记有效期 {} 天",
+                EMBEDDING_TTL.toDays(), EMBEDDING_MARK_TTL.toDays());
         return redisEmbeddingStore;
     }
 

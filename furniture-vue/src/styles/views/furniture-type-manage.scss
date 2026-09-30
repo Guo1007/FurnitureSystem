@@ -9,7 +9,7 @@
 .page-title {
   margin: 0 0 24px 0;
   font-size: 20px;
-  color: #333;
+  color: #3d3d3d;
 }
 
 .search-bar {
@@ -77,5 +77,5 @@
 
 .tip-text {
   font-size: 12px;
-  color: #606266;
+  color: var(--color-text-secondary);
 }

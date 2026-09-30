@@ -1,9 +1,7 @@
 <template>
-  <div class="operation-log-manage">
-    <div class="page-header">
-      <h2>操作日志</h2>
-      <p class="page-desc">查看系统所有操作记录，支持按用户、操作、结果和时间范围筛选</p>
-    </div>
+  <div class="operation-log-manage manage-page">
+    <h2 class="page-title">操作日志</h2>
+    <p class="page-desc">查看系统所有操作记录，支持按用户、操作、结果和时间范围筛选</p>
 
     <!-- 筛选栏 -->
     <div class="filter-bar">
@@ -168,27 +166,6 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.operation-log-manage {
-  padding: 6px 0;
-}
-
-.page-header {
-  margin-bottom: 20px;
-}
-
-.page-header h2 {
-  margin: 0 0 6px 0;
-  font-size: 20px;
-  color: #333;
-  font-weight: 600;
-}
-
-.page-desc {
-  margin: 0;
-  color: #999;
-  font-size: 13px;
-}
-
 .filter-bar {
   display: flex;
   flex-wrap: wrap;
@@ -196,9 +173,9 @@ onMounted(() => {
   align-items: center;
   margin-bottom: 16px;
   padding: 16px;
-  background: #fafbfc;
+  background: var(--color-bg);
   border-radius: 8px;
-  border: 1px solid #f0f0f0;
+  border: 1px solid var(--color-border-light);
 }
 
 .filter-bar :deep(.el-date-editor) {
@@ -207,27 +184,26 @@ onMounted(() => {
 }
 
 .num-text {
-  color: #888;
+  color: var(--color-text-secondary);
   font-size: 13px;
 }
 
 .time-text {
-  color: #888;
+  color: var(--color-text-secondary);
   font-size: 13px;
   white-space: nowrap;
 }
 
 .text-muted {
-  color: #bbb;
+  color: var(--color-text-tertiary);
 }
 
 .text-danger {
-  color: #d95a5a;
+  color: var(--color-danger);
 }
 
 .pagination-wrap {
   display: flex;
-  justify-content: center;
   margin-top: 16px;
   padding-top: 12px;
 }

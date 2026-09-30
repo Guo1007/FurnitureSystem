@@ -191,21 +191,25 @@ public class OperationLogAspect {
     }
 
     /**
-     * 判断参数名是否为密码类敏感字段。
+     * 判断参数名是否为敏感字段（整个值直接脱敏）。
+     * <p>
+     * 除密码类外，还需覆盖验证码类字段：邮箱/短信登录与注册的 6 位验证码参数名为 {@code code}，
+     * 此前未被识别，会原样写入 operation_log.params，翻阅日志即可拿到他人验证码。
      */
     private boolean isSensitiveParamName(String name) {
         if (name == null) return false;
         String lower = name.toLowerCase();
-        return lower.contains("password") || lower.contains("passwd") || lower.contains("pwd");
+        return lower.contains("password") || lower.contains("passwd") || lower.contains("pwd")
+                || lower.contains("code") || lower.contains("captcha") || lower.contains("verifycode");
     }
 
     /**
-     * 对字符串中的密码类字段值做脱敏。
+     * 对字符串中的敏感字段值做脱敏。
      * 兼容 Lombok toString 格式（newPassword=xxx）与 JSON 格式（"newPassword":"xxx"）。
      */
     private String sanitize(String text) {
         if (text == null) return "";
-        return text.replaceAll("(?i)(\\b[a-z]*(?:password|passwd|pwd)[a-z]*\\s*[=:]\\s*)([^,\"}\\s]+)", "$1***");
+        return text.replaceAll("(?i)(\\b[a-z]*(?:password|passwd|pwd|code|captcha|verifycode)[a-z]*\\s*[=:]\\s*)([^,\"}\\s]+)", "$1***");
     }
 
     /**

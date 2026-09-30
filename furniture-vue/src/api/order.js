@@ -30,12 +30,8 @@ export const cancelOrder = (orderId) => {
   });
 };
 
-export const payOrder = (orderId) => {
-  return request({
-    url: `/order/pay/${orderId}`,
-    method: "put",
-  });
-};
+// 注：原 /order/pay/{orderId} 直改订单状态的接口已下线，
+// 订单置为「已支付」只能经由支付宝预下单 + 异步回调（prepayOrder / queryPayStatus）。
 
 // 支付宝预下单：返回可自动提交的付款页面 HTML
 export const prepayOrder = (orderId) => {

@@ -29,3 +29,13 @@ export function deleteCoupon(id) {
 export function toggleCoupon(id) {
   return request({ url: `/admin/coupons/toggle/${id}`, method: "put" });
 }
+
+/** 查询优惠券叠加规则配置（最大叠加张数 / 总抵扣上限比例） */
+export function getCouponRules() {
+  return request({ url: "/admin/coupon-rule", method: "get" });
+}
+
+/** 保存单条叠加规则 */
+export function saveCouponRule(data) {
+  return request({ url: "/admin/coupon-rule", method: "put", data });
+}

@@ -95,6 +95,7 @@
               @click="goToFurniture(item.furnitureId)"
             >
               <img
+                loading="lazy"
                 :src="
                   imgUrl(item.furnitureIcon, '/images/default-furniture.png')
                 "
@@ -143,7 +144,7 @@
                   v-if="order.status === 0"
                   type="primary"
                   size="small"
-                  @click="payOrder(order.id)"
+                  @click="goToPay(order.id)"
                 >
                   立即支付
                 </el-button>
@@ -421,6 +422,7 @@
                 class="review-images"
               >
                 <img
+                  loading="lazy"
                   v-for="(img, idx) in parseImages(r.imgUrl)"
                   :key="idx"
                   :src="img"
@@ -472,6 +474,7 @@
                   class="review-images"
                 >
                   <img
+                    loading="lazy"
                     v-for="(img, idx) in parseImages(a.appendImg)"
                     :key="idx"
                     :src="img"
@@ -676,6 +679,7 @@
             class="detail-item"
           >
             <img
+              loading="lazy"
               :src="imgUrl(item.furnitureIcon, '/images/default-furniture.png')"
               class="detail-item-img"
             />
@@ -897,10 +901,11 @@ const loadOrders = async () => {
     if (res.success || res.code === 200) {
       orderList.value = res.data.records || [];
       total.value = res.data.total || 0;
-      // 启动倒计时（50ms 刷新，百分秒可见）
+      // 启动倒计时。原为 50ms（每秒 20 次）遍历全部订单并触发组件 patch，
+      // 订单列表越长开销越大；倒计时只显示到秒，1s 刷新完全够用，降频 20 倍。
       tickAll();
       if (!countdownTimer) {
-        countdownTimer = setInterval(tickAll, 50);
+        countdownTimer = setInterval(tickAll, 1000);
       }
     } else {
       ElMessage.error(res.msg || "获取订单失败");
@@ -961,8 +966,8 @@ const goToFurniture = (id) => {
   getFurnitureById(id);
 };
 
-// 支付订单
-const payOrder = (orderId) => {
+// 跳到支付页（由该页发起支付宝预下单，不在列表页直接改订单状态）
+const goToPay = (orderId) => {
   router.push(`/order/pay/${orderId}`);
 };
 

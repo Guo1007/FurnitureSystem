@@ -2,7 +2,6 @@ package gcy.system.service.Impl;
 
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.util.StrUtil;
-import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -10,18 +9,19 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import gcy.system.entity.dto.CartFormDTO;
 import gcy.system.entity.dto.OrderItemDTO;
 import gcy.system.entity.dto.Result;
+import gcy.system.entity.dto.StockDeltaDTO;
 import gcy.system.entity.dto.UserDTO;
 import gcy.system.entity.pojo.*;
 import gcy.system.entity.vo.OrderVO;
 import gcy.system.exception.BusinessException;
 import gcy.system.integration.EmailService;
 import gcy.system.mapper.*;
+import gcy.system.service.ICouponRuleConfigService;
 import gcy.system.service.IOrderItemService;
 import gcy.system.service.IOrderService;
 import gcy.system.service.admin.AdminNotifyService;
 import gcy.system.service.admin.Impl.NotifySettingServiceImpl;
 import gcy.system.utils.OrderEmailUtil;
-import gcy.system.utils.RedisData;
 import gcy.system.utils.UserHolder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -29,7 +29,11 @@ import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -81,9 +85,26 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     private final RedissonClient redissonClient;
 
     /**
+     * 事务管理器。用于显式控制下单事务边界，使「加锁 → 开事务 → 提交 → 解锁」顺序可控。
+     * 注意：本类内部方法互调不会经过 Spring 代理，@Transactional 会失效，故不使用注解。
+     */
+    private final PlatformTransactionManager txManager;
+
+    /**
+     * 优惠券叠加规则配置（最大叠加张数、总抵扣上限比例），后台可配。
+     * 读取失败时服务内部回落到默认值，不会阻断下单。
+     */
+    private final ICouponRuleConfigService couponRuleConfigService;
+
+    /**
      * 创建订单。
-     * 使用 Redisson 分布式锁防止同一用户并发重复下单，校验收货信息完整性后，
-     * 遍历购物车商品列表：校验商品是否存在、库存是否充足（支持 SKU 规格模式和无规格模式），
+     * <p>
+     * 使用 Redisson 分布式锁防止同一用户并发重复下单。锁必须位于事务之外：
+     * 若事务注解加在本方法上，事务会在方法返回后才提交，而解锁写在 finally 中必然早于提交，
+     * 导致并发请求在事务未提交时拿到锁并读到旧快照。这里用事务模板把事务收在内层，
+     * 保证「提交之后才解锁」。
+     * </p>
+     * 校验收货信息完整性后遍历购物车：校验商品是否存在、库存是否充足（支持 SKU 规格与无规格两种模式），
      * 扣减库存并计算订单总金额，最终保存订单主体及订单明细。
      *
      * @param dto 购物车下单数据传输对象，包含收货人、收货地址、联系电话和商品列表
@@ -91,13 +112,12 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
      * @throws BusinessException 当商品数量无效、商品不存在或已下架、规格不匹配、库存不足、订单明细保存失败时抛出
      */
     @Override
-    @Transactional
     public Result createOrder(CartFormDTO dto) {
         UserDTO user = UserHolder.getUser();
         Long userId = user.getId();
         String lockKey = ORDER_CREATE_KEY + userId;
         RLock lock = redissonClient.getLock(lockKey);
-        boolean locked;
+        boolean locked = false;
         try {
             locked = lock.tryLock(5, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
@@ -109,129 +129,181 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
             return Result.fail("操作处理中，请勿重复提交");
         }
         try {
-            if (StrUtil.isBlank(dto.getConsignee()) || StrUtil.isBlank(dto.getAddress()) || StrUtil.isBlank(dto.getPhone())) {
-                return Result.fail("请填写完整的收货信息");
-            }
-            List<OrderItemDTO> items = dto.getItemList();
-            if (items == null || items.isEmpty()) {
-                return Result.fail("购物车为空");
-            }
-            Order order = BeanUtil.copyProperties(dto, Order.class);
-            order.setCreateTime(LocalDateTime.now());
-            order.setStatus(PENDING_PAYMENT.getCode());
-            order.setUserId(userId);
-            BigDecimal totalAmount = BigDecimal.ZERO;
-            Set<Long> itemTypeIds = new HashSet<>();
-            List<OrderItem> orderItems = new ArrayList<>();
-            for (OrderItemDTO itemDto : items) {
-                Long furnitureId = itemDto.getFurnitureId();
-                Long skuId = itemDto.getSkuId();
-                int quantity = itemDto.getQuantity();
-                if (quantity <= 0) {
-                    throw new BusinessException("商品数量必须大于0");
-                }
-                Furniture furniture = furnitureMapper.selectById(furnitureId);
-                if (furniture == null) {
-                    throw new BusinessException("商品不存在或已下架");
-                }
-                if (furniture.getTypeId() != null) {
-                    itemTypeIds.add(furniture.getTypeId());
-                }
-                BigDecimal itemPrice;
-                if (skuId != null) {
-                    Sku sku = skuMapper.selectById(skuId);
-                    if (sku == null || !sku.getFurnitureId().equals(furnitureId)) {
-                        throw new BusinessException("商品规格不存在");
-                    }
-                    // 校验规格可售状态（status=1 为可售）
-                    if (sku.getStatus() != null && sku.getStatus() != 1) {
-                        throw new BusinessException("商品 " + furniture.getFName() + " 该规格已停售");
-                    }
-                    if (sku.getStock() < quantity) {
-                        throw new BusinessException("商品 " + furniture.getFName() + " 该规格库存不足，当前库存: " + sku.getStock());
-                    }
-                    int rows = skuMapper.decrementStock(skuId, quantity);
-                    if (rows == 0) {
-                        throw new BusinessException("商品 " + furniture.getFName() + " 库存发生变化，请重新下单");
-                    }
-                    // 同步扣减家具总库存，失败则回滚整个下单事务（防止 SKU 已扣而总库存未扣的台账不一致）
-                    int furRows = furnitureMapper.decrementStock(furnitureId, quantity);
-                    if (furRows == 0) {
-                        throw new BusinessException("商品 " + furniture.getFName() + " 库存发生变化，请重新下单");
-                    }
-                    itemPrice = sku.getPrice();
-                } else {
-                    if (skuMapper.selectCount(
-                            new LambdaQueryWrapper<Sku>().eq(Sku::getFurnitureId, furnitureId)) > 0) {
-                        throw new BusinessException("商品「" + furniture.getFName() + "」有多个规格，请选择具体规格后下单");
-                    }
-                    if (furniture.getStock() < quantity) {
-                        throw new BusinessException("商品 " + furniture.getFName() + " 库存不足，当前库存: " + furniture.getStock());
-                    }
-                    int rows = furnitureMapper.decrementStock(furnitureId, quantity);
-                    if (rows == 0) {
-                        throw new BusinessException("商品 " + furniture.getFName() + " 库存发生变化，请重新下单");
-                    }
-                    itemPrice = furniture.getPrice();
-                }
-
-                Furniture latestFurniture = furnitureMapper.selectById(furnitureId);
-                if (latestFurniture != null) {
-                    updateFurnitureCache(latestFurniture);
-                }
-                BigDecimal itemTotal = itemPrice.multiply(new BigDecimal(quantity));
-                totalAmount = totalAmount.add(itemTotal);
-                OrderItem orderItem = new OrderItem();
-                orderItem.setFurnitureId(furnitureId);
-                orderItem.setSkuId(skuId);
-                orderItem.setPrice(itemPrice);
-                orderItem.setQuantity(quantity);
-                orderItem.setItemTotalPrice(itemTotal);
-                orderItem.setFurnitureName(furniture.getFName());
-                orderItem.setFurnitureIcon(furniture.getFIcon());
-                if (skuId != null) {
-                    orderItem.setSkuSpec(buildSkuSpecText(skuId));
-                }
-                orderItems.add(orderItem);
-            }
-            order.setTotalPrice(totalAmount);
-            LocalDateTime now = LocalDateTime.now();
-            // 优惠券抵扣（支持多张：可叠加的券可同时使用，不可叠加的券只能单独用）
-            List<Long> userCouponIds = collectCouponIds(dto);
-            if (!userCouponIds.isEmpty()) {
-                List<Coupon> usedCoupons = validateCoupons(userId, userCouponIds, totalAmount, itemTypeIds, now);
-                BigDecimal discount = calcCouponsDiscount(usedCoupons, totalAmount);
-                order.setCouponId(usedCoupons.get(0).getId());
-                order.setCouponDiscount(discount);
-                order.setTotalPrice(totalAmount.subtract(discount).max(BigDecimal.ZERO));
-            }
-            save(order);
-            Long orderId = order.getId();
-            for (OrderItem item : orderItems) {
-                item.setOrderId(orderId);
-            }
-            boolean success = orderItemService.saveBatch(orderItems);
-            if (!success) {
-                throw new BusinessException("订单明细保存失败");
-            }
-            // 订单创建成功后，将已用优惠券置为已用并关联订单
-            for (Long userCouponId : userCouponIds) {
-                markCouponUsed(userCouponId, orderId, now);
-            }
-            log.info("订单创建成功: orderId={}, userId={}, amount={}", orderId, userId, totalAmount);
-            // 通知管理员有新订单
-            adminNotifyService.sendNotification(NotifySettingServiceImpl.TYPE_NEW_ORDER, "🛒 新订单通知",
-                    "系统产生了新订单，请及时处理。\n订单号：" + orderId + "\n金额：¥" + totalAmount);
-            return Result.ok(orderId);
+            // 事务在锁的内层开启：提交完成后 unlock 才执行
+            return new TransactionTemplate(txManager).execute(status -> doCreateOrder(dto, userId));
         } finally {
-            lock.unlock();
+            // 未持锁时不可 unlock，否则抛 IllegalMonitorStateException 掩盖真实错误
+            if (locked) {
+                lock.unlock();
+            }
         }
     }
 
     /**
-     * 校验优惠券是否可用于本单：归属、未用、有效期内、门槛、适用范围。不满足抛异常。
+     * 下单核心逻辑，由 {@link #createOrder(CartFormDTO)} 通过事务模板调用，必须运行在事务内。
      */
-    private Coupon validateCoupon(Long userId, Long userCouponId, BigDecimal goodsTotal, Set<Long> itemTypeIds, LocalDateTime now) {
+    private Result doCreateOrder(CartFormDTO dto, Long userId) {
+        if (StrUtil.isBlank(dto.getConsignee()) || StrUtil.isBlank(dto.getAddress()) || StrUtil.isBlank(dto.getPhone())) {
+            return Result.fail("请填写完整的收货信息");
+        }
+        List<OrderItemDTO> items = dto.getItemList();
+        if (items == null || items.isEmpty()) {
+            return Result.fail("购物车为空");
+        }
+        Order order = BeanUtil.copyProperties(dto, Order.class);
+        order.setCreateTime(LocalDateTime.now());
+        order.setStatus(PENDING_PAYMENT.getCode());
+        order.setUserId(userId);
+        BigDecimal totalAmount = BigDecimal.ZERO;
+        Set<Long> itemTypeIds = new HashSet<>();
+        // 按分类汇总商品小计，供分类券校验门槛与抵扣上限使用（分类券只对本分类金额生效）
+        Map<Long, BigDecimal> subTotalByType = new HashMap<>();
+        // 库存发生变动的商品，待事务提交后统一失效缓存
+        Set<Long> touchedFurnitureIds = new HashSet<>();
+        List<OrderItem> orderItems = new ArrayList<>();
+
+        // 循环外批量预加载：原实现在循环内对每件商品查家具、查规格、再 COUNT 一次规格，
+        // 20 件商品 ≈ 100+ 次 DB 往返且全部串行在一个事务里。这里压成 3 条查询。
+        Set<Long> furnitureIdSet = items.stream().map(OrderItemDTO::getFurnitureId)
+                .filter(Objects::nonNull).collect(Collectors.toSet());
+        Map<Long, Furniture> furnitureMap = furnitureIdSet.isEmpty() ? Map.of()
+                : furnitureMapper.selectBatchIds(furnitureIdSet).stream()
+                        .collect(Collectors.toMap(Furniture::getId, f -> f));
+
+        Set<Long> skuIdSet = items.stream().map(OrderItemDTO::getSkuId)
+                .filter(Objects::nonNull).collect(Collectors.toSet());
+        Map<Long, Sku> skuMap = skuIdSet.isEmpty() ? Map.of()
+                : skuMapper.selectBatchIds(skuIdSet).stream()
+                        .collect(Collectors.toMap(Sku::getId, s -> s));
+
+        // 「该商品是否存在规格」一次 IN 查询判完，替代逐条 COUNT(*)
+        Set<Long> noSkuFurnitureIds = items.stream()
+                .filter(i -> i.getSkuId() == null && i.getFurnitureId() != null)
+                .map(OrderItemDTO::getFurnitureId)
+                .collect(Collectors.toSet());
+        Set<Long> furnitureIdsWithSku = noSkuFurnitureIds.isEmpty() ? Set.of()
+                : skuMapper.selectList(new LambdaQueryWrapper<Sku>()
+                        .select(Sku::getFurnitureId)
+                        .in(Sku::getFurnitureId, noSkuFurnitureIds))
+                        .stream().map(Sku::getFurnitureId).collect(Collectors.toSet());
+
+        for (OrderItemDTO itemDto : items) {
+            Long furnitureId = itemDto.getFurnitureId();
+            Long skuId = itemDto.getSkuId();
+            int quantity = itemDto.getQuantity();
+            if (quantity <= 0) {
+                throw new BusinessException("商品数量必须大于0");
+            }
+            Furniture furniture = furnitureMap.get(furnitureId);
+            if (furniture == null) {
+                throw new BusinessException("商品不存在或已下架");
+            }
+            if (furniture.getTypeId() != null) {
+                itemTypeIds.add(furniture.getTypeId());
+            }
+            BigDecimal itemPrice;
+            if (skuId != null) {
+                Sku sku = skuMap.get(skuId);
+                if (sku == null || !sku.getFurnitureId().equals(furnitureId)) {
+                    throw new BusinessException("商品规格不存在");
+                }
+                // 校验规格可售状态（status=1 为可售）
+                if (sku.getStatus() != null && sku.getStatus() != 1) {
+                    throw new BusinessException("商品 " + furniture.getFName() + " 该规格已停售");
+                }
+                if (sku.getStock() < quantity) {
+                    throw new BusinessException("商品 " + furniture.getFName() + " 该规格库存不足，当前库存: " + sku.getStock());
+                }
+                int rows = skuMapper.decrementStock(skuId, quantity);
+                if (rows == 0) {
+                    throw new BusinessException("商品 " + furniture.getFName() + " 库存发生变化，请重新下单");
+                }
+                // 同步扣减家具总库存，失败则回滚整个下单事务（防止 SKU 已扣而总库存未扣的台账不一致）
+                int furRows = furnitureMapper.decrementStock(furnitureId, quantity);
+                if (furRows == 0) {
+                    throw new BusinessException("商品 " + furniture.getFName() + " 库存发生变化，请重新下单");
+                }
+                itemPrice = sku.getPrice();
+            } else {
+                if (furnitureIdsWithSku.contains(furnitureId)) {
+                    throw new BusinessException("商品「" + furniture.getFName() + "」有多个规格，请选择具体规格后下单");
+                }
+                if (furniture.getStock() < quantity) {
+                    throw new BusinessException("商品 " + furniture.getFName() + " 库存不足，当前库存: " + furniture.getStock());
+                }
+                int rows = furnitureMapper.decrementStock(furnitureId, quantity);
+                if (rows == 0) {
+                    throw new BusinessException("商品 " + furniture.getFName() + " 库存发生变化，请重新下单");
+                }
+                itemPrice = furniture.getPrice();
+            }
+
+            // 记录库存变动涉及的商品，提交后再失效缓存：
+            // 不在事务内写缓存，事务回滚时缓存无法同步回滚，会留下脏数据
+            touchedFurnitureIds.add(furnitureId);
+            BigDecimal itemTotal = itemPrice.multiply(new BigDecimal(quantity));
+            totalAmount = totalAmount.add(itemTotal);
+            if (furniture.getTypeId() != null) {
+                subTotalByType.merge(furniture.getTypeId(), itemTotal, BigDecimal::add);
+            }
+            OrderItem orderItem = new OrderItem();
+            orderItem.setFurnitureId(furnitureId);
+            orderItem.setSkuId(skuId);
+            orderItem.setPrice(itemPrice);
+            orderItem.setQuantity(quantity);
+            orderItem.setItemTotalPrice(itemTotal);
+            orderItem.setFurnitureName(furniture.getFName());
+            orderItem.setFurnitureIcon(furniture.getFIcon());
+            if (skuId != null) {
+                orderItem.setSkuSpec(buildSkuSpecText(skuId));
+            }
+            orderItems.add(orderItem);
+        }
+        order.setTotalPrice(totalAmount);
+        LocalDateTime now = LocalDateTime.now();
+        // 优惠券抵扣（支持多张：可叠加的券可同时使用，不可叠加的券只能单独用）
+            List<Long> userCouponIds = collectCouponIds(dto);
+            if (!userCouponIds.isEmpty()) {
+                // 叠加张数上限取自后台配置，未配置时使用服务内置默认值
+                int maxStackCount = couponRuleConfigService.getMaxStackCount();
+                List<Coupon> usedCoupons = validateCoupons(userId, userCouponIds, totalAmount,
+                        itemTypeIds, subTotalByType, now, maxStackCount);
+                BigDecimal discount = calcCouponsDiscount(usedCoupons, totalAmount, subTotalByType);
+            order.setCouponId(usedCoupons.get(0).getId());
+            order.setCouponDiscount(discount);
+            order.setTotalPrice(totalAmount.subtract(discount).max(BigDecimal.ZERO));
+        }
+        save(order);
+        Long orderId = order.getId();
+        for (OrderItem item : orderItems) {
+            item.setOrderId(orderId);
+        }
+        boolean success = orderItemService.saveBatch(orderItems);
+        if (!success) {
+            throw new BusinessException("订单明细保存失败");
+        }
+        // 订单创建成功后，将已用优惠券置为已用并关联订单（一条 IN(...) 批量 UPDATE，替代逐条核销）
+        markCouponsUsed(userCouponIds, orderId, now);
+        // 库存已落库，提交后再失效缓存（由读路径自动重建）
+        evictFurnitureCacheAfterCommit(touchedFurnitureIds);
+        log.info("订单创建成功: orderId={}, userId={}, amount={}", orderId, userId, order.getTotalPrice());
+        // 通知管理员有新订单（金额为优惠后实付，避免与订单实付不符）
+        adminNotifyService.sendNotification(NotifySettingServiceImpl.TYPE_NEW_ORDER, "🛒 新订单通知",
+                "系统产生了新订单，请及时处理。\n订单号：" + orderId + "\n实付金额：¥" + order.getTotalPrice());
+        return Result.ok(orderId);
+    }
+
+    /**
+     * 校验优惠券是否可用于本单：归属、未用、有效期内、门槛、适用范围。不满足抛异常。
+     * <p>
+     * 门槛按「适用基数」判断：全场券用整单金额，分类券（scope=1）只用该分类的商品小计，
+     * 否则会出现「订单里只有一件该分类的低价商品，却能使用高额分类券」的漏洞。
+     * </p>
+     *
+     * @param subTotalByType 各分类的商品小计（typeId -> 金额）
+     */
+    private Coupon validateCoupon(Long userId, Long userCouponId, BigDecimal goodsTotal, Set<Long> itemTypeIds,
+                                  Map<Long, BigDecimal> subTotalByType, LocalDateTime now) {
         UserCoupon uc = userCouponMapper.selectById(userCouponId);
         if (uc == null || !uc.getUserId().equals(userId)) {
             throw new BusinessException("优惠券不存在");
@@ -246,8 +318,10 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         if (c == null || c.getStatus() == null || c.getStatus() != 1) {
             throw new BusinessException("优惠券已停用");
         }
+        // 分类券以该分类小计为基数校验门槛与抵扣，全场券以整单金额为基数
+        BigDecimal applicableBase = resolveCouponBase(c, goodsTotal, subTotalByType);
         BigDecimal threshold = c.getMinThreshold() == null ? BigDecimal.ZERO : c.getMinThreshold();
-        if (goodsTotal.compareTo(threshold) < 0) {
+        if (applicableBase.compareTo(threshold) < 0) {
             throw new BusinessException("未满足优惠券使用门槛");
         }
         if (c.getScope() != null && c.getScope() == 1 && c.getTypeId() != null
@@ -263,32 +337,61 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     }
 
     /**
-     * 计算优惠金额：满减/无门槛取面额；折扣券按折扣率并受最高优惠上限约束，均不超过商品总额。
+     * 计算单张券的优惠金额：满减/无门槛取面额；折扣券按折扣率并受最高优惠上限约束。
+     * 抵扣上限为「适用基数」——分类券不得超过该分类小计，全场券不得超过订单剩余金额。
      */
-    private BigDecimal calcCouponDiscount(Coupon c, BigDecimal goodsTotal) {
+    private BigDecimal calcCouponDiscount(Coupon c, BigDecimal applicableBase) {
         BigDecimal discount;
         if (c.getType() != null && c.getType() == 2 && c.getDiscount() != null) {
-            discount = goodsTotal.multiply(BigDecimal.ONE.subtract(c.getDiscount()));
+            discount = applicableBase.multiply(BigDecimal.ONE.subtract(c.getDiscount()));
             if (c.getCapAmount() != null && discount.compareTo(c.getCapAmount()) > 0) {
                 discount = c.getCapAmount();
             }
         } else {
             discount = c.getAmount() == null ? BigDecimal.ZERO : c.getAmount();
         }
-        discount = discount.max(BigDecimal.ZERO).min(goodsTotal);
-        return discount.setScale(2, java.math.RoundingMode.HALF_UP);
+        discount = discount.max(BigDecimal.ZERO).min(applicableBase);
+        return discount.setScale(2, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * 确定某张券的适用基数：分类券为该分类商品小计，全场券为整单金额。
+     */
+    private BigDecimal resolveCouponBase(Coupon c, BigDecimal goodsTotal, Map<Long, BigDecimal> subTotalByType) {
+        if (c.getScope() != null && c.getScope() == 1 && c.getTypeId() != null) {
+            if (subTotalByType == null) {
+                return BigDecimal.ZERO;
+            }
+            return subTotalByType.getOrDefault(c.getTypeId(), BigDecimal.ZERO);
+        }
+        return goodsTotal == null ? BigDecimal.ZERO : goodsTotal;
     }
 
     /**
      * 下单成功后，将使用的优惠券置为已用并关联订单。
+     * 必须校验影响行数：若并发下该券已被核销，此处会静默更新 0 行而不报错，
+     * 导致同一张券被多笔订单同时使用。
      */
-    private void markCouponUsed(Long userCouponId, Long orderId, LocalDateTime now) {
-        userCouponMapper.update(null, new LambdaUpdateWrapper<UserCoupon>()
-                .eq(UserCoupon::getId, userCouponId)
+    /**
+     * 批量核销本单用到的优惠券：一条 {@code IN(...)} UPDATE 完成，避免 N 张券 N 次往返。
+     * <p>
+     * 仍然带 {@code status = 0} 的 CAS 条件并校验影响行数：并发下若某张券已被核销，
+     * 影响行数会小于券数，此时直接抛异常回滚，不会静默「一券多用」。
+     * </p>
+     */
+    private void markCouponsUsed(List<Long> userCouponIds, Long orderId, LocalDateTime now) {
+        if (userCouponIds == null || userCouponIds.isEmpty()) {
+            return;
+        }
+        int rows = userCouponMapper.update(null, new LambdaUpdateWrapper<UserCoupon>()
+                .in(UserCoupon::getId, userCouponIds)
                 .eq(UserCoupon::getStatus, 0)
                 .set(UserCoupon::getStatus, 1)
                 .set(UserCoupon::getUseTime, now)
                 .set(UserCoupon::getOrderId, orderId));
+        if (rows != userCouponIds.size()) {
+            throw new BusinessException("优惠券已被使用，请重新下单");
+        }
     }
 
     /**
@@ -302,14 +405,20 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     }
 
     /**
-     * 批量校验多张优惠券，并施加叠加规则：不可叠加券只能单独用一张；可叠加券可与其他可叠加券同用。
+     * 批量校验多张优惠券，并施加叠加规则：
+     * 不可叠加券只能单独用一张；可叠加券总张数受后台配置的「最大叠加张数」限制。
+     * <p>
+     * 注意：不对同一券模板去重——同一张券领取 N 份即对应 user_coupon 中 N 条独立记录，
+     * 本就应当可以分别使用；抵扣失控由「最大叠加张数」与「总抵扣上限比例」共同兜底。
+     * </p>
      */
     private List<Coupon> validateCoupons(Long userId, List<Long> userCouponIds, BigDecimal goodsTotal,
-                                         Set<Long> itemTypeIds, LocalDateTime now) {
+                                         Set<Long> itemTypeIds, Map<Long, BigDecimal> subTotalByType,
+                                         LocalDateTime now, int maxStackCount) {
         List<Coupon> coupons = new ArrayList<>();
         boolean hasExclusive = false;
         for (Long id : userCouponIds) {
-            Coupon c = validateCoupon(userId, id, goodsTotal, itemTypeIds, now);
+            Coupon c = validateCoupon(userId, id, goodsTotal, itemTypeIds, subTotalByType, now);
             boolean stackable = c.getStackable() != null && c.getStackable() == 1;
             if (!stackable) {
                 hasExclusive = true;
@@ -319,21 +428,52 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         if (coupons.size() > 1 && hasExclusive) {
             throw new BusinessException("不可叠加类优惠券不能与其他优惠券同时使用");
         }
+        if (coupons.size() > maxStackCount) {
+            throw new BusinessException("最多叠加使用 " + maxStackCount + " 张优惠券");
+        }
         return coupons;
     }
 
     /**
-     * 计算多张券的总抵扣：按顺序对剩余应付金额逐个抵扣（可叠加太简单稳步累加），总抵扣不超过商品总额。
+     * 计算多张券的总抵扣。
+     * <p>
+     * 每张券按各自的「适用基数」抵扣：分类券只抵扣该分类小计，全场券抵扣订单剩余金额。
+     * 逐券递减各自的剩余额度，保证多张分类券不会互相把对方的分类额度吃掉。
+     * 最终还受两道封顶：不超过商品总额；不超过后台配置的「总抵扣上限比例」
+     * （{@link ICouponRuleConfigService#getMaxDiscountRatio()}），避免多张券叠加把订单抵成 0 元。
+     * </p>
      */
-    private BigDecimal calcCouponsDiscount(List<Coupon> coupons, BigDecimal goodsTotal) {
-        BigDecimal payable = goodsTotal;
+    private BigDecimal calcCouponsDiscount(List<Coupon> coupons, BigDecimal goodsTotal,
+                                           Map<Long, BigDecimal> subTotalByType) {
+        // 各分类剩余可抵扣额度
+        Map<Long, BigDecimal> remainByType = subTotalByType == null
+                ? new HashMap<>() : new HashMap<>(subTotalByType);
+        BigDecimal remainTotal = goodsTotal;
         BigDecimal total = BigDecimal.ZERO;
         for (Coupon c : coupons) {
-            BigDecimal discount = calcCouponDiscount(c, payable);
+            boolean scoped = c.getScope() != null && c.getScope() == 1 && c.getTypeId() != null;
+            BigDecimal base = scoped
+                    ? remainByType.getOrDefault(c.getTypeId(), BigDecimal.ZERO)
+                    : remainTotal;
+            BigDecimal discount = calcCouponDiscount(c, base);
             total = total.add(discount);
-            payable = payable.subtract(discount).max(BigDecimal.ZERO);
+            if (scoped) {
+                remainByType.put(c.getTypeId(), base.subtract(discount).max(BigDecimal.ZERO));
+            }
+            remainTotal = remainTotal.subtract(discount).max(BigDecimal.ZERO);
         }
-        return total.max(BigDecimal.ZERO).min(goodsTotal).setScale(2, RoundingMode.HALF_UP);
+        total = total.max(BigDecimal.ZERO).min(goodsTotal);
+        // 总抵扣比例封顶：多张券叠加时，实付不低于「1 - 上限比例」
+        BigDecimal ratio = couponRuleConfigService.getMaxDiscountRatio();
+        if (ratio != null && ratio.compareTo(BigDecimal.ZERO) > 0) {
+            BigDecimal cap = goodsTotal.multiply(ratio).setScale(2, RoundingMode.HALF_UP);
+            if (total.compareTo(cap) > 0) {
+                log.info("优惠券叠加抵扣超出上限比例 {}，已封顶: 原抵扣={}, 封顶后={}",
+                        ratio, total, cap);
+                total = cap;
+            }
+        }
+        return total.setScale(2, RoundingMode.HALF_UP);
     }
 
     /**
@@ -449,52 +589,6 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         }
         update().set("user_deleted", 1).eq("id", id).update();
         log.info("用户删除订单: orderId={}, userId={}", id, userId);
-        return Result.ok();
-    }
-
-    /**
-     * 支付指定订单。
-     * 校验订单归属和状态后，使用 CAS 乐观锁（eq status）将待支付状态更新为已支付，
-     * 并记录支付时间。支付成功后异步发送邮件通知用户。
-     *
-     * @param id 订单 ID
-     * @return Result 支付成功返回 ok，失败返回错误提示；若订单已支付或已发货则幂等返回成功
-     */
-    @Override
-    @Transactional
-    public Result payOrderById(Long id) {
-        Order order = getById(id);
-        if (order == null) {
-            return Result.fail("订单不存在！");
-        }
-        Long userId = UserHolder.getUser().getId();
-        int status = order.getStatus();
-        if (!order.getUserId().equals(userId)) {
-            return Result.fail("无权支付该订单！");
-        }
-        if (status != PENDING_PAYMENT.getCode()) {
-            if (status == PAID.getCode() || status == SHIPPED.getCode()) {
-                return Result.ok();
-            }
-            return Result.fail("订单状态异常，请稍后重新支付或取消订单！");
-        }
-        boolean success = update()
-                .set("status", PAID.getCode())
-                .set("pay_time", LocalDateTime.now())
-                .eq("id", id)
-                .eq("status", PENDING_PAYMENT.getCode())
-                .update();
-        if (!success) {
-            Order updated = getById(id);
-            if (updated.getStatus() == PAID.getCode() || updated.getStatus() == SHIPPED.getCode()) {
-                return Result.ok();
-            }
-            return Result.fail("支付失败，请重试");
-        }
-        OrderEmailUtil.sendOrderStatus(emailService, userMapper, order, "订单支付成功",
-                "您的订单 #" + order.getId() + " 已支付成功，我们将尽快为您发货。",
-                "💳", null);
-        log.info("订单支付成功: orderId={}, userId={}", id, order.getUserId());
         return Result.ok();
     }
 
@@ -619,8 +713,8 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     }
 
     /**
-     * 恢复指定订单占用的库存：遍历订单明细恢复 SKU 库存和家具总库存，
-     * 并同步更新 Redis 缓存。供订单取消和退款审核通过复用。
+     * 恢复指定订单占用的库存：遍历订单明细恢复 SKU 库存和家具总库存。
+     * 库存落库后于事务提交时统一失效缓存，由读路径重建。供订单取消和退款审核通过复用。
      *
      * @param orderId 订单 ID
      * @throws BusinessException 当商品不存在或库存恢复失败时抛出
@@ -630,30 +724,39 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         LambdaQueryWrapper<OrderItem> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(OrderItem::getOrderId, orderId);
         List<OrderItem> items = orderItemService.list(wrapper);
+        Set<Long> touchedFurnitureIds = new HashSet<>();
+        // 先按 id 聚合数量（同一件商品可能在明细里出现多次），再用两条批量 SQL 一次回库，
+        // 替代原先「每件明细 1~2 条 UPDATE」的循环写法。
+        Map<Long, Integer> skuQty = new HashMap<>();
+        Map<Long, Integer> furnitureQty = new HashMap<>();
         for (OrderItem item : items) {
-            Long furnitureId = item.getFurnitureId();
-            Long skuId = item.getSkuId();
             int quantity = item.getQuantity();
-            if (quantity == 0) continue;
-            if (skuId != null) {
-                // SKU模式：恢复SKU库存 + 同步恢复furniture表总库存
-                // incrementStock 为自定义 SQL（无 deleted 过滤），软删除商品也能正常恢复
-                skuMapper.incrementStock(skuId, quantity);
-                furnitureMapper.incrementStock(furnitureId, quantity);
-            } else {
-                // 兼容旧模式
-                furnitureMapper.incrementStock(furnitureId, quantity);
+            if (quantity == 0 || item.getFurnitureId() == null) {
+                continue;
             }
-            // 刷新缓存：软删商品 selectById 返回 null，仅告警跳过，不影响库存恢复
-            try {
-                Furniture latestFurniture = furnitureMapper.selectById(furnitureId);
-                if (latestFurniture != null) {
-                    updateFurnitureCache(latestFurniture);
-                }
-            } catch (Exception e) {
-                log.warn("恢复库存后刷新家具缓存失败: furnitureId={}", furnitureId, e);
+            if (item.getSkuId() != null) {
+                skuQty.merge(item.getSkuId(), quantity, Integer::sum);
             }
+            furnitureQty.merge(item.getFurnitureId(), quantity, Integer::sum);
+            touchedFurnitureIds.add(item.getFurnitureId());
         }
+        if (!skuQty.isEmpty()) {
+            // 批量 SQL 同样无 deleted 过滤，软删除商品也能正常恢复
+            skuMapper.batchIncrementStock(toStockDeltas(skuQty));
+        }
+        if (!furnitureQty.isEmpty()) {
+            furnitureMapper.batchIncrementStock(toStockDeltas(furnitureQty));
+        }
+        evictFurnitureCacheAfterCommit(touchedFurnitureIds);
+    }
+
+    /**
+     * 把「id -> 增量」的聚合结果转成批量 UPDATE 的入参。
+     */
+    private List<StockDeltaDTO> toStockDeltas(Map<Long, Integer> qtyMap) {
+        List<StockDeltaDTO> list = new ArrayList<>(qtyMap.size());
+        qtyMap.forEach((id, qty) -> list.add(new StockDeltaDTO(id, qty)));
+        return list;
     }
 
     /**
@@ -712,6 +815,62 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     }
 
     /**
+     * 用户撤销退款申请，订单回退到申请退款前的状态。
+     * <p>
+     * 此前 {@code REFUND_APPLYING} 状态的唯一出口是管理员审核，用户误申请后
+     * 无法自行撤销，只能等管理员处理。
+     *
+     * @param orderId 订单ID
+     * @param userId  操作用户ID（用于归属校验）
+     * @return 操作结果
+     */
+    @Override
+    public Result cancelRefund(Long orderId, Long userId) {
+        Order order = getById(orderId);
+        if (order == null) {
+            return Result.fail("订单不存在！");
+        }
+        if (!order.getUserId().equals(userId)) {
+            return Result.fail("无权操作该订单！");
+        }
+        if (order.getStatus() != REFUND_APPLYING.getCode()) {
+            return Result.fail("当前订单状态不支持撤销退款申请");
+        }
+        // 回退目标必须是合法的非退款态；脏数据（NULL 或本身是退款态）兜底为已支付，
+        // 避免撤销后订单停留在一个非法状态上。
+        Integer prev = order.getRefundPrevStatus();
+        if (prev == null || !isValidRefundPrevStatus(prev)) {
+            log.warn("订单退款前状态异常，撤销时兜底为已支付: orderId={}, refundPrevStatus={}", orderId, prev);
+            prev = PAID.getCode();
+        }
+        boolean success = update()
+                .set("status", prev)
+                // 一并清空退款痕迹，避免下次申请时读到上一条申请的原因与时间
+                .set("refund_prev_status", null)
+                .set("refund_reason", null)
+                .set("refund_apply_time", null)
+                .eq("id", orderId)
+                .eq("status", REFUND_APPLYING.getCode())
+                .update();
+        if (!success) {
+            return Result.fail("撤销退款申请失败，请重试");
+        }
+        log.info("用户撤销退款申请: orderId={}, userId={}, 回退到状态={}", orderId, userId, prev);
+        return Result.ok();
+    }
+
+    /**
+     * 判断某个状态是否为「可回退的合法非退款态」。
+     * 退款态（6/7/8）与取消态（4）都不能作为撤销退款后的目标状态。
+     */
+    private boolean isValidRefundPrevStatus(int status) {
+        return status == PAID.getCode()
+                || status == SHIPPED.getCode()
+                || status == COMPLETED.getCode()
+                || status == REVIEWED.getCode();
+    }
+
+    /**
      * 确认收货。
      * 仅允许订单所属用户在已发货状态下操作，使用 CAS 乐观锁将状态更新为已完成，
      * 并记录收货时间。确认成功后累加对应商品的销量计数，并发送确认收货邮件通知。
@@ -747,6 +906,21 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
                 return Result.fail("订单已经取消，请重新下单！");
             }
         }
+        return doConfirmReceipt(order);
+    }
+
+    /**
+     * 确认收货的核心逻辑，不校验操作者身份。
+     * <p>
+     * 抽出该方法是为了让「自动确认收货」调度器复用同一套结算逻辑
+     * （状态 CAS、销量累加、缓存失效、邮件通知），避免调度器另写一份导致行为不一致。
+     * 对外接口 {@link #confirmReceipt(Long)} 负责先做归属与状态校验。
+     *
+     * @param order 已校验过归属与状态的订单
+     * @return 操作结果
+     */
+    private Result doConfirmReceipt(Order order) {
+        Long id = order.getId();
         boolean success = update()
                 .set("status", COMPLETED.getCode())
                 .set("receive_time", LocalDateTime.now())
@@ -760,43 +934,94 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
             }
             throw new BusinessException("确认收货失败，请稍后重试或联系平台客服！");
         }
+        Set<Long> saleTouchedIds = new HashSet<>();
         try {
             List<OrderItem> items = orderItemService.lambdaQuery()
                     .eq(OrderItem::getOrderId, id).list();
+            // 同 id 合并后一条批量 UPDATE，替代逐条累加（20 件明细 = 20 次往返）
+            Map<Long, Integer> saleQty = new HashMap<>();
             for (OrderItem item : items) {
                 if (item.getFurnitureId() != null && item.getQuantity() != 0) {
-                    furnitureMapper.incrementSaleCount(item.getFurnitureId(), item.getQuantity());
+                    saleQty.merge(item.getFurnitureId(), item.getQuantity(), Integer::sum);
+                    saleTouchedIds.add(item.getFurnitureId());
                 }
+            }
+            if (!saleQty.isEmpty()) {
+                furnitureMapper.batchIncrementSaleCount(toStockDeltas(saleQty));
             }
         } catch (Exception e) {
             log.error("更新销量失败, orderId={}", id, e);
         }
+        // 销量已变更，提交后失效缓存（销量不影响库存与价格，失败也不阻断主流程）
+        if (!saleTouchedIds.isEmpty()) {
+            evictFurnitureCacheAfterCommit(saleTouchedIds);
+        }
         OrderEmailUtil.sendOrderStatus(emailService, userMapper, order, "订单已收货",
                 "您的订单 #" + order.getId() + " 已确认收货，感谢您的购买！",
                 "✅", null);
-        log.info("订单确认收货: orderId={}, userId={}", id, userId);
+        log.info("订单确认收货: orderId={}, userId={}", id, order.getUserId());
         return Result.ok();
     }
 
     /**
-     * 更新 Redis 中的家具缓存。
-     * 仅当缓存已存在时才更新，避免写入无效缓存；缓存有效期为 1 小时。
-     * 更新失败仅记录日志，不影响主业务流程。
+     * 供调度器调用：自动确认收货（不校验操作者身份）。
+     * <p>
+     * 发货后若用户一直不点确认，订单会永久停留在「已发货」：不结算、不能评价、
+     * 售后窗口也无法关闭。这里由调度器在超过配置天数后代为确认。
      *
-     * @param furniture 家具对象，包含最新的库存、价格等信息
+     * @param orderId 订单ID
+     * @return 操作结果
      */
-    private void updateFurnitureCache(Furniture furniture) {
-        String key = CACHE_FURNITURE_KEY + furniture.getId();
-        String cached = stringRedisTemplate.opsForValue().get(key);
-        if (StrUtil.isNotBlank(cached)) {
-            try {
-                RedisData redisData = new RedisData();
-                redisData.setData(furniture);
-                redisData.setExpireTime(LocalDateTime.now().plusSeconds(3600));
-                stringRedisTemplate.opsForValue().set(key, JSONUtil.toJsonStr(redisData));
-            } catch (Exception e) {
-                log.error("更新家具缓存失败: furnitureId={}", furniture.getId(), e);
+    @Override
+    public Result autoConfirmReceipt(Long orderId) {
+        Order order = getById(orderId);
+        if (order == null) {
+            return Result.fail("订单不存在！");
+        }
+        if (order.getStatus() != SHIPPED.getCode()) {
+            // 状态已变更（用户已确认 / 已退款等），无需处理
+            return Result.fail("订单当前状态不是已发货，跳过自动确认收货，status=" + order.getStatus());
+        }
+        return doConfirmReceipt(order);
+    }
+
+    /**
+     * 在事务提交之后失效家具缓存（只删除，不回写）。
+     * <p>
+     * 为什么不在事务内写缓存：
+     * 事务内的库存/价格变更尚未提交，一旦后续校验失败回滚，数据库恢复原值，
+     * 而 Redis 中已被写入的值不会回滚，会留下脏数据；且早期实现遗漏了物理 TTL，
+     * 脏数据会永久驻留。这里改为仅删除，由读路径
+     * （互斥锁 + 双检 + 逻辑过期 + 物理 TTL）在下一次访问时按数据库最新值重建。
+     * </p>
+     * 若当前不存在事务（如单测或独立调用），则立即删除。
+     *
+     * @param furnitureIds 库存或信息发生变动的家具 ID
+     */
+    private void evictFurnitureCacheAfterCommit(Set<Long> furnitureIds) {
+        if (furnitureIds == null || furnitureIds.isEmpty()) {
+            return;
+        }
+        Set<Long> ids = new HashSet<>(furnitureIds);
+        Runnable evict = () -> {
+            for (Long id : ids) {
+                try {
+                    stringRedisTemplate.delete(CACHE_FURNITURE_KEY + id);
+                } catch (Exception e) {
+                    // 缓存失效失败不影响主流程，最多是下次读到旧值后由逻辑过期触发重建
+                    log.warn("提交后失效家具缓存失败: furnitureId={}", id, e);
+                }
             }
+        };
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    evict.run();
+                }
+            });
+        } else {
+            evict.run();
         }
     }
 

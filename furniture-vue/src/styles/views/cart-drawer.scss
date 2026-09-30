@@ -3,7 +3,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #5a6a7a;
+  color: var(--color-accent);
 }
 
 /* ===== 领券通栏入口 ===== */
@@ -61,7 +61,7 @@
 
     .label {
       font-size: var(--text-sm, 14px);
-      color: var(--color-text-secondary, #666);
+      color: var(--color-text-secondary, var(--color-text-secondary));
       margin-right: auto;
     }
 
@@ -82,7 +82,7 @@
         color: var(--color-danger, #c5554a);
       }
       .arrow {
-        color: var(--color-text-tertiary, #999);
+        color: var(--color-text-tertiary, var(--color-text-tertiary));
       }
     }
   }
@@ -120,7 +120,7 @@
         }
         .opt-threshold {
           font-size: 12px;
-          color: var(--color-text-tertiary, #999);
+          color: var(--color-text-tertiary, var(--color-text-tertiary));
         }
       }
 
@@ -134,7 +134,7 @@
     .coupon-none {
       padding: 14px;
       text-align: center;
-      color: var(--color-text-tertiary, #999);
+      color: var(--color-text-tertiary, var(--color-text-tertiary));
       font-size: var(--text-sm, 14px);
     }
   }
@@ -143,13 +143,13 @@
 /* ===== 收货地址 ===== */
 .address-section {
   padding: 12px 20px;
-  border-top: 1px solid #f0f0f0;
-  background: #fafbfc;
+  border-top: 1px solid var(--color-border-light);
+  background: var(--color-bg);
 }
 
 .og-price {
   text-decoration: line-through;
-  color: var(--color-text-tertiary, #999);
+  color: var(--color-text-tertiary, var(--color-text-tertiary));
   font-size: 13px;
   margin-right: 4px;
 }
@@ -161,13 +161,13 @@
 .address-label {
   font-size: 13px;
   font-weight: 600;
-  color: #333;
+  color: #3d3d3d;
 }
 
 .address-card {
   padding: 10px 12px;
   background: #fff;
-  border: 1px solid #e8e8e8;
+  border: 1px solid var(--color-border);
   border-radius: 8px;
   cursor: pointer;
   position: relative;
@@ -175,7 +175,7 @@
 }
 
 .address-card:hover {
-  border-color: #c0c4cc;
+  border-color: var(--color-border);
 }
 
 .addr-contact {
@@ -188,12 +188,12 @@
 .addr-name {
   font-size: 14px;
   font-weight: 600;
-  color: #333;
+  color: #3d3d3d;
 }
 
 .addr-phone {
   font-size: 13px;
-  color: #666;
+  color: var(--color-text-secondary);
 }
 
 .addr-detail {
@@ -212,7 +212,7 @@
 
 .change-link {
   font-size: 12px;
-  color: #409eff;
+  color: var(--color-accent);
   cursor: pointer;
 }
 
@@ -229,19 +229,19 @@
 .picker-item {
   padding: 8px 12px;
   background: #fff;
-  border: 1px solid #e8e8e8;
+  border: 1px solid var(--color-border);
   border-radius: 6px;
   cursor: pointer;
   transition: border-color 0.2s;
 }
 
 .picker-item:hover {
-  border-color: #409eff;
+  border-color: var(--color-accent);
 }
 
 .picker-item.active {
-  border-color: #409eff;
-  background: #ecf5ff;
+  border-color: var(--color-accent);
+  background: var(--color-accent-subtle);
 }
 
 .picker-contact {
@@ -249,11 +249,11 @@
   align-items: center;
   gap: 8px;
   font-size: 13px;
-  color: #333;
+  color: #3d3d3d;
 }
 
 .picker-phone {
-  color: #666;
+  color: var(--color-text-secondary);
   font-size: 12px;
 }
 
@@ -284,7 +284,7 @@
 .add-new-link {
   margin-top: 8px;
   font-size: 12px;
-  color: #409eff;
+  color: var(--color-accent);
   cursor: pointer;
   text-align: center;
 }

@@ -68,6 +68,7 @@
                 <span class="checkmark"></span>
               </label>
               <img
+                loading="lazy"
                 :src="imgUrl(item.fIcon, '/images/default-furniture.png')"
                 class="item-img"
                 @click="goDetail(item.id)"
@@ -133,46 +134,25 @@
 
             <!-- 优惠券 -->
             <div class="cart-coupon">
-              <button class="coupon-picker" @click="toggleCouponPanel">
-                <span v-if="selectedCoupons.length">
+              <button class="coupon-picker" @click="openCouponDialog">
+                <span v-if="selectedCouponIds.length">
                   {{ couponText }}
                   <em class="picker-save">-{{ formatPrice(discountEstimate) }}</em>
                 </span>
-                <span v-else>{{ availableCoupons.length ? "选择优惠券" : "暂无可用优惠券" }}</span>
-                <span class="arrow">▾</span>
+                <span v-else>选择优惠券</span>
+                <span class="arrow">›</span>
               </button>
-              <div v-if="showCouponPanel" class="coupon-panel">
-                <div
-                  class="coupon-opt"
-                  :class="{ on: !selectedCoupons.length }"
-                  @click="selectCoupon(null)"
-                >
-                  不使用优惠券
-                </div>
-                <div
-                  v-for="c in availableCoupons"
-                  :key="c.userCouponId"
-                  class="coupon-opt"
-                  :class="{ on: isCouponOn(c) }"
-                  @click="selectCoupon(c)"
-                >
-                  <div class="opt-info">
-                    <b>{{ c.amountText }}</b>
-                    <span>{{ c.name }}</span>
-                    <span v-if="Number(c.minThreshold) > 0" class="opt-threshold"
-                      >满{{ c.minThreshold }}可用</span
-                    >
-                    <span v-if="isStackable(c)" class="opt-stackable">可叠加</span>
-                    <span v-else class="opt-exclusive">不可叠加</span>
-                  </div>
-                  <span v-if="isCouponOn(c)" class="opt-check">✓</span>
-                  <div class="opt-discount">-{{ formatPrice(estimateCoupon(c)) }}</div>
-                </div>
-                <div v-if="!availableCoupons.length" class="coupon-none">
-                  当前选购商品暂无可用优惠券
-                </div>
-              </div>
             </div>
+
+            <CouponPickerDialog
+              v-model="showCouponDialog"
+              v-model:selected-ids="selectedCouponIds"
+              :coupons="cartCoupons"
+              :total-amount="selectedTotalNum"
+              :sub-totals="couponSubTotals.map"
+              :sub-totals-unknown="couponSubTotals.unknown"
+              :rules="couponRules"
+            />
 
             <div class="summary-row total">
               <span>合计</span>
@@ -228,10 +208,12 @@ import { useRouter } from "vue-router";
 import { useCartStore } from "@/stores/cart.js";
 import { getAddressList } from "@/api/address.js";
 import { getFurnitureByTypeId } from "@/api/furniture.js";
-import { getMyCoupons } from "@/api/coupon.js";
+import { getCouponRules, getMyCoupons } from "@/api/coupon.js";
+import CouponPickerDialog from "@/components/coupon/CouponPickerDialog.vue";
 import { createOrder } from "@/api/order.js";
 import { imgUrl } from "@/utils/img.js";
 import { formatPrice } from "@/utils/format.js";
+import { buildSubTotals, calcTotalDiscount } from "@/utils/coupon.js";
 import { ElMessage } from "element-plus";
 import { logger } from "@/utils/logger.js";
 import ProductCard from "@/components/product/ProductCard.vue";
@@ -247,10 +229,12 @@ const defaultAddress = ref(null);
 const recentProducts = ref([]);
 const checkoutLoading = ref(false);
 
-// ========== 优惠券（支持多选叠加） ==========
+// ========== 优惠券（弹窗多选，支持叠加） ==========
 const cartCoupons = ref([]);
-const selectedCoupons = ref([]);
-const showCouponPanel = ref(false);
+/** 已选中的 userCouponId 数组 */
+const selectedCouponIds = ref([]);
+const showCouponDialog = ref(false);
+const couponRules = ref({});
 
 const selectedTotalNum = computed(
   () =>
@@ -259,82 +243,66 @@ const selectedTotalNum = computed(
       .reduce((s, i) => s + Number(i.price) * i.quantity, 0) || 0,
 );
 
-const availableCoupons = computed(() =>
-  cartCoupons.value.filter((c) => {
-    if (c.status !== 0) return false;
-    if (c.expireTime) {
-      const t = Array.isArray(c.expireTime)
-        ? new Date(c.expireTime[0], c.expireTime[1] - 1, c.expireTime[2])
-        : new Date(c.expireTime);
-      if (t.getTime() < Date.now()) return false;
-    }
-    if (Number(c.minThreshold) > selectedTotalNum.value) return false;
-    return true;
-  }),
+/** 已选券对象（按当前券列表还原） */
+const selectedCoupons = computed(() =>
+  selectedCouponIds.value
+    .map((id) => cartCoupons.value.find((c) => c.userCouponId === id))
+    .filter(Boolean),
 );
 
-const isStackable = (c) => c && Number(c.stackable) === 1;
-const isCouponOn = (c) =>
-  selectedCoupons.value.some((s) => s.userCouponId === c.userCouponId);
-
-const estimateCoupon = (c, total = selectedTotalNum.value) => {
-  let d = 0;
-  if (c.type === 2 && c.discount) d = total * (1 - Number(c.discount));
-  else if (c.amount) d = Number(c.amount);
-  if (c.capAmount && d > Number(c.capAmount)) d = Number(c.capAmount);
-  d = Math.min(d, total);
-  return Math.max(0, Math.round(d * 100) / 100);
-};
-
-// 多张券总优惠：按剩余应付金额依次抵扣（与后端一致）
-const discountEstimate = computed(() => {
-  let payable = selectedTotalNum.value;
-  let total = 0;
-  for (const c of selectedCoupons.value) {
-    const d = estimateCoupon(c, payable);
-    total += d;
-    payable = Math.max(0, payable - d);
-  }
-  return Math.round(Math.min(total, selectedTotalNum.value) * 100) / 100;
-});
-
-const couponText = computed(() => {
-  if (!selectedCoupons.value.length) return "选择优惠券";
-  if (selectedCoupons.value.length === 1) return selectedCoupons.value[0].name;
-  return `已选 ${selectedCoupons.value.length} 张券`;
-});
+/**
+ * 选中商品的分类小计，供分类券核算门槛与抵扣上限。
+ * 购物车为本地存储，历史数据可能缺 typeId，此时 unknown=true，
+ * 分类券基数回退为整单金额，避免被误判为不可用。
+ */
+const couponSubTotals = computed(() =>
+  buildSubTotals(
+    cartStore.items.filter((i) => selectedIds.value.includes(i.cartItemId)),
+  ),
+);
 
 const loadCoupons = async () => {
   if (!localStorage.getItem("token")) return;
   const res = await getMyCoupons();
-  cartCoupons.value = (res.success || res.code === 200) ? res.data || [] : [];
+  cartCoupons.value = res.success || res.code === 200 ? res.data || [] : [];
+  // 券列表刷新后，剔除已失效/不再存在的选中项
+  const valid = new Set(cartCoupons.value.map((c) => c.userCouponId));
+  selectedCouponIds.value = selectedCouponIds.value.filter((id) => valid.has(id));
 };
 
-const toggleCouponPanel = () => {
-  showCouponPanel.value = !showCouponPanel.value;
-};
-const selectCoupon = (c) => {
-  if (!c) {
-    selectedCoupons.value = [];
-    showCouponPanel.value = false;
-    return;
+const loadCouponRules = async () => {
+  try {
+    const res = await getCouponRules();
+    couponRules.value = res?.data || {};
+  } catch (e) {
+    logger.warn("加载优惠券叠加规则失败，使用默认规则:", e);
+    couponRules.value = {};
   }
-  if (isStackable(c)) {
-    // 可叠加券：先剔除已选中的不可叠加券（二者不能共存）
-    selectedCoupons.value = selectedCoupons.value.filter((s) => isStackable(s));
-    if (isCouponOn(c)) {
-      selectedCoupons.value = selectedCoupons.value.filter(
-        (s) => s.userCouponId !== c.userCouponId,
-      );
-    } else {
-      selectedCoupons.value.push(c);
-    }
-  } else {
-    // 不可叠加券：只能单独用一张，清空其它
-    selectedCoupons.value = isCouponOn(c) ? [] : [c];
-  }
-  showCouponPanel.value = false;
 };
+
+const openCouponDialog = () => {
+  showCouponDialog.value = true;
+};
+
+// 券组合变化后重新估算抵扣（复用与弹窗、后端一致的算法）
+const discountEstimate = computed(() => {
+  const ratio = Number(couponRules.value?.maxDiscountRatio);
+  const cap = Number.isFinite(ratio) && ratio > 0 && ratio <= 1 ? ratio : 0.8;
+  return calcTotalDiscount(
+    selectedCoupons.value,
+    selectedTotalNum.value,
+    couponSubTotals.value.map,
+    cap,
+    couponSubTotals.value.unknown,
+  );
+});
+
+const couponText = computed(() => {
+  const n = selectedCouponIds.value.length;
+  if (!n) return "选择优惠券";
+  if (n === 1 && selectedCoupons.value[0]) return selectedCoupons.value[0].name;
+  return `已选 ${n} 张券`;
+});
 
 const allSelected = computed({
   get: () =>
@@ -384,10 +352,7 @@ const goCheckout = async () => {
       phone: defaultAddress.value.phone,
       address: defaultAddress.value.address,
       remark: "",
-      userCouponIds:
-        selectedCoupons.value.length
-          ? selectedCoupons.value.map((c) => c.userCouponId)
-          : undefined,
+      userCouponIds: selectedCouponIds.value.length ? [...selectedCouponIds.value] : undefined,
       itemList: cartStore.getCartData([...selectedIds.value]),
     };
     const res = await createOrder(orderData);
@@ -426,6 +391,7 @@ onMounted(async () => {
       /* ignore */
     }
     loadCoupons();
+    loadCouponRules();
   }
 
   // Recent products

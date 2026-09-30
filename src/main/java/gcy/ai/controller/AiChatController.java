@@ -1,6 +1,9 @@
 package gcy.ai.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import dev.langchain4j.data.message.ChatMessage;
+import dev.langchain4j.data.message.UserMessage;
+import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -28,6 +31,7 @@ import reactor.core.publisher.Flux;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 import static gcy.system.utils.RedisConstants.AI_CHAT_MEMORY_KEY;
@@ -54,6 +58,11 @@ public class AiChatController {
     private final FavoriteMapper favoriteMapper;
 
     private final FurnitureMapper furnitureMapper;
+
+    /**
+     * 会话记忆存储，用于流式聊天失败重试前回滚已写入的用户消息。
+     */
+    private final ChatMemoryStore chatMemoryStore;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -92,13 +101,25 @@ public class AiChatController {
                 : Flux.empty();
         String userContext = buildUserContext(userId);
         String enhancedMessage = userContext.isEmpty() ? message : userContext + "\n\n用户消息：" + message;
+        // 记录本次是否已经向客户端吐出过内容。中途失败时重发会造成内容重复、
+        // token 翻倍、工具被重复执行，因此只在「尚未输出任何内容」的连接建立阶段才重试。
+        AtomicBoolean emitted = new AtomicBoolean(false);
         Flux<String> chatStream = furnitureAiService.streamChat(memoryId, enhancedMessage)
-                .map(this::contentJson)
+                .map(s -> {
+                    emitted.set(true);
+                    return contentJson(s);
+                })
                 .concatWith(Flux.just("[DONE]"))
                 .onErrorResume(e -> {
-                    // 首次失败多为冷启动（模型唤醒/连接重建），第一次请求已触发唤醒，
-                    // 立即自动重试一次大概率成功，用户无感知，无需用户手动"再问一次"
-                    log.error("AI聊天流式调用失败，触发自动重试（冷启动唤醒）: {}", e.getMessage(), e);
+                    if (emitted.get()) {
+                        log.error("AI聊天流式中途失败，已输出内容，不再重试以免重复: {}", e.getMessage());
+                        return Flux.just(errorJson("AI客服响应中断，请稍后再试"));
+                    }
+                    // 首次失败多为冷启动（模型唤醒/连接重建），此时尚未输出任何内容，
+                    // 重试一次用户无感知。但必须先回滚本轮已写入记忆的用户消息，
+                    // 否则同一条消息会在记忆里出现两次，污染后续多轮对话上下文。
+                    log.error("AI聊天连接阶段失败，回滚记忆后重试一次（冷启动唤醒）: {}", e.getMessage(), e);
+                    rollbackLastUserMessage(memoryId);
                     return furnitureAiService.streamChat(memoryId, enhancedMessage)
                             .map(this::contentJson)
                             .concatWith(Flux.just("[DONE]"))
@@ -109,6 +130,32 @@ public class AiChatController {
                 });
 
         return Flux.concat(metaEvent, chatStream);
+    }
+
+    /**
+     * 回滚最后一条用户消息，供流式聊天失败重试前调用。
+     * <p>
+     * 流式调用在进入时就把用户消息写进了会话记忆，直接重发会让同一条消息
+     * 在记忆里堆叠两次：token 翻倍，且后续多轮对话上下文被污染。
+     *
+     * @param memoryId 会话记忆ID
+     */
+    private void rollbackLastUserMessage(String memoryId) {
+        try {
+            List<ChatMessage> messages = chatMemoryStore.getMessages(memoryId);
+            if (messages == null || messages.isEmpty()) {
+                return;
+            }
+            int last = messages.size() - 1;
+            if (messages.get(last) instanceof UserMessage) {
+                messages.remove(last);
+                chatMemoryStore.updateMessages(memoryId, messages);
+                log.info("已回滚会话记忆中的最后一条用户消息: memoryId={}", memoryId);
+            }
+        } catch (Exception e) {
+            // 回滚失败不应阻断重试，记录日志即可
+            log.warn("回滚最后一条用户消息失败: memoryId={}", memoryId, e);
+        }
     }
 
     /**

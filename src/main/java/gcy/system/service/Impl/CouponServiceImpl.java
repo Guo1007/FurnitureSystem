@@ -1,6 +1,7 @@
 package gcy.system.service.Impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import gcy.system.entity.dto.Result;
 import gcy.system.entity.pojo.Coupon;
@@ -24,9 +25,12 @@ import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import static gcy.system.utils.RedisConstants.COUPON_COUNT_KEY;
@@ -99,16 +103,21 @@ public class CouponServiceImpl implements ICouponService {
                 .stream()
                 .collect(Collectors.groupingBy(UserCoupon::getCouponId, Collectors.counting()));
 
+        // 全局已领数量：一次 multiGet + 一次 GROUP BY 回源，替代此前每券 2~3 次 Redis GET
+        // （30 张券原本要 60~90 次往返，Redis 被清空时更退化成 30 次 COUNT(*)）
+        Map<Long, Long> claimed = batchClaimedCount(coupons);
+
         List<CouponItemVO> result = coupons.stream()
-                .map(c -> toClaimableVO(c, userClaimed.getOrDefault(c.getId(), 0L), regDays))
+                .map(c -> toClaimableVO(c, userClaimed.getOrDefault(c.getId(), 0L), regDays,
+                        claimed.getOrDefault(c.getId(), 0L)))
                 .filter(Objects::nonNull) // 过滤掉不满足人群的券
                 .collect(Collectors.toList());
 
         return Result.ok(result);
     }
 
-    private CouponItemVO toClaimableVO(Coupon c, Long userClaimedCount, int regDays) {
-        int state = resolveState(c, userClaimedCount, regDays, getClaimedCount(c.getId()));
+    private CouponItemVO toClaimableVO(Coupon c, Long userClaimedCount, int regDays, long claimedCount) {
+        int state = resolveState(c, userClaimedCount, regDays, claimedCount);
         if (state == 4) {
             return null; // 不满足人群，隐藏
         }
@@ -122,7 +131,7 @@ public class CouponServiceImpl implements ICouponService {
         vo.setScopeText(scopeText(c));
         vo.setValidText(validText(c));
         vo.setPerUserLimit(c.getPerUserLimit());
-        vo.setClaimedCount((int) getClaimedCount(c.getId()));
+        vo.setClaimedCount((int) claimedCount);
         vo.setState(state);
         vo.setStateText(stateText(state, c));
         return vo;
@@ -135,7 +144,11 @@ public class CouponServiceImpl implements ICouponService {
         if (!matchTarget(c, regDays)) {
             return 4;
         }
-        if (c.getTotalCount() != null && claimedCount >= c.getTotalCount()) {
+        // totalCount <= 0 视为「不限量」，与领取 Lua 脚本的 total > 0 判定保持一致。
+        // 此前这里写成 claimedCount >= totalCount，totalCount=0 时会误判为「已领完」，
+        // 与 Lua 侧「不限量可继续领」的语义自相矛盾。
+        long totalCount = c.getTotalCount() == null ? 0L : c.getTotalCount().longValue();
+        if (totalCount > 0 && claimedCount >= totalCount) {
             return 2; // 已领完
         }
         if (userClaimedCount >= c.getPerUserLimit()) {
@@ -181,14 +194,23 @@ public class CouponServiceImpl implements ICouponService {
                 .collect(Collectors.toMap(Coupon::getId, c -> c));
 
         LocalDateTime now = LocalDateTime.now();
+        // 过期纠正：先收集 id，一条 IN(...) 批量 UPDATE，避免读接口里逐条写库
+        // （原实现在 stream 内对每张过期券发一条 UPDATE，N 张过期券 = N 次往返，且方法无事务）
+        Set<Long> expiredIds = list.stream()
+                .filter(uc -> uc.getStatus() == 0 && uc.getExpireTime() != null && uc.getExpireTime().isBefore(now))
+                .map(UserCoupon::getId)
+                .collect(Collectors.toSet());
+        if (!expiredIds.isEmpty()) {
+            userCouponMapper.update(null, new LambdaUpdateWrapper<UserCoupon>()
+                    .in(UserCoupon::getId, expiredIds)
+                    .set(UserCoupon::getStatus, 2));
+        }
+
         List<UserCouponVO> vos = list.stream()
                 .map(uc -> {
-                    // 未用但已过期的实时纠正
-                    if (uc.getStatus() == 0 && uc.getExpireTime() != null && uc.getExpireTime().isBefore(now)) {
+                    // 同步内存状态，保证本次返回给前端的就是纠正后的状态
+                    if (expiredIds.contains(uc.getId())) {
                         uc.setStatus(2);
-                        userCouponMapper.update(null, new LambdaUpdateWrapper<UserCoupon>()
-                                .eq(UserCoupon::getId, uc.getId())
-                                .set(UserCoupon::getStatus, 2));
                     }
                     Coupon c = couponMap.get(uc.getCouponId());
                     UserCouponVO vo = new UserCouponVO();
@@ -198,6 +220,8 @@ public class CouponServiceImpl implements ICouponService {
                     vo.setType(c != null ? c.getType() : null);
                     vo.setAmountText(c != null ? amountText(c) : "");
                     vo.setScopeText(c != null ? scopeText(c) : "全场");
+                    vo.setScope(c != null ? c.getScope() : 0);
+                    vo.setTypeId(c != null ? c.getTypeId() : null);
                     vo.setMinThreshold(c != null ? c.getMinThreshold() : BigDecimal.ZERO);
                     vo.setAmount(c != null ? c.getAmount() : null);
                     vo.setDiscount(c != null ? c.getDiscount() : null);
@@ -248,6 +272,14 @@ public class CouponServiceImpl implements ICouponService {
                     .eq(UserCoupon::getCouponId, couponId));
             stringRedisTemplate.opsForValue().setIfAbsent(countKey, String.valueOf(dbCount));
         }
+        // 用户限领计数同样需要回种：只回种 countKey 的话，Redis 重启后
+        // 每人限领计数从 0 重新开始，「每人限领 N 张」会退化成无限领。
+        if (stringRedisTemplate.opsForValue().get(userKey) == null) {
+            long dbUserCount = userCouponMapper.selectCount(new LambdaQueryWrapper<UserCoupon>()
+                    .eq(UserCoupon::getCouponId, couponId)
+                    .eq(UserCoupon::getUserId, userId));
+            stringRedisTemplate.opsForValue().setIfAbsent(userKey, String.valueOf(dbUserCount));
+        }
         Long total = c.getTotalCount() == null ? 0L : c.getTotalCount().longValue();
         Long limit = c.getPerUserLimit() == null ? 1L : c.getPerUserLimit().longValue();
         Long res = stringRedisTemplate.execute(CLAIM_SCRIPT, List.of(countKey, userKey),
@@ -294,6 +326,75 @@ public class CouponServiceImpl implements ICouponService {
                 .eq(UserCoupon::getCouponId, couponId));
         stringRedisTemplate.opsForValue().setIfAbsent(COUPON_COUNT_KEY + couponId, String.valueOf(count));
         return count;
+    }
+
+    /**
+     * 批量取「各券已领数量」：一次 Redis multiGet 拿齐，缺失的用一条 GROUP BY 回源后回种。
+     * <p>
+     * 替代此前每券单独 GET（列表页每张券还要调 2~3 次），30 张券从 60~90 次往返降到 1~2 次。
+     * </p>
+     */
+    private Map<Long, Long> batchClaimedCount(List<Coupon> coupons) {
+        Map<Long, Long> result = new HashMap<>();
+        if (coupons == null || coupons.isEmpty()) {
+            return result;
+        }
+        List<Long> ids = coupons.stream().map(Coupon::getId).distinct().collect(Collectors.toList());
+        List<String> keys = ids.stream().map(id -> COUPON_COUNT_KEY + id).collect(Collectors.toList());
+
+        List<String> values = null;
+        try {
+            values = stringRedisTemplate.opsForValue().multiGet(keys);
+        } catch (Exception e) {
+            log.warn("优惠券已领计数批量读取失败，回退逐条读取: {}", e.getMessage());
+        }
+
+        List<Long> missed = new ArrayList<>();
+        for (int i = 0; i < ids.size(); i++) {
+            String v = values == null ? null : values.get(i);
+            if (v != null) {
+                try {
+                    result.put(ids.get(i), Long.parseLong(v));
+                    continue;
+                } catch (NumberFormatException ignore) {
+                    // 脏值当缺失处理
+                }
+            }
+            missed.add(ids.get(i));
+        }
+        if (missed.isEmpty()) {
+            return result;
+        }
+
+        // 单次 GROUP BY 回源，替代 N 次 COUNT(*)
+        Map<Long, Long> fromDb = new HashMap<>();
+        try {
+            QueryWrapper<UserCoupon> qw = new QueryWrapper<UserCoupon>()
+                    .select("coupon_id", "COUNT(*) AS cnt")
+                    .in("coupon_id", missed)
+                    .groupBy("coupon_id");
+            for (Map<String, Object> row : userCouponMapper.selectMaps(qw)) {
+                Object cid = row.get("coupon_id");
+                Object cnt = row.get("cnt");
+                if (cid instanceof Number && cnt instanceof Number) {
+                    fromDb.put(((Number) cid).longValue(), ((Number) cnt).longValue());
+                }
+            }
+        } catch (Exception e) {
+            log.warn("优惠券已领计数批量回源失败: {}", e.getMessage());
+        }
+
+        for (Long id : missed) {
+            long count = fromDb.getOrDefault(id, 0L);
+            result.put(id, count);
+            // 回种（只在缺失时写），与 getClaimedCount 单条路径语义一致
+            try {
+                stringRedisTemplate.opsForValue().setIfAbsent(COUPON_COUNT_KEY + id, String.valueOf(count));
+            } catch (Exception e) {
+                log.warn("优惠券已领计数回种失败: couponId={}, {}", id, e.getMessage());
+            }
+        }
+        return result;
     }
 
     private int regDaysOf(Long userId) {

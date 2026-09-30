@@ -25,6 +25,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.math.BigDecimal;
 
@@ -170,10 +172,44 @@ public class FurnitureManageServiceImpl extends ServiceImpl<FurnitureMapper, Fur
         }
         boolean success = furnitureMapper.update(null, wrapper) > 0;
         if (success) {
-            stringRedisTemplate.delete(RedisConstants.CACHE_FURNITURE_KEY + dto.getId());
+            evictFurnitureCacheAfterCommit(dto.getId());
             return Result.okMsg("修改成功");
         } else {
             throw new BusinessException("修改失败，请系统联系管理人员！");
+        }
+    }
+
+    /**
+     * 事务提交之后再失效家具详情缓存。
+     * <p>
+     * 若在事务提交前删除缓存，并发的用户请求会在缓存未命中时读到「尚未提交」的旧值并回写缓存，
+     * 事务提交后缓存中便长期保留旧价格/旧库存（本项目的读缓存会由逻辑过期+物理 TTL 兜底，
+     * 但回种的旧值仍会持续误导用户）。因此删除动作必须排在提交之后。
+     * </p>
+     *
+     * @param furnitureId 家具 ID
+     */
+    private void evictFurnitureCacheAfterCommit(Long furnitureId) {
+        if (furnitureId == null) {
+            return;
+        }
+        String key = RedisConstants.CACHE_FURNITURE_KEY + furnitureId;
+        Runnable evict = () -> {
+            try {
+                stringRedisTemplate.delete(key);
+            } catch (Exception e) {
+                log.warn("提交后失效家具缓存失败: furnitureId={}", furnitureId, e);
+            }
+        };
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    evict.run();
+                }
+            });
+        } else {
+            evict.run();
         }
     }
 
@@ -201,7 +237,7 @@ public class FurnitureManageServiceImpl extends ServiceImpl<FurnitureMapper, Fur
                     new LambdaUpdateWrapper<Notification>()
                             .set(Notification::getGoodsId, null)
                             .eq(Notification::getGoodsId, furnitureId));
-            stringRedisTemplate.delete(RedisConstants.CACHE_FURNITURE_KEY + furnitureId);
+            evictFurnitureCacheAfterCommit(furnitureId);
             log.info("管理员删除家具: furnitureId={}", furnitureId);
             return Result.ok();
         }

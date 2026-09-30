@@ -11,3 +11,6 @@ export const getMyCoupons = (status) =>
 /** 领取优惠券 */
 export const claimCoupon = (couponId) =>
   request.post(`/user/coupons/${couponId}/claim`);
+
+/** 优惠券叠加规则（最大叠加张数 / 总抵扣上限比例），选券弹窗用 */
+export const getCouponRules = () => request.get("/user/coupons/rules");

@@ -1,6 +1,7 @@
 package gcy.system.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import gcy.system.entity.dto.StockDeltaDTO;
 import gcy.system.entity.pojo.Furniture;
 import gcy.system.entity.vo.LowStockVO;
 import org.apache.ibatis.annotations.Mapper;
@@ -76,6 +77,31 @@ public interface FurnitureMapper extends BaseMapper<Furniture> {
      */
     @Update("UPDATE furniture SET sale_count = sale_count + #{quantity} WHERE id = #{id}")
     void incrementSaleCount(@Param("id") Long id, @Param("quantity") int quantity);
+
+    /**
+     * 批量增加家具库存：一条 SQL 用 {@code CASE id WHEN ... THEN ...} 完成多行不同增量的更新。
+     * <p>
+     * 用于订单取消 / 退款的库存恢复，替代循环内逐条 {@code UPDATE}（20 件明细 = 20 次往返）。
+     * 与 {@link #incrementStock(Long, int)} 一样不带 deleted 过滤，软删除商品也能正常回库。
+     * </p>
+     *
+     * @param list 变更项（id + 增量）
+     */
+    @Update("<script>UPDATE furniture SET stock = stock + CASE id " +
+            "<foreach collection='list' item='i'>WHEN #{i.id} THEN #{i.quantity} </foreach>" +
+            "END WHERE id IN " +
+            "<foreach collection='list' item='i' open='(' separator=',' close=')'>#{i.id}</foreach></script>")
+    void batchIncrementStock(@Param("list") List<StockDeltaDTO> list);
+
+    /**
+     * 批量累加销量，语义同 {@link #batchIncrementStock(java.util.List)}，作用于 sale_count。
+     * quantity 传负数即为对称扣回（退款场景）。
+     */
+    @Update("<script>UPDATE furniture SET sale_count = sale_count + CASE id " +
+            "<foreach collection='list' item='i'>WHEN #{i.id} THEN #{i.quantity} </foreach>" +
+            "END WHERE id IN " +
+            "<foreach collection='list' item='i' open='(' separator=',' close=')'>#{i.id}</foreach></script>")
+    void batchIncrementSaleCount(@Param("list") List<StockDeltaDTO> list);
 
     /**
      * 查询库存低于 10 且未删除的家具列表，按库存升序排列。

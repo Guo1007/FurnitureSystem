@@ -28,6 +28,7 @@
             @click="goDetail(item)"
           >
             <img
+              loading="lazy"
               :src="imgUrl(item.fIcon, '/images/default-furniture.png')"
               class="fav-img"
               @error="handleImgError"

@@ -1,11 +1,11 @@
 // SpecManageDialog.vue 样式
 .spec-empty-tip {
-  color: var(--color-text-tertiary, #999);
+  color: var(--color-text-tertiary, var(--color-text-tertiary));
   padding: 20px 0;
   text-align: center;
 }
 .spec-group-card {
-  border: 1px solid var(--border-color, #e4e7ed);
+  border: 1px solid var(--border-color, #e8e4df);
   border-radius: 6px;
   padding: 12px;
   margin-bottom: 12px;
@@ -47,12 +47,12 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px dashed var(--border-color, #dcdfe6);
+  border: 1px dashed var(--border-color, #e8e4df);
   border-radius: 4px;
   color: #8c939d;
 }
 .sku-summary {
   margin-top: 10px;
-  color: var(--color-text-secondary, #606266);
+  color: var(--color-text-secondary, #6b6b6b);
   font-size: 13px;
 }

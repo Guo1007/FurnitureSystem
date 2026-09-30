@@ -99,6 +99,24 @@ public class TokenAuthFilter extends OncePerRequestFilter {
             // 从 userMap 里拿 userId
             Object userIdObj = userMap.get("id");
 
+            // 【绝对过期】滑动续期没有上限的话，一根泄露的 token 可持续存活。
+            // 这里以「首次登录时刻」起算，超过绝对上限即强制失效且不再续期。
+            Object loginTimeObj = userMap.get(RedisConstants.LOGIN_TIME_FIELD);
+            if (loginTimeObj != null) {
+                try {
+                    long loginTime = Long.parseLong(loginTimeObj.toString());
+                    if (System.currentTimeMillis() - loginTime
+                            > RedisConstants.LOGIN_USER_ABSOLUTE_TTL * 1000) {
+                        stringRedisTemplate.delete(hashKey);
+                        logger.warn("Token 已超过绝对有效期，强制失效，userId=" + userIdObj);
+                        writeUnauthorized(response, "登录已过期，请重新登录");
+                        return;
+                    }
+                } catch (NumberFormatException e) {
+                    logger.warn("loginTime 解析失败，跳过绝对过期校验");
+                }
+            }
+
             // 【双保险】校验 token 还在不在用户的 Set 里
             if (userIdObj != null) {
                 try {

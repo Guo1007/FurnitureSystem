@@ -95,7 +95,7 @@
       />
       <el-table-column prop="totalPrice" label="金额" width="120">
         <template #default="{ row }">
-          <span style="color: #d95a5a; font-weight: 600"
+          <span style="color: var(--color-danger); font-weight: 600"
             >¥{{ row.totalPrice }}</span
           >
         </template>
@@ -199,7 +199,7 @@
         <el-table-column label="规格" width="170">
           <template #default="{ row }">
             <el-tag v-if="row.skuSpec" type="info" size="small" effect="plain">{{ row.skuSpec }}</el-tag>
-            <span v-else style="color:#999">默认规格</span>
+            <span v-else style="color: var(--color-text-tertiary)">默认规格</span>
           </template>
         </el-table-column>
         <el-table-column label="单价" width="110" align="right">
@@ -269,7 +269,7 @@
         <el-table-column label="支付时间" width="180">
           <template #default="{ row }">
             <span v-if="row.payTime">{{ row.payTime }}</span>
-            <span v-else style="color:#999">-</span>
+            <span v-else style="color: var(--color-text-tertiary)">-</span>
           </template>
         </el-table-column>
         <template #empty>

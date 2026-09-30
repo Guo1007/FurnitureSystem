@@ -41,6 +41,7 @@
           <div class="main-image">
             <div class="image-placeholder-large">
               <img
+                loading="lazy"
                 v-if="!mainImgError"
                 :src="imgUrl(currentImage)"
                 :alt="furniture.fName"
@@ -56,6 +57,7 @@
           </div>
           <div class="thumbnail-list" v-if="allImages.length > 1">
             <img
+              loading="lazy"
               v-for="(img, idx) in allImages"
               :key="idx"
               :src="imgUrl(img)"
@@ -100,6 +102,7 @@
                   @click="selectSpec(group.groupName, val.valueName)"
                 >
                   <img
+                    loading="lazy"
                     v-if="val.valueImage"
                     :src="imgUrl(val.valueImage)"
                     class="spec-value-img"
@@ -205,6 +208,7 @@
             <!-- 多图展示 -->
             <div class="detail-images" v-if="allImages.length > 0">
               <img
+                loading="lazy"
                 v-for="(img, idx) in allImages"
                 :key="'det' + idx"
                 :src="imgUrl(img)"
@@ -280,6 +284,7 @@
                   <div v-else>
                     <div class="review-card-hd">
                       <img
+                        loading="lazy"
                         v-if="r.userAvatar"
                         :src="imgUrl(r.userAvatar)"
                         class="review-avatar"
@@ -316,6 +321,7 @@
                     <p class="review-text" v-if="r.content">{{ r.content }}</p>
                     <div class="review-media" v-if="r.imgUrl || r.videoUrl">
                       <img
+                        loading="lazy"
                         v-for="(img, idx) in parseImages(r.imgUrl)"
                         :key="idx"
                         :src="imgUrl(img)"
@@ -375,6 +381,7 @@
                         <p class="append-text">{{ a.appendContent }}</p>
                         <div class="review-media" v-if="a.appendImg">
                           <img
+                            loading="lazy"
                             v-for="(img, idx) in parseAppendImages(a.appendImg)"
                             :key="'a' + idx"
                             :src="imgUrl(img)"
@@ -424,6 +431,7 @@
                             </div>
                             <template v-else>
                               <img
+                                loading="lazy"
                                 v-if="c.userAvatar"
                                 :src="imgUrl(c.userAvatar)"
                                 class="comment-avatar"
@@ -492,6 +500,7 @@
                                     </div>
                                     <template v-else>
                                       <img
+                                        loading="lazy"
                                         v-if="child.userAvatar"
                                         :src="imgUrl(child.userAvatar)"
                                         class="comment-avatar-small"
@@ -669,6 +678,7 @@
             <div v-else>
               <div class="review-card-hd">
                 <img
+                  loading="lazy"
                   v-if="r.userAvatar"
                   :src="imgUrl(r.userAvatar)"
                   class="review-avatar"
@@ -703,6 +713,7 @@
               <p class="review-text" v-if="r.content">{{ r.content }}</p>
               <div class="review-media" v-if="r.imgUrl || r.videoUrl">
                 <img
+                  loading="lazy"
                   v-for="(img, idx) in parseImages(r.imgUrl)"
                   :key="idx"
                   :src="imgUrl(img)"
@@ -733,6 +744,7 @@
                   <p class="append-text">{{ a.appendContent }}</p>
                   <div class="review-media" v-if="a.appendImg">
                     <img
+                      loading="lazy"
                       v-for="(img, idx) in parseAppendImages(a.appendImg)"
                       :key="'a' + idx"
                       :src="imgUrl(img)"
@@ -790,6 +802,7 @@
                       </div>
                       <template v-else>
                         <img
+                          loading="lazy"
                           v-if="c.userAvatar"
                           :src="imgUrl(c.userAvatar)"
                           class="comment-avatar"
@@ -854,6 +867,7 @@
                               </div>
                               <template v-else>
                                 <img
+                                  loading="lazy"
                                   v-if="child.userAvatar"
                                   :src="imgUrl(child.userAvatar)"
                                   class="comment-avatar-small"
@@ -960,6 +974,7 @@
     >
       <div class="image-preview-body">
         <img
+          loading="lazy"
           :src="previewImageUrl"
           class="preview-img-full"
           @error="(e) => (e.target.style.display = 'none')"
@@ -995,6 +1010,7 @@
       <div class="order-summary">
         <div class="summary-item">
           <img
+            loading="lazy"
             :src="imgUrl(displayImage || furniture.fIcon)"
             class="summary-img"
             @error="handleSummaryImgError"
@@ -1018,40 +1034,25 @@
       <div class="buy-coupon">
         <div class="coupon-select-hd">
           <span class="label">优惠券</span>
-          <button class="picker" @click="toggleBuyCoupon">
-            <span v-if="selectedBuyCoupons.length">
+          <button class="picker" @click="showBuyCouponDialog = true">
+            <span v-if="selectedBuyCouponIds.length">
               {{ buyCouponText }}
               <em class="picker-save">-{{ formatPrice(buyDiscountEstimate) }}</em>
             </span>
-            <span v-else>{{ buyAvailableCoupons.length ? "选择优惠券" : "暂无可用优惠券" }}</span>
-            <span class="arrow">▾</span>
+            <span v-else>{{ buyAvailableCount ? "选择优惠券" : "暂无可用优惠券" }}</span>
+            <span class="arrow">›</span>
           </button>
         </div>
-        <div v-if="showBuyCoupon" class="coupon-panel">
-          <div class="coupon-opt" :class="{ on: !selectedBuyCoupons.length }" @click="selectBuyCoupon(null)">
-            不使用优惠券
-          </div>
-          <div
-            v-for="c in buyAvailableCoupons"
-            :key="c.userCouponId"
-            class="coupon-opt"
-            :class="{ on: isCouponOn(c) }"
-            @click="selectBuyCoupon(c)"
-          >
-            <div class="opt-info">
-              <b>{{ c.amountText }}</b>
-              <span>{{ c.name }}</span>
-              <span v-if="Number(c.minThreshold) > 0" class="opt-threshold"
-                >满{{ c.minThreshold }}可用</span
-              >
-              <span v-if="isStackable(c)" class="opt-stackable">可叠加</span>
-              <span v-else class="opt-exclusive">不可叠加</span>
-            </div>
-            <span v-if="isCouponOn(c)" class="opt-check">✓</span>
-            <div class="opt-discount">-{{ formatPrice(buyEstimate(c)) }}</div>
-          </div>
-          <div v-if="!buyAvailableCoupons.length" class="coupon-none">暂无可用优惠券</div>
-        </div>
+
+        <CouponPickerDialog
+          v-model="showBuyCouponDialog"
+          v-model:selected-ids="selectedBuyCouponIds"
+          :coupons="buyCoupons"
+          :total-amount="buyGoodsTotal"
+          :sub-totals="buySubTotals.map"
+          :sub-totals-unknown="buySubTotals.unknown"
+          :rules="couponRules"
+        />
       </div>
 
       <!-- 应付合计 -->
@@ -1080,12 +1081,12 @@
               :value="addr.id"
             >
               <span>{{ addr.consignee }} — {{ addr.phone }}</span>
-              <span style="color: #999; font-size: 12px; display: block">{{
+              <span style="color: var(--color-text-tertiary); font-size: 12px; display: block">{{
                 addr.address
               }}</span>
             </el-option>
             <el-option :value="0" label="使用新地址">
-              <span style="color: #5a6a7a">+ 使用新地址</span>
+              <span style="color: var(--color-accent)">+ 使用新地址</span>
             </el-option>
           </el-select>
           <div v-if="savedAddresses.length === 0" class="form-tip">
@@ -1123,6 +1124,12 @@
               maxlength="200"
               show-word-limit
             />
+          </el-form-item>
+
+          <el-form-item>
+            <el-checkbox v-model="saveAddressToBook">
+              保存到我的地址簿，下次下单可直接选用
+            </el-checkbox>
           </el-form-item>
         </template>
 
@@ -1172,7 +1179,7 @@ import { useCartStore } from "@/stores/cart.js";
 import { checkFavorite, toggleFavorite } from "@/api/favorite.js";
 import { getAddressList, saveAddress } from "@/api/address.js";
 import { deleteAppend, deleteReview, getComments } from "@/api/comment.js";
-import { getMyCoupons } from "@/api/coupon.js";
+import { getCouponRules, getMyCoupons } from "@/api/coupon.js";
 import {
   addReviewComment,
   deleteReviewComment,
@@ -1180,6 +1187,8 @@ import {
 } from "@/api/reviewComment.js";
 import { getFurnitureByTypeId } from "@/api/furniture.js";
 import ProductCard from "@/components/product/ProductCard.vue";
+import CouponPickerDialog from "@/components/coupon/CouponPickerDialog.vue";
+import { calcTotalDiscount, couponReason } from "@/utils/coupon.js";
 
 const cartStore = useCartStore();
 
@@ -1190,6 +1199,9 @@ const isFavorited = ref(false);
 const savedAddresses = ref([]);
 const selectedAddressId = ref(null);
 const useNewAddress = ref(false);
+// 下单时是否把本次填写的地址存入地址簿。默认勾选（保留原来的便利性），
+// 但改成用户可见、可取消的显式开关，不再"静默"往地址簿里写数据。
+const saveAddressToBook = ref(true);
 const currentImage = ref("");
 const mainImgError = ref(false);
 
@@ -1244,95 +1256,93 @@ const {
 const { goBack } = useBackNavigation();
 const { requireLogin } = useRequireLogin();
 
-// ========== 立即购买 - 优惠券（支持多选叠加） ==========
+// ========== 立即购买 - 优惠券（弹窗多选，支持叠加） ==========
 const buyCoupons = ref([]);
-const selectedBuyCoupons = ref([]);
-const showBuyCoupon = ref(false);
+/** 已选中的 userCouponId 数组 */
+const selectedBuyCouponIds = ref([]);
+const showBuyCouponDialog = ref(false);
+const couponRules = ref({});
 const buyGoodsTotal = computed(() =>
   Math.round(Number(displayPrice.value || 0) * Number(quantity.value || 1) * 100) / 100,
 );
-const isStackable = (c) => c && Number(c.stackable) === 1;
 
-const buyAvailableCoupons = computed(() =>
-  buyCoupons.value.filter((c) => {
-    if (c.status !== 0) return false;
-    if (c.expireTime) {
-      const t = Array.isArray(c.expireTime)
-        ? new Date(c.expireTime[0], c.expireTime[1] - 1, c.expireTime[2])
-        : new Date(c.expireTime);
-      if (t.getTime() < Date.now()) return false;
-    }
-    if (Number(c.minThreshold) > buyGoodsTotal.value) return false;
-    return true;
-  }),
+/**
+ * 单件商品的分类小计：整单金额即该商品所在分类的金额。
+ * 商品详情缺 typeId 时标记 unknown，分类券基数回退为整单金额，避免被误判为不可用。
+ */
+const buySubTotals = computed(() => {
+  const tid = furniture.value?.typeId ?? furniture.value?.type_id ?? null;
+  if (tid == null) return { map: {}, unknown: true };
+  return { map: { [String(tid)]: buyGoodsTotal.value }, unknown: false };
+});
+
+/** 已选券对象（按当前券列表还原） */
+const selectedBuyCoupons = computed(() =>
+  selectedBuyCouponIds.value
+    .map((id) => buyCoupons.value.find((c) => c.userCouponId === id))
+    .filter(Boolean),
 );
 
-const isCouponOn = (c) =>
-  selectedBuyCoupons.value.some((s) => s.userCouponId === c.userCouponId);
+/** 可用券数量（判定口径与弹窗一致，用于「暂无可用优惠券」提示） */
+const buyAvailableCount = computed(
+  () =>
+    buyCoupons.value.filter(
+      (c) =>
+        !couponReason(
+          c,
+          buyGoodsTotal.value,
+          buySubTotals.value.map,
+          buySubTotals.value.unknown,
+        ),
+    ).length,
+);
 
-// 单张券在给定基数上的预估优惠
-const buyEstimate = (c, base = buyGoodsTotal.value) => {
-  let d = 0;
-  if (c.type === 2 && c.discount) d = base * (1 - Number(c.discount));
-  else if (c.amount) d = Number(c.amount);
-  if (c.capAmount && d > Number(c.capAmount)) d = Number(c.capAmount);
-  d = Math.min(d, base);
-  return Math.max(0, Math.round(d * 100) / 100);
-};
-
-// 多张券总优惠（按剩余应付依次抵扣，与后端一致）
+// 多张券总优惠：复用与弹窗、后端一致的算法（分类池与整单池分别递减 + 比例封顶）
 const buyDiscountEstimate = computed(() => {
-  let payable = buyGoodsTotal.value;
-  let total = 0;
-  for (const c of selectedBuyCoupons.value) {
-    const d = buyEstimate(c, payable);
-    total += d;
-    payable = Math.max(0, payable - d);
-  }
-  return Math.round(Math.min(total, buyGoodsTotal.value) * 100) / 100;
+  const ratio = Number(couponRules.value?.maxDiscountRatio);
+  const cap = Number.isFinite(ratio) && ratio > 0 && ratio <= 1 ? ratio : 0.8;
+  return calcTotalDiscount(
+    selectedBuyCoupons.value,
+    buyGoodsTotal.value,
+    buySubTotals.value.map,
+    cap,
+    buySubTotals.value.unknown,
+  );
 });
 
 const buyCouponText = computed(() => {
-  if (!selectedBuyCoupons.value.length) return "选择优惠券";
-  if (selectedBuyCoupons.value.length === 1) return selectedBuyCoupons.value[0].name;
-  return `已选 ${selectedBuyCoupons.value.length} 张券`;
+  const n = selectedBuyCouponIds.value.length;
+  if (!n) return "选择优惠券";
+  if (n === 1 && selectedBuyCoupons.value[0]) return selectedBuyCoupons.value[0].name;
+  return `已选 ${n} 张券`;
 });
 
 const loadBuyCoupons = async () => {
   if (!localStorage.getItem("token")) return;
   const res = await getMyCoupons();
   buyCoupons.value = (res.success || res.code === 200) ? res.data || [] : [];
+  // 券列表刷新后，剔除已失效/不再存在的选中项
+  const valid = new Set(buyCoupons.value.map((c) => c.userCouponId));
+  selectedBuyCouponIds.value = selectedBuyCouponIds.value.filter((id) => valid.has(id));
 };
 
-const toggleBuyCoupon = () => {
-  showBuyCoupon.value = !showBuyCoupon.value;
-};
-const selectBuyCoupon = (c) => {
-  if (!c) {
-    selectedBuyCoupons.value = [];
-    showBuyCoupon.value = false;
-    return;
+const loadCouponRules = async () => {
+  try {
+    const res = await getCouponRules();
+    couponRules.value = res?.data || {};
+  } catch (e) {
+    logger.warn("加载优惠券叠加规则失败，使用默认规则:", e);
+    couponRules.value = {};
   }
-  if (isStackable(c)) {
-    // 可叠加券：先移除已选中的不可叠加券（可叠加不能和不可叠加共存）
-    selectedBuyCoupons.value = selectedBuyCoupons.value.filter((s) => isStackable(s));
-    if (isCouponOn(c)) {
-      selectedBuyCoupons.value = selectedBuyCoupons.value.filter(
-        (s) => s.userCouponId !== c.userCouponId,
-      );
-    } else {
-      selectedBuyCoupons.value.push(c);
-    }
-  } else {
-    // 不可叠加券：只能单独用一张，清空其它
-    selectedBuyCoupons.value = isCouponOn(c) ? [] : [c];
-  }
-  showBuyCoupon.value = false;
 };
+
 watch(buyDialogVisible, (open) => {
   if (open) {
-    selectedBuyCoupons.value = [];
+    selectedBuyCouponIds.value = [];
+    // 每次打开下单弹窗都恢复默认勾选，避免上次取消的选择影响下次
+    saveAddressToBook.value = true;
     loadBuyCoupons();
+    loadCouponRules();
   }
 });
 
@@ -1418,20 +1428,49 @@ const goToAddresses = () => {
 };
 
 const handleSubmitBuy = async () => {
-  const success = await submitBuy(selectedBuyCoupons.value.map((c) => c.userCouponId));
-  if (success) {
-    // 订单创建成功后，自动保存地址（静默处理，不打扰用户）
-    try {
-      await saveAddress({
-        consignee: buyForm.value.consignee,
-        phone: buyForm.value.phone,
-        address: buyForm.value.address,
-        isDefault: 0,
-      });
-    } catch (e) {
-      // 地址保存失败不影响主流程
-      logger.error("保存地址失败:", e);
-    }
+  // 必须先快照：submitBuy 内部下单成功后会关闭弹窗并把 buyForm 重置为空，
+  // 事后再读 buyForm 只能读到空值，导致保存地址时上报「手机号不能为空」。
+  const addrSnapshot = {
+    consignee: (buyForm.value.consignee || "").trim(),
+    phone: (buyForm.value.phone || "").trim(),
+    address: (buyForm.value.address || "").trim(),
+  };
+  // 勾选状态同样先取快照（表单关闭后状态可能被重置）
+  const shouldSave = saveAddressToBook.value;
+  // 选的是地址簿里已有的地址时，没必要也不应该再存一份
+  const isNewAddress = useNewAddress.value;
+
+  const success = await submitBuy(
+    selectedBuyCouponIds.value.length ? [...selectedBuyCouponIds.value] : undefined,
+  );
+  if (!success) return;
+
+  // 未勾选 / 用的是已有地址 / 地址信息不完整 → 都不写入地址簿
+  if (!shouldSave || !isNewAddress) return;
+  if (!addrSnapshot.consignee || !addrSnapshot.phone || !addrSnapshot.address) return;
+
+  // 已存在完全相同的地址则不重复保存
+  const duplicated = savedAddresses.value.some(
+    (a) =>
+      a.consignee === addrSnapshot.consignee &&
+      a.phone === addrSnapshot.phone &&
+      a.address === addrSnapshot.address,
+  );
+  if (duplicated) return;
+
+  // 地址簿为空时，存的第一条顺手设为默认地址，省得用户再去地址页设置
+  const isFirstAddress = savedAddresses.value.length === 0;
+
+  try {
+    await saveAddress({
+      consignee: addrSnapshot.consignee,
+      phone: addrSnapshot.phone,
+      address: addrSnapshot.address,
+      isDefault: isFirstAddress ? 1 : 0,
+    });
+  } catch (e) {
+    // 地址保存失败不影响主流程
+    logger.error("保存地址失败:", e);
   }
 };
 
@@ -1918,114 +1957,6 @@ const handleSummaryImgError = (e) => {
         font-size: 12px;
       }
     }
-  }
-
-  .coupon-panel {
-    margin-top: 6px;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    padding: 4px;
-    border: 1px solid #eee8e1;
-    border-radius: 8px;
-    max-height: 220px;
-    overflow-y: auto;
-    background: #fff;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
-  }
-
-  .coupon-opt {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    padding: 10px 12px;
-    border-radius: 6px;
-    cursor: pointer;
-    transition: background 0.15s;
-
-    &:hover {
-      background: #faf6f2;
-    }
-
-    &.on {
-      background: #fff5f2;
-      box-shadow: inset 3px 0 0 0 #c5554a;
-    }
-
-    .opt-info {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-      min-width: 0;
-
-      b {
-        font-size: 16px;
-        color: #c5554a;
-      }
-
-      span {
-        font-size: 13px;
-        color: #555;
-      }
-
-      .opt-threshold {
-        font-size: 12px;
-        color: #999;
-      }
-
-      .opt-stackable {
-        align-self: flex-start;
-        margin-top: 3px;
-        font-size: 11px;
-        line-height: 1;
-        padding: 3px 6px;
-        border-radius: 4px;
-        color: #389e6d;
-        background: #e9f7f0;
-      }
-
-      .opt-exclusive {
-        align-self: flex-start;
-        margin-top: 3px;
-        font-size: 11px;
-        line-height: 1;
-        padding: 3px 6px;
-        border-radius: 4px;
-        color: #b4883f;
-        background: #fbf4e6;
-      }
-
-      &.on .opt-exclusive {
-        color: #c5554a;
-        background: #fbeae7;
-      }
-
-      .opt-check {
-        font-size: 15px;
-        font-weight: 700;
-        color: #c5554a;
-        flex-shrink: 0;
-      }
-
-      .opt-discount {
-        font-size: 14px;
-        font-weight: 600;
-        color: #c5554a;
-        flex-shrink: 0;
-      }
-    }
-
-    .coupon-opt + .coupon-opt {
-      margin-top: 2px;
-    }
-  }
-
-  .coupon-none {
-    padding: 14px;
-    text-align: center;
-    color: #999;
-    font-size: 13px;
   }
 }
 .buy-total {

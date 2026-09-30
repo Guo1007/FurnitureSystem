@@ -99,6 +99,12 @@ logging:
     gcy.system: ${LOG_LEVEL_GCY:info}
     gcy.ai: ${LOG_LEVEL_GCY:info}
     dev.langchain4j: ${LOG_LEVEL_LANGCHAIN:warn}
+    # 支付宝 SDK 自带日志：业务失败/通信失败都以 ERROR 级别打印，且会带上整条
+    # 签名请求串和响应。支付页轮询查单时，只要用户还没付款就会返回
+    # ACQ.TRADE_NOT_EXIST，一次支付流程能刷出几十条 ERROR，把真正的故障淹没。
+    # 这些情况在 PaymentServiceImpl 中已按业务语义自行记录，故关闭 SDK 原始日志。
+    sdk.biz.err: off
+    sdk.comm.err: off
 
 # 阿里云 OSS 配置
 aliyun:
@@ -152,6 +158,11 @@ knife4j:
 
 # 应用自定义配置
 app:
+  # 接口文档（Swagger/Knife4j）是否对外匿名开放。
+  # 文档等于一份完整攻击面地图，生产环境务必设为 false；
+  # 关闭后文档路径仍会要求 ADMIN 角色，不会因漏配置而完全裸奔。
+  swagger:
+    enabled: true
   cors:
     allowed-origins:
       - http://localhost:5173

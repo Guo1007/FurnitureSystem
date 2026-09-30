@@ -2,6 +2,7 @@ package gcy.system.service.admin.Impl;
 
 import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import gcy.system.entity.dto.Result;
@@ -25,7 +26,9 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -362,32 +365,25 @@ public class CommentManageServiceImpl implements ICommentManageService {
      */
     @Override
     public Result getStatusCounts() {
-        // 评价各状态数量
-        long commentAll = goodsCommentMapper.selectCount(null);
-        long commentPending = goodsCommentMapper.selectCount(
-                new LambdaQueryWrapper<GoodsComment>().in(GoodsComment::getStatus, 0, 3));
-        long commentApproved = goodsCommentMapper.selectCount(
-                new LambdaQueryWrapper<GoodsComment>().eq(GoodsComment::getStatus, 1));
-        long commentRejected = goodsCommentMapper.selectCount(
-                new LambdaQueryWrapper<GoodsComment>().eq(GoodsComment::getStatus, 2));
+        // 原实现是 12 次串行 COUNT(*)，其中 selectCount(null) 连索引都用不上。
+        // 改为每种表一条 GROUP BY status，3 次查询取回全部 12 个数字。
+        Map<Integer, Long> c = countByStatus(goodsCommentMapper);
+        long commentAll = sum(c);
+        long commentPending = c.getOrDefault(0, 0L) + c.getOrDefault(3, 0L);
+        long commentApproved = c.getOrDefault(1, 0L);
+        long commentRejected = c.getOrDefault(2, 0L);
 
-        // 追评各状态数量
-        long appendAll = commentAppendMapper.selectCount(null);
-        long appendPending = commentAppendMapper.selectCount(
-                new LambdaQueryWrapper<CommentAppend>().in(CommentAppend::getStatus, 0, 3));
-        long appendApproved = commentAppendMapper.selectCount(
-                new LambdaQueryWrapper<CommentAppend>().eq(CommentAppend::getStatus, 1));
-        long appendRejected = commentAppendMapper.selectCount(
-                new LambdaQueryWrapper<CommentAppend>().eq(CommentAppend::getStatus, 2));
+        Map<Integer, Long> a = countByStatus(commentAppendMapper);
+        long appendAll = sum(a);
+        long appendPending = a.getOrDefault(0, 0L) + a.getOrDefault(3, 0L);
+        long appendApproved = a.getOrDefault(1, 0L);
+        long appendRejected = a.getOrDefault(2, 0L);
 
-        // 评价回复各状态数量
-        long replyAll = reviewCommentMapper.selectCount(null);
-        long replyPending = reviewCommentMapper.selectCount(
-                new LambdaQueryWrapper<ReviewComment>().in(ReviewComment::getStatus, 0, 3));
-        long replyApproved = reviewCommentMapper.selectCount(
-                new LambdaQueryWrapper<ReviewComment>().eq(ReviewComment::getStatus, 1));
-        long replyRejected = reviewCommentMapper.selectCount(
-                new LambdaQueryWrapper<ReviewComment>().eq(ReviewComment::getStatus, 2));
+        Map<Integer, Long> r = countByStatus(reviewCommentMapper);
+        long replyAll = sum(r);
+        long replyPending = r.getOrDefault(0, 0L) + r.getOrDefault(3, 0L);
+        long replyApproved = r.getOrDefault(1, 0L);
+        long replyRejected = r.getOrDefault(2, 0L);
 
         return Result.ok(java.util.Map.of(
                 "comment", java.util.Map.of(
@@ -399,6 +395,33 @@ public class CommentManageServiceImpl implements ICommentManageService {
                 "reviewComment", java.util.Map.of(
                         "all", replyAll, "pending", replyPending,
                         "approved", replyApproved, "rejected", replyRejected)));
+    }
+
+    /**
+     * 按 status 分组计数：一条 SQL 取回该表各状态的数量（status -> count）。
+     * 逻辑删除过滤由 MyBatis-Plus 自动追加，与原 selectCount 语义一致。
+     */
+    private <T> Map<Integer, Long> countByStatus(com.baomidou.mybatisplus.core.mapper.BaseMapper<T> mapper) {
+        QueryWrapper<T> qw = new QueryWrapper<T>()
+                .select("status AS s", "COUNT(*) AS c")
+                .groupBy("status");
+        Map<Integer, Long> map = new HashMap<>();
+        for (Map<String, Object> row : mapper.selectMaps(qw)) {
+            Object s = row.get("s");
+            Object cnt = row.get("c");
+            if (s instanceof Number && cnt instanceof Number) {
+                map.put(((Number) s).intValue(), ((Number) cnt).longValue());
+            }
+        }
+        return map;
+    }
+
+    private long sum(Map<Integer, Long> statusCount) {
+        long total = 0L;
+        for (Long v : statusCount.values()) {
+            total += v == null ? 0L : v;
+        }
+        return total;
     }
 
     /**

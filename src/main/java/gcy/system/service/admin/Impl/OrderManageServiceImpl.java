@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import gcy.system.entity.dto.Result;
+import gcy.system.entity.dto.StockDeltaDTO;
 import gcy.system.entity.pojo.Order;
 import gcy.system.entity.pojo.OrderItem;
 import gcy.system.entity.pojo.User;
@@ -27,6 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.io.PrintWriter;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -345,6 +347,17 @@ public class OrderManageServiceImpl extends ServiceImpl<OrderMapper, Order>
      * @param remark  拒绝原因备注
      * @return 包含操作结果的Result对象
      */
+    /**
+     * 判断某个状态是否为「可回退的合法非退款态」。
+     * 退款态（6/7/8）与已取消（4）都不能作为退款回退的目标状态。
+     */
+    private boolean isValidRefundPrevStatus(int status) {
+        return status == PAID.getCode()
+                || status == SHIPPED.getCode()
+                || status == COMPLETED.getCode()
+                || status == REVIEWED.getCode();
+    }
+
     @Override
     @Transactional
     public Result rejectRefund(Long orderId, String remark) {
@@ -355,11 +368,21 @@ public class OrderManageServiceImpl extends ServiceImpl<OrderMapper, Order>
         if (order.getStatus() != REFUND_APPLYING.getCode()) {
             return Result.fail("订单当前状态不支持此操作");
         }
-        int prevStatus = order.getRefundPrevStatus() != null ? order.getRefundPrevStatus() : PAID.getCode();
+        // 退款前状态必须属于合法的非退款态，脏数据（NULL / 本身是退款态 / 已取消）
+        // 会让订单回滚到一个非法状态上，这里统一兜底为「已支付」
+        Integer prevRaw = order.getRefundPrevStatus();
+        int prevStatus = (prevRaw != null && isValidRefundPrevStatus(prevRaw))
+                ? prevRaw : PAID.getCode();
+        if (prevRaw == null || !isValidRefundPrevStatus(prevRaw)) {
+            log.warn("订单退款前状态异常，拒绝退款时兜底为已支付: orderId={}, refundPrevStatus={}", orderId, prevRaw);
+        }
         boolean success = update()
                 .set("status", prevStatus)
                 .set("refund_handle_remark", remark)
-                .set("refund_approve_time", LocalDateTime.now())
+                // 拒绝属于审核动作，应记入审核时间；此前误写成了「同意时间」refund_approve_time，
+                // 与另一条拒绝路径（审核退款不通过）写入的 refund_audit_time 不一致，时间线审计失真
+                .set("refund_audit_time", LocalDateTime.now())
+                .set("refund_prev_status", null)
                 .eq("id", orderId)
                 .eq("status", REFUND_APPLYING.getCode())
                 .update();
@@ -401,16 +424,29 @@ public class OrderManageServiceImpl extends ServiceImpl<OrderMapper, Order>
             // 仅在订单曾处于"已完成(3)/已评价(5)"时扣回销量：
             // 这两类状态在确认收货时累加过 sale_count，退款需对称扣回；
             // 已支付(1)/已发货(2)订单从未累加销量，扣减会导致销量失真甚至为负。
-            int prevStatus = order.getRefundPrevStatus() != null ? order.getRefundPrevStatus() : PAID.getCode();
+            // 退款前状态同样需要合法性断言，脏数据兜底为「已支付」
+            Integer prevRaw = order.getRefundPrevStatus();
+            int prevStatus = (prevRaw != null && isValidRefundPrevStatus(prevRaw))
+                    ? prevRaw : PAID.getCode();
+            if (prevRaw == null || !isValidRefundPrevStatus(prevRaw)) {
+                log.warn("订单退款前状态异常，退款通过时兜底为已支付: orderId={}, refundPrevStatus={}", orderId, prevRaw);
+            }
             if (prevStatus == COMPLETED.getCode() || prevStatus == REVIEWED.getCode()) {
                 // 扣回销量失败必须抛异常回滚整个事务（含已恢复的库存），
                 // 避免出现"库存已恢复但销量未扣回"的台账不一致
                 List<OrderItem> items = orderItemService.lambdaQuery()
                         .eq(OrderItem::getOrderId, orderId).list();
+                // 同 id 合并后一条批量 UPDATE 扣回销量（传负增量），替代逐条 UPDATE
+                Map<Long, Integer> saleBack = new HashMap<>();
                 for (OrderItem item : items) {
                     if (item.getFurnitureId() != null && item.getQuantity() != 0) {
-                        furnitureMapper.incrementSaleCount(item.getFurnitureId(), -item.getQuantity());
+                        saleBack.merge(item.getFurnitureId(), -item.getQuantity(), Integer::sum);
                     }
+                }
+                if (!saleBack.isEmpty()) {
+                    List<StockDeltaDTO> deltas = new ArrayList<>(saleBack.size());
+                    saleBack.forEach((id, qty) -> deltas.add(new StockDeltaDTO(id, qty)));
+                    furnitureMapper.batchIncrementSaleCount(deltas);
                 }
             }
             boolean success = update()
@@ -429,11 +465,17 @@ public class OrderManageServiceImpl extends ServiceImpl<OrderMapper, Order>
             log.info("退款审核通过: orderId={}", orderId);
         } else {
             // 审核不通过：恢复原状态
-            int prevStatus = order.getRefundPrevStatus() != null ? order.getRefundPrevStatus() : PAID.getCode();
+            Integer prevRaw = order.getRefundPrevStatus();
+            int prevStatus = (prevRaw != null && isValidRefundPrevStatus(prevRaw))
+                    ? prevRaw : PAID.getCode();
+            if (prevRaw == null || !isValidRefundPrevStatus(prevRaw)) {
+                log.warn("订单退款前状态异常，审核不通过时兜底为已支付: orderId={}, refundPrevStatus={}", orderId, prevRaw);
+            }
             boolean success = update()
                     .set("status", prevStatus)
                     .set("refund_handle_remark", remark)
                     .set("refund_audit_time", LocalDateTime.now())
+                    .set("refund_prev_status", null)
                     .eq("id", orderId)
                     .eq("status", REFUND_AUDITING.getCode())
                     .update();
@@ -491,6 +533,12 @@ public class OrderManageServiceImpl extends ServiceImpl<OrderMapper, Order>
         if (!isDeletableStatus(order.getStatus())) {
             return Result.fail("在途订单仍占用库存，不能直接删除，请先取消订单或走退款流程");
         }
+        // 删除前归还该订单占用的优惠券：订单记录没了但 user_coupon 仍是「已用」状态的话，
+        // 用户这张券就永久消失了。归还逻辑按 status=1 且 orderId 匹配，重复调用是幂等的。
+        orderService.returnCouponForOrder(orderId);
+        // 同步清理订单明细，避免 order_item 变成无主孤儿数据
+        orderItemService.remove(new LambdaQueryWrapper<OrderItem>()
+                .eq(OrderItem::getOrderId, orderId));
         removeById(orderId);
         log.info("管理员删除订单: orderId={}, status={}", orderId, order.getStatus());
         return Result.okMsg("删除成功");
@@ -522,6 +570,12 @@ public class OrderManageServiceImpl extends ServiceImpl<OrderMapper, Order>
         if (deletableIds.isEmpty()) {
             return Result.fail("所选订单均为在途订单，不能删除（请先取消或走退款流程）");
         }
+        // 与单条删除保持一致：先归还优惠券并清理明细，再删主表
+        for (Long id : deletableIds) {
+            orderService.returnCouponForOrder(id);
+        }
+        orderItemService.remove(new LambdaQueryWrapper<OrderItem>()
+                .in(OrderItem::getOrderId, deletableIds));
         removeByIds(deletableIds);
         int deleted = deletableIds.size();
         String msg = "删除成功 " + deleted + " 个订单";

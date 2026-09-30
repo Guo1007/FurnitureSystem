@@ -131,7 +131,10 @@ const router = createRouter({
     {
       path: "/admin",
       component: () => import("@/layouts/admin/AdminLayout.vue"),
-      meta: { requiresAdmin: true },
+      // requiresAuth 必须同时补上：request.js 的 handleUnauthorized 只认 requiresAuth，
+      // 而路由守卫只认 requiresAdmin。缺了它，管理员会话过期后会被清掉登录态
+      // 却不跳转登录页，停在一个「已登出但仍显示后台」的死界面上。
+      meta: { requiresAdmin: true, requiresAuth: true },
       children: [
         { path: "", redirect: "/admin/dashboard" },
         {
@@ -240,7 +243,8 @@ router.beforeEach((to, from, next) => {
     } catch (e) {}
   }
   if (to.meta.requiresAuth && !isLoggedIn) {
-    next("/login");
+    // 带上 redirect，登录后可以回到原本要去的页面，而不是一律回首页
+    next({ path: "/login", query: { redirect: to.fullPath } });
   } else if (to.meta.requiresAdmin && userRole !== 1) {
     next("/");
   } else if (to.path === "/login" && isLoggedIn) {

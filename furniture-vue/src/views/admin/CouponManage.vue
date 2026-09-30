@@ -18,6 +18,51 @@
       >
     </div>
 
+    <!-- 叠加规则设置 -->
+    <div class="rule-panel">
+      <div class="rule-panel__head">
+        <span class="rule-panel__title">叠加规则设置</span>
+        <span class="rule-panel__hint"
+          >控制多张优惠券同时使用时的上限，对所有优惠券生效</span
+        >
+      </div>
+
+      <div v-if="ruleLoading" class="rule-panel__loading">加载中…</div>
+
+      <div v-else class="rule-panel__body">
+        <div v-for="rule in ruleList" :key="rule.ruleKey" class="rule-item">
+          <div class="rule-item__main">
+            <span class="rule-item__name">{{ rule.ruleName }}</span>
+            <el-input-number
+              v-model="rule.ruleValueNum"
+              :min="rule.minValue"
+              :max="rule.maxValue"
+              size="small"
+              controls-position="right"
+              style="width: 130px"
+            />
+            <span class="rule-item__unit">{{ rule.unit }}</span>
+          </div>
+          <div class="rule-item__side">
+            <el-switch
+              v-model="rule.enabled"
+              size="small"
+              active-text="启用"
+              inactive-text="停用"
+            />
+            <el-button
+              type="primary"
+              size="small"
+              :loading="ruleSaving === rule.ruleKey"
+              @click="saveRule(rule)"
+              >保存</el-button
+            >
+          </div>
+          <div class="rule-item__remark">{{ rule.remark }}</div>
+        </div>
+      </div>
+    </div>
+
     <!-- 表格 -->
     <el-table :data="tableData" v-loading="loading" border>
       <el-table-column prop="name" label="券名称" min-width="150" show-overflow-tooltip />
@@ -242,6 +287,8 @@ import {
   deleteCoupon,
   getCouponInfo,
   getCouponList,
+  getCouponRules,
+  saveCouponRule,
   toggleCoupon,
   updateCoupon,
 } from "@/api/admin/coupon";
@@ -294,6 +341,56 @@ const formRules = reactive({
 });
 
 const dialogTitle = computed(() => (isEdit.value ? "编辑优惠券" : "新增优惠券"));
+
+// ---------- 叠加规则设置 ----------
+const ruleList = ref([]);
+const ruleLoading = ref(false);
+const ruleSaving = ref("");
+
+const loadRules = async () => {
+  ruleLoading.value = true;
+  try {
+    const res = await getCouponRules();
+    const rows = Array.isArray(res?.data) ? res.data : [];
+    ruleList.value = rows.map((r) => ({
+      ...r,
+      // 后端返回字符串，el-input-number 需要数值
+      ruleValueNum: Number.parseInt(r.ruleValue, 10) || r.minValue || 1,
+    }));
+  } catch (e) {
+    logger.error("加载优惠券叠加规则失败:", e);
+    ElMessage.warning("叠加规则加载失败，下单将使用默认规则");
+  } finally {
+    ruleLoading.value = false;
+  }
+};
+
+const saveRule = async (rule) => {
+  const n = Number(rule.ruleValueNum);
+  if (!Number.isInteger(n) || n < rule.minValue || n > rule.maxValue) {
+    ElMessage.warning(`请输入 ${rule.minValue} ~ ${rule.maxValue} 之间的整数`);
+    return;
+  }
+  ruleSaving.value = rule.ruleKey;
+  try {
+    const res = await saveCouponRule({
+      ruleKey: rule.ruleKey,
+      ruleValue: String(n),
+      enabled: rule.enabled,
+    });
+    if (res?.success || res?.code === 200) {
+      ElMessage.success("已保存，立即对后续下单生效");
+      rule.ruleValue = String(n);
+    } else {
+      ElMessage.error(res?.msg || res?.message || "保存失败");
+    }
+  } catch (e) {
+    logger.error("保存优惠券叠加规则失败:", e);
+    ElMessage.error("保存失败");
+  } finally {
+    ruleSaving.value = "";
+  }
+};
 
 const typeText = (t) => (t === 2 ? "折扣" : t === 3 ? "无门槛" : "满减");
 const typeTag = (t) => (t === 2 ? "warning" : t === 3 ? "info" : "success");
@@ -469,6 +566,7 @@ const handleSizeChange = () => {
 onMounted(() => {
   loadList();
   loadTypes();
+  loadRules();
 });
 </script>
 
@@ -481,5 +579,84 @@ onMounted(() => {
   font-size: 12px;
   color: var(--el-text-color-secondary, #999);
   line-height: 1.4;
+}
+
+/* 叠加规则设置面板 */
+.rule-panel {
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--el-border-color-lighter, #ebeef5);
+  border-radius: 8px;
+  background: var(--el-fill-color-lighter, #fafafa);
+
+  &__head {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+
+  &__title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--el-text-color-primary, #303133);
+  }
+
+  &__hint {
+    font-size: 12px;
+    color: var(--el-text-color-secondary, #909399);
+  }
+
+  &__loading {
+    font-size: 13px;
+    color: var(--el-text-color-secondary, #909399);
+  }
+
+  &__body {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+}
+
+.rule-item {
+  flex: 1 1 320px;
+  min-width: 300px;
+  padding: 12px 14px;
+  border: 1px solid var(--el-border-color-lighter, #ebeef5);
+  border-radius: 6px;
+  background: #fff;
+
+  &__main {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  &__name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--el-text-color-primary, #303133);
+  }
+
+  &__unit {
+    font-size: 13px;
+    color: var(--el-text-color-secondary, #909399);
+  }
+
+  &__side {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: 10px;
+  }
+
+  &__remark {
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--el-text-color-secondary, #909399);
+    line-height: 1.5;
+  }
 }
 </style>

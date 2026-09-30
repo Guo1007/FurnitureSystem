@@ -9,7 +9,7 @@
 .page-title {
   margin: 0 0 24px 0;
   font-size: 20px;
-  color: #333;
+  color: #3d3d3d;
 }
 
 .search-bar {
@@ -77,7 +77,7 @@
 
 .tip-text {
   font-size: 12px;
-  color: #606266;
+  color: var(--color-text-secondary);
 }
 
 /* 多图片上传 */
@@ -93,7 +93,7 @@
   height: 80px;
   border-radius: 4px;
   overflow: hidden;
-  border: 1px solid #dcdfe6;
+  border: 1px solid var(--color-border);
 }
 
 .thumb-preview {
@@ -120,13 +120,13 @@
 }
 
 .thumb-delete:hover {
-  background: #f56c6c;
+  background: var(--color-danger);
 }
 
 .image-add-btn {
   width: 80px;
   height: 80px;
-  border: 1px dashed #dcdfe6;
+  border: 1px dashed var(--color-border);
   border-radius: 4px;
   display: flex;
   flex-direction: column;
@@ -138,11 +138,11 @@
 }
 
 .image-add-btn:hover {
-  border-color: #409eff;
-  color: #409eff;
+  border-color: var(--color-accent);
+  color: var(--color-accent);
 }
 
 .form-item-tip {
   font-size: 12px;
-  color: #909399;
+  color: var(--color-text-tertiary);
 }

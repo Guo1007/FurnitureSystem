@@ -392,7 +392,7 @@ onMounted(() => {
 }
 
 .tab-count {
-  color: #999;
+  color: var(--color-text-tertiary);
   font-size: 12px;
 }
 </style>

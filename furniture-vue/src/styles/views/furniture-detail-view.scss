@@ -273,7 +273,7 @@
 
 .spec-group-label {
   font-size: 13px;
-  color: #999;
+  color: var(--color-text-tertiary);
   margin-bottom: 8px;
   font-weight: 500;
   letter-spacing: .01em;
@@ -349,14 +349,14 @@
 
 .price-original {
   font-size: 14px;
-  color: #999;
+  color: var(--color-text-tertiary);
   text-decoration: line-through;
   margin-left: 8px;
 }
 
 .stock-hint {
   font-size: 13px;
-  color: #999;
+  color: var(--color-text-tertiary);
   margin-left: 12px;
 }
 
@@ -368,7 +368,7 @@
 
 .review-card {
   padding: 20px 16px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--color-border-light);
   transition: background 0.3s;
 }
 
@@ -377,7 +377,7 @@
   align-items: center;
   justify-content: center;
   padding: 24px;
-  color: #999;
+  color: var(--color-text-tertiary);
   font-size: 14px;
 }
 
@@ -409,7 +409,7 @@
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: #f0f0f0;
+  background: var(--color-border-light);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -419,7 +419,7 @@
 
 .review-text {
   font-size: 14px;
-  color: #333;
+  color: #3d3d3d;
   line-height: 1.6;
   margin: 0;
   padding-left: 42px;
@@ -458,9 +458,9 @@
   margin-top: 12px;
   padding: 12px 16px;
   margin-left: 42px;
-  background: #f8f9fa;
+  background: var(--color-bg);
   border-radius: 8px;
-  border-left: 3px solid #409eff;
+  border-left: 3px solid var(--color-accent);
 }
 
 .append-hd {
@@ -472,20 +472,20 @@
 
 .append-tag {
   font-size: 12px;
-  color: #409eff;
+  color: var(--color-accent);
   font-weight: 500;
 }
 
 .append-text {
   font-size: 13px;
-  color: #333;
+  color: #3d3d3d;
   line-height: 1.5;
   margin: 0 0 6px 0;
 }
 
 .append-time {
   font-size: 12px;
-  color: #999;
+  color: var(--color-text-tertiary);
 }
 
 .review-more {
@@ -507,7 +507,7 @@
 
 .review-dialog-list .review-card {
   padding: 16px 0;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--color-border-light);
 }
 
 .review-dialog-list .review-card:last-child {
@@ -516,7 +516,7 @@
 
 .review-user {
   font-weight: 500;
-  color: #333;
+  color: #3d3d3d;
 }
 
 .review-stars {
@@ -525,7 +525,7 @@
 
 .review-time {
   margin-left: auto;
-  color: #999;
+  color: var(--color-text-tertiary);
   font-size: 13px;
 }
 
@@ -604,14 +604,14 @@
   align-items: center;
   gap: 6px;
   font-size: 13px;
-  color: #666;
+  color: var(--color-text-secondary);
   cursor: pointer;
   padding: 6px 0;
   user-select: none;
 }
 
 .comment-toggle:hover {
-  color: #409eff;
+  color: var(--color-accent);
 }
 
 .toggle-arrow {
@@ -626,7 +626,7 @@
 .comment-panel {
   margin-top: 8px;
   padding: 12px;
-  background: #f8f9fa;
+  background: var(--color-bg);
   border-radius: 8px;
 }
 
@@ -653,7 +653,7 @@
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  background: #e8e8e8;
+  background: var(--color-border);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -676,27 +676,27 @@
 .comment-user {
   font-size: 13px;
   font-weight: 500;
-  color: #333;
+  color: #3d3d3d;
 }
 
 .comment-reply-to {
   font-size: 12px;
-  color: #999;
+  color: var(--color-text-tertiary);
 }
 
 .reply-user {
-  color: #409eff;
+  color: var(--color-accent);
 }
 
 .comment-time {
   font-size: 11px;
-  color: #999;
+  color: var(--color-text-tertiary);
   margin-left: auto;
 }
 
 .comment-content {
   font-size: 13px;
-  color: #333;
+  color: #3d3d3d;
   line-height: 1.5;
   margin: 4px 0;
 }
@@ -712,7 +712,7 @@
   padding: 10px;
   background: #fff;
   border-radius: 6px;
-  border-left: 2px solid #e8e8e8;
+  border-left: 2px solid var(--color-border);
 }
 
 .comment-child-item {
@@ -722,7 +722,7 @@
 }
 
 .comment-child-item + .comment-child-item {
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--color-border-light);
 }
 
 .comment-avatar-small {
@@ -737,7 +737,7 @@
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  background: #e8e8e8;
+  background: var(--color-border);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -757,5 +757,5 @@
   align-items: center;
   margin-top: 12px;
   padding-top: 12px;
-  border-top: 1px solid #e8e8e8;
+  border-top: 1px solid var(--color-border);
 }

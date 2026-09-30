@@ -126,7 +126,7 @@
             <span
               v-if="loginType === 'code'"
               class="form-tip"
-              style="font-size: 12px; color: #999"
+              style="font-size: 12px; color: var(--color-text-tertiary)"
               >验证码登录仅支持邮箱账号</span
             >
             <span class="error-msg" v-if="errors.account">{{

@@ -47,7 +47,20 @@ export const useCartStore = defineStore("cart", () => {
     currentUserId.value = userId;
 
     const saved = localStorage.getItem(getStorageKey(userId));
-    items.value = saved ? JSON.parse(saved) : [];
+    if (!saved) {
+      items.value = [];
+      return;
+    }
+    // localStorage 里的购物车可能被其它标签页/旧版本写坏，裸 JSON.parse 抛异常会直接白屏。
+    // 解析失败时清掉脏数据并以空购物车启动，保证页面可用。
+    try {
+      const parsed = JSON.parse(saved);
+      items.value = Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      console.error("购物车数据损坏，已重置:", e);
+      localStorage.removeItem(getStorageKey(userId));
+      items.value = [];
+    }
   };
 
   loadFromStorage();
@@ -88,6 +101,8 @@ export const useCartStore = defineStore("cart", () => {
         skuId: skuInfo ? skuInfo.skuId : null,
         specText: skuInfo ? skuInfo.specText : "",
         fName: furniture.fName,
+        // 商品分类ID：分类券需据此核算该分类小计（见 CouponPickerDialog 的 subTotals）
+        typeId: furniture.typeId ?? furniture.type_id ?? null,
         price: skuInfo ? skuInfo.price : furniture.price,
         fIcon: skuInfo && skuInfo.skuImage ? skuInfo.skuImage : furniture.fIcon,
         stock: maxStock,

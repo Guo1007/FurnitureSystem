@@ -24,6 +24,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -80,24 +82,29 @@ public class NotificationServiceImpl extends ServiceImpl<NotificationMapper, Not
                 if (StrUtil.isBlank(target.getEmail())) {
                     return Result.okMsg("通知已保存，但该用户（" + target.getUserName() + "）未绑定邮箱，邮件未发送");
                 }
-                emailService.sendNotificationEmail(target.getEmail(), dto.getTitle(), dto.getContent());
+                runAfterCommit(() ->
+                        emailService.sendNotificationEmail(target.getEmail(), dto.getTitle(), dto.getContent()));
             } else {
-                List<String> emails = userMapper.selectList(
-                                new LambdaQueryWrapper<User>()
-                                        .isNotNull(User::getEmail)
-                                        .ne(User::getEmail, ""))
-                        .stream()
-                        .map(User::getEmail)
+                // 只投影 email 一列：原实现 selectList 会把整张 User 实体（含头像、简介等大字段）
+                // 拉进 JVM，用户量上万时有 OOM 风险，且查询发生在事务内会拉长事务时间。
+                List<Object> rows = userMapper.selectObjs(new LambdaQueryWrapper<User>()
+                        .select(User::getEmail)
+                        .isNotNull(User::getEmail)
+                        .ne(User::getEmail, ""));
+                List<String> emails = rows.stream()
+                        .filter(Objects::nonNull)
+                        .map(String::valueOf)
                         .filter(StrUtil::isNotBlank)
                         .distinct()
                         .collect(Collectors.toList());
                 if (emails.isEmpty()) {
                     return Result.okMsg("通知已保存，但系统中没有已绑定邮箱的用户，邮件未发送");
                 }
-                // 批量发送：一次 SMTP 会话投递全部邮件，避免逐封产生大量连接与异步任务
-                emailService.sendNotificationBatch(emails, dto.getTitle(), dto.getContent());
-                log.info("通知邮件已群发，覆盖 {} 位用户", emails.size());
-                return Result.okMsg("通知已保存，已向 " + emails.size() + " 位用户发送邮件通知");
+                // 邮件发送放到事务提交之后：SMTP 是慢 IO，不该占用数据库事务
+                int total = emails.size();
+                runAfterCommit(() -> sendBatchInChunks(emails, dto.getTitle(), dto.getContent()));
+                log.info("通知邮件已排入提交后群发，覆盖 {} 位用户", total);
+                return Result.okMsg("通知已保存，邮件将在提交后发送给 " + total + " 位用户");
             }
         }
         return Result.okMsg("发送成功");
@@ -203,10 +210,69 @@ public class NotificationServiceImpl extends ServiceImpl<NotificationMapper, Not
         UserDTO user = UserHolder.getUser();
         Long userId = user.getId();
 
-        // 查询用户已删除的通知ID
+        try {
+            // 单条 SQL 直接数出未读数：
+            // 可见范围（本人或全体）AND 无「已读」关联行 AND 无「已删除」关联行。
+            // 原实现是「拉全量可见ID → 再 count 已读」两步，
+            // 其中 user_id=? OR user_id IS NULL 会让 user_id 索引失效走全表扫，
+            // 且 notIn(deletedIds) 随用户删除量无限膨胀、全量 ID 还要拉进 JVM。
+            LambdaQueryWrapper<Notification> wrapper = new LambdaQueryWrapper<Notification>()
+                    .and(w -> w.eq(Notification::getUserId, userId)
+                            .or().isNull(Notification::getUserId))
+                    .apply("NOT EXISTS (SELECT 1 FROM user_notification un_read" +
+                            " WHERE un_read.notification_id = notification.id" +
+                            " AND un_read.user_id = {0}" +
+                            " AND un_read.is_read = 1 AND un_read.is_deleted = 0)", userId)
+                    .apply("NOT EXISTS (SELECT 1 FROM user_notification un_del" +
+                            " WHERE un_del.notification_id = notification.id" +
+                            " AND un_del.user_id = {0}" +
+                            " AND un_del.is_deleted = 1)", userId);
+            return Result.ok(count(wrapper));
+        } catch (Exception e) {
+            // SQL 万一与库结构不匹配时不影响功能，回退到原来的两步算法
+            log.warn("未读数单条SQL失败，回退旧算法: {}", e.getMessage());
+            return Result.ok(countUnreadLegacy(userId));
+        }
+    }
+
+    /**
+     * 把慢 IO（邮件发送）推迟到事务提交之后执行，避免 SMTP 耗时把数据库事务拖长。
+     * 无事务时（例如单元测试直接调用）立即执行。
+     */
+    private void runAfterCommit(Runnable task) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    task.run();
+                }
+            });
+        } else {
+            task.run();
+        }
+    }
+
+    /**
+     * 分批群发：每批 500 封，单批失败不影响其余批次（避免一次异常导致全量重投）。
+     */
+    private void sendBatchInChunks(List<String> emails, String title, String content) {
+        int chunkSize = 500;
+        for (int i = 0; i < emails.size(); i += chunkSize) {
+            List<String> chunk = emails.subList(i, Math.min(i + chunkSize, emails.size()));
+            try {
+                emailService.sendNotificationBatch(chunk, title, content);
+            } catch (Exception e) {
+                log.error("通知邮件群发第 {} 批失败，共 {} 封: {}", (i / chunkSize) + 1, chunk.size(), e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * 旧的两步算法，仅在单条 SQL 异常时兜底使用。
+     */
+    private long countUnreadLegacy(Long userId) {
         Set<Long> deletedIds = getDeletedNotificationIds(userId);
 
-        // 查询用户可见的所有通知ID
         LambdaQueryWrapper<Notification> wrapper = new LambdaQueryWrapper<>();
         wrapper.and(w -> w.eq(Notification::getUserId, userId)
                 .or().isNull(Notification::getUserId));
@@ -219,10 +285,9 @@ public class NotificationServiceImpl extends ServiceImpl<NotificationMapper, Not
                 .collect(Collectors.toList());
 
         if (allNotificationIds.isEmpty()) {
-            return Result.ok(0L);
+            return 0L;
         }
 
-        // 查询用户已读的通知ID
         LambdaQueryWrapper<UserNotification> readWrapper = new LambdaQueryWrapper<>();
         readWrapper.eq(UserNotification::getUserId, userId)
                 .eq(UserNotification::getIsRead, 1)
@@ -230,7 +295,7 @@ public class NotificationServiceImpl extends ServiceImpl<NotificationMapper, Not
                 .in(UserNotification::getNotificationId, allNotificationIds);
         long readCount = userNotificationMapper.selectCount(readWrapper);
 
-        return Result.ok(allNotificationIds.size() - readCount);
+        return allNotificationIds.size() - readCount;
     }
 
     /**

@@ -49,4 +49,14 @@ public interface OrderMapper extends BaseMapper<Order> {
      */
     @Select("SELECT id FROM `order` WHERE status = 0 AND deleted = 0 AND create_time < #{cutoffTime}")
     List<Long> selectTimeoutOrders(@Param("cutoffTime") LocalDateTime cutoffTime);
+
+    /**
+     * 查询「已发货且发货时间早于截止时间」的订单ID列表，用于自动确认收货。
+     * 仅查状态为已发货(2)且未被删除的订单，避免误处理退款中的订单。
+     *
+     * @param cutoffTime 发货时间截止点，早于该时间即视为可自动确认收货
+     * @return 可自动确认收货的订单ID列表
+     */
+    @Select("SELECT id FROM `order` WHERE status = 2 AND deleted = 0 AND ship_time IS NOT NULL AND ship_time < #{cutoffTime}")
+    List<Long> selectShippedOrdersBefore(@Param("cutoffTime") LocalDateTime cutoffTime);
 }

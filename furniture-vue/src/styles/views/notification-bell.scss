@@ -22,7 +22,7 @@
   padding: 0;
   border: none;
   border-radius: 10px;
-  background: #f5f5f5;
+  background: var(--color-border-light);
   cursor: pointer;
   transition: all 0.2s;
   position: relative;
@@ -30,7 +30,7 @@
 
   &:hover {
     background: #e8eaec;
-    color: #333;
+    color: #3d3d3d;
   }
 }
 
@@ -58,13 +58,13 @@
   justify-content: space-between;
   align-items: center;
   padding: 16px 20px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--color-border-light);
 }
 
 .dropdown-header .title {
   font-weight: 600;
   font-size: 15px;
-  color: #333;
+  color: #3d3d3d;
 }
 
 .header-actions {
@@ -83,7 +83,7 @@
 .empty {
   text-align: center;
   padding: 40px 0;
-  color: #999;
+  color: var(--color-text-tertiary);
   font-size: 14px;
   display: flex;
   flex-direction: column;
@@ -111,7 +111,7 @@
   padding: 14px 20px;
   cursor: pointer;
   transition: background 0.2s;
-  border-bottom: 1px solid #f8f8f8;
+  border-bottom: 1px solid var(--color-bg);
 }
 
 .notif-item .delete-btn {
@@ -126,11 +126,11 @@
 }
 
 .notif-item:hover {
-  background: #f5f7fa;
+  background: var(--color-bg);
 }
 
 .notif-item.unread {
-  background: #f7f8fa;
+  background: var(--color-bg);
 }
 
 .notif-item.deleted {
@@ -145,7 +145,7 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #5a6a7a;
+  background: var(--color-accent);
   margin-top: 6px;
   flex-shrink: 0;
 }
@@ -170,14 +170,14 @@
 .notif-title {
   font-size: 14px;
   font-weight: 600;
-  color: #333;
+  color: #3d3d3d;
   margin-bottom: 4px;
   line-height: 1.3;
 }
 
 .notif-desc {
   font-size: 13px;
-  color: #999;
+  color: var(--color-text-tertiary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -193,13 +193,13 @@
 
 .notif-time {
   font-size: 12px;
-  color: #ccc;
+  color: var(--color-border);
 }
 
 .dropdown-footer {
   text-align: center;
   padding: 12px;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--color-border-light);
 }
 
 /* 详情弹窗样式 */
@@ -216,13 +216,13 @@
 
 .detail-time {
   font-size: 13px;
-  color: #999;
+  color: var(--color-text-tertiary);
 }
 
 .detail-title {
   font-size: 20px;
   font-weight: 700;
-  color: #333;
+  color: #3d3d3d;
   margin: 0 0 8px 0;
   line-height: 1.4;
 }

@@ -46,6 +46,7 @@
           <div class="hero-visual">
             <div class="hero-visual-inner">
               <img
+                loading="lazy"
                 v-if="slide.image"
                 :src="imgUrl(slide.image)"
                 class="hero-image"
