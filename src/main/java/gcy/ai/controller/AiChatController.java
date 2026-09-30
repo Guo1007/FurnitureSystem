@@ -128,7 +128,6 @@ public class AiChatController {
                                 return Flux.just(errorJson("AI客服暂时无法响应，请稍后再试"));
                             });
                 });
-
         return Flux.concat(metaEvent, chatStream);
     }
 
