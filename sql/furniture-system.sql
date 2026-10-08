@@ -11,7 +11,7 @@
  Target Server Version : 80043 (8.0.43)
  File Encoding         : 65001
 
- Date: 01/10/2026 01:10:26
+ Date: 08/10/2026 13:41:21
 */
 
 SET NAMES utf8mb4;
@@ -121,13 +121,13 @@ CREATE TABLE `coupon_rule_config`  (
   `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE INDEX `uk_rule_key`(`rule_key` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 3 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '优惠券叠加规则配置表' ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB AUTO_INCREMENT = 7 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '优惠券叠加规则配置表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of coupon_rule_config
 -- ----------------------------
 INSERT INTO `coupon_rule_config` VALUES (1, 'max_stack_count', '3', 1, '单笔订单最多可叠加使用的优惠券张数（1~10）', '2026-09-30 16:14:25');
-INSERT INTO `coupon_rule_config` VALUES (2, 'max_discount_ratio', '20', 1, '多张券叠加时总抵扣占商品总额的上限百分比（1~100，填100表示不限制）', '2026-09-30 16:14:25');
+INSERT INTO `coupon_rule_config` VALUES (2, 'max_discount_ratio', '20', 1, '多张券叠加时总抵扣占商品总额的上限百分比（1~100，填100表示不限制）', '2026-10-08 12:02:23');
 
 -- ----------------------------
 -- Table structure for favorite
