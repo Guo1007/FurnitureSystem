@@ -9,8 +9,31 @@
 /** 金额保留两位，规避浮点累积误差 */
 const money = (v) => Math.round((Number(v) || 0) * 100) / 100;
 
+/**
+ * 叠加规则的后端默认值 —— **前端兜底的唯一来源**。
+ *
+ * 后端把这两个值做成后台可配（`coupon_rule_config` 表）+ 内置默认
+ * （`ICouponRuleConfigService.DEFAULT_MAX_STACK_COUNT / DEFAULT_MAX_DISCOUNT_RATIO`）。
+ * 前端在 `/user/coupons/rules` 拉取失败或返回空时只能猜，因此这里的兜底值必须
+ * 与后端内置默认**逐字对齐**，否则会出现「前端估算的优惠高于后端实际抵扣」——
+ * 用户看到省 ¥X、下单只省 ¥Y。
+ *
+ * 历史教训：这两个值原先散落在 4 个组件里各写一份 0.8 / 3，后端默认值一改就会
+ * 集体脱钩。任何情况下都不要在这些组件里再写死字面量，一律 import 本常量。
+ */
+export const DEFAULT_MAX_RATIO = 0.2;
+export const DEFAULT_MAX_STACK_COUNT = 3;
+
 /** 是否为「指定分类券」（对齐后端 resolveCouponBase 的判定） */
 export const isScoped = (c) => Number(c?.scope) === 1 && c?.typeId != null;
+
+/**
+ * 是否为折扣券（type=2）。
+ * 折扣券每单限用 1 张（对齐后端 validateCoupons）：比例型券叠加是乘方衰减，
+ * 两张 8 折等效 6.4 折，运营无法预估让利，故不允许折扣券之间叠加；
+ * 折扣券仍可与满减券／无门槛券同用。
+ */
+export const isDiscount = (c) => Number(c?.type) === 2;
 
 /**
  * 读取某分类的参与结算小计。
@@ -63,7 +86,7 @@ export function calcTotalDiscount(
   coupons,
   totalAmount,
   subTotals,
-  maxRatio = 0.8,
+  maxRatio = DEFAULT_MAX_RATIO,
   unknown = false,
 ) {
   const list = Array.isArray(coupons) ? coupons.filter(Boolean) : [];
@@ -137,7 +160,7 @@ function bestPermutation(list, calc) {
  *
  * 「不可叠加券与任何其它券互斥」这一约束决定了合法组合只有两种形态：
  *   ① 单独使用一张不可叠加券
- *   ② 使用若干张可叠加券（张数 ≤ maxStackCount）
+ *   ② 使用若干张可叠加券（张数 ≤ maxStackCount，其中折扣券最多 1 张）
  * 两种形态各求最优再比较，即可覆盖全部合法组合。
  *
  * 算法是**带排序启发的贪心 + 小规模排列择优**，不是穷举：先按「折扣券优先、
@@ -151,8 +174,8 @@ export function pickBestCoupons({
   coupons = [],
   totalAmount = 0,
   subTotals = {},
-  maxStackCount = 3,
-  maxRatio = 0.8,
+  maxStackCount = DEFAULT_MAX_STACK_COUNT,
+  maxRatio = DEFAULT_MAX_RATIO,
   unknown = false,
 } = {}) {
   const list = Array.isArray(coupons) ? coupons.filter(Boolean) : [];
@@ -191,6 +214,8 @@ export function pickBestCoupons({
   let picked = [];
   for (const c of ranked) {
     if (picked.length >= maxStackCount) break;
+    // 折扣券每单限 1 张，已有折扣券就跳过其余折扣券
+    if (isDiscount(c) && picked.some(isDiscount)) continue;
     const next = [...picked, c];
     if (calc(next) > calc(picked)) picked = next;
   }

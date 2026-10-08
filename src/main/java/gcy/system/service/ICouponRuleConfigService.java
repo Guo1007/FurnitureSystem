@@ -62,7 +62,8 @@ public interface ICouponRuleConfigService {
     int DEFAULT_MAX_STACK_COUNT = 3;
 
     /**
-     * 总抵扣上限比例默认值（配置缺失时的兜底）：0.8 表示最多抵扣 80%。
+     * 总抵扣上限比例默认值（配置缺失时的兜底）：0.2 表示最多抵扣 20%，
+     * 即用户实付不低于商品总额的 80%（最低打八折）。
      */
-    java.math.BigDecimal DEFAULT_MAX_DISCOUNT_RATIO = new java.math.BigDecimal("0.8");
+    java.math.BigDecimal DEFAULT_MAX_DISCOUNT_RATIO = new java.math.BigDecimal("0.2");
 }

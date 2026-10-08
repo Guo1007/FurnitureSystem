@@ -174,13 +174,13 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         Set<Long> furnitureIdSet = items.stream().map(OrderItemDTO::getFurnitureId)
                 .filter(Objects::nonNull).collect(Collectors.toSet());
         Map<Long, Furniture> furnitureMap = furnitureIdSet.isEmpty() ? Map.of()
-                : furnitureMapper.selectBatchIds(furnitureIdSet).stream()
+                : furnitureMapper.selectByIds(furnitureIdSet).stream()
                         .collect(Collectors.toMap(Furniture::getId, f -> f));
 
         Set<Long> skuIdSet = items.stream().map(OrderItemDTO::getSkuId)
                 .filter(Objects::nonNull).collect(Collectors.toSet());
         Map<Long, Sku> skuMap = skuIdSet.isEmpty() ? Map.of()
-                : skuMapper.selectBatchIds(skuIdSet).stream()
+                : skuMapper.selectByIds(skuIdSet).stream()
                         .collect(Collectors.toMap(Sku::getId, s -> s));
 
         // 「该商品是否存在规格」一次 IN 查询判完，替代逐条 COUNT(*)
@@ -415,8 +415,14 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
      * 批量校验多张优惠券，并施加叠加规则：
      * 不可叠加券只能单独用一张；可叠加券总张数受后台配置的「最大叠加张数」限制。
      * <p>
-     * 注意：不对同一券模板去重——同一张券领取 N 份即对应 user_coupon 中 N 条独立记录，
-     * 本就应当可以分别使用；抵扣失控由「最大叠加张数」与「总抵扣上限比例」共同兜底。
+     * 注意 1：不对同一券模板去重——同一张券领取 N 份即对应 user_coupon 中 N 条独立记录，
+     * 本就应当可以分别使用；抵扣失控由「折扣券限 1 张」「最大叠加张数」「总抵扣上限比例」共同兜底。
+     * </p>
+     * <p>
+     * 注意 2：折扣券（type=2）每单限用 1 张。折扣券是比例型券，叠加是乘法链式衰减
+     * （两张 8 折 = 0.64 即 6.4 折，三张 = 5.12 折），且让利随订单金额线性放大，
+     * 与满减券「固定面额线性相加」的性质完全不同，运营无法预估让利规模，故不开放叠加。
+     * 折扣券仍可与满减券／无门槛券同用。
      * </p>
      */
     private List<Coupon> validateCoupons(Long userId, List<Long> userCouponIds, BigDecimal goodsTotal,
@@ -434,6 +440,14 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         }
         if (coupons.size() > 1 && hasExclusive) {
             throw new BusinessException("不可叠加类优惠券不能与其他优惠券同时使用");
+        }
+        // 折扣券每单限 1 张：比例型券叠加为乘方衰减（两张 8 折 = 6.4 折），
+        // 让利随订单金额放大且运营难以预估，因此折扣券之间不开放叠加。
+        long discountCount = coupons.stream()
+                .filter(c -> c.getType() != null && c.getType() == 2)
+                .count();
+        if (discountCount > 1) {
+            throw new BusinessException("折扣券每单限使用 1 张");
         }
         if (coupons.size() > maxStackCount) {
             throw new BusinessException("最多叠加使用 " + maxStackCount + " 张优惠券");

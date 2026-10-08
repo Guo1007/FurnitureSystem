@@ -213,7 +213,11 @@ import CouponPickerDialog from "@/components/coupon/CouponPickerDialog.vue";
 import { createOrder } from "@/api/order.js";
 import { imgUrl } from "@/utils/img.js";
 import { formatPrice } from "@/utils/format.js";
-import { buildSubTotals, calcTotalDiscount } from "@/utils/coupon.js";
+import {
+  buildSubTotals,
+  calcTotalDiscount,
+  DEFAULT_MAX_RATIO,
+} from "@/utils/coupon.js";
 import { ElMessage } from "element-plus";
 import { logger } from "@/utils/logger.js";
 import ProductCard from "@/components/product/ProductCard.vue";
@@ -287,7 +291,8 @@ const openCouponDialog = () => {
 // 券组合变化后重新估算抵扣（复用与弹窗、后端一致的算法）
 const discountEstimate = computed(() => {
   const ratio = Number(couponRules.value?.maxDiscountRatio);
-  const cap = Number.isFinite(ratio) && ratio > 0 && ratio <= 1 ? ratio : 0.8;
+  const cap =
+    Number.isFinite(ratio) && ratio > 0 && ratio <= 1 ? ratio : DEFAULT_MAX_RATIO;
   return calcTotalDiscount(
     selectedCoupons.value,
     selectedTotalNum.value,

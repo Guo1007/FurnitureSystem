@@ -127,7 +127,7 @@ CREATE TABLE `coupon_rule_config`  (
 -- Records of coupon_rule_config
 -- ----------------------------
 INSERT INTO `coupon_rule_config` VALUES (1, 'max_stack_count', '3', 1, '单笔订单最多可叠加使用的优惠券张数（1~10）', '2026-09-30 16:14:25');
-INSERT INTO `coupon_rule_config` VALUES (2, 'max_discount_ratio', '80', 1, '多张券叠加时总抵扣占商品总额的上限百分比（1~100，填100表示不限制）', '2026-09-30 16:14:25');
+INSERT INTO `coupon_rule_config` VALUES (2, 'max_discount_ratio', '20', 1, '多张券叠加时总抵扣占商品总额的上限百分比（1~100，填100表示不限制）', '2026-09-30 16:14:25');
 
 -- ----------------------------
 -- Table structure for favorite
@@ -3242,6 +3242,7 @@ CREATE TABLE `order`  (
   INDEX `idx_status`(`status` ASC) USING BTREE,
   INDEX `idx_timeout_query`(`status` ASC, `create_time` ASC) USING BTREE,
   INDEX `idx_user_del_ctime`(`user_id` ASC, `deleted` ASC, `user_deleted` ASC, `create_time` DESC) USING BTREE,
+  INDEX `idx_del_ctime`(`deleted` ASC, `create_time` DESC) USING BTREE,
   CONSTRAINT `order_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `user` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT
 ) ENGINE = InnoDB AUTO_INCREMENT = 2105295365665030147 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '订单表' ROW_FORMAT = DYNAMIC;
 

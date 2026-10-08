@@ -2,6 +2,7 @@ package gcy.system.service.Impl;
 
 import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import gcy.system.entity.dto.Result;
@@ -24,6 +25,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 
 import java.time.LocalDateTime;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -70,6 +72,7 @@ public class CommentServiceImpl implements ICommentService {
         Page<CommentVO> page = new Page<>(current != null ? current : 1, size != null ? size : 10);
         Page<CommentVO> result = goodsCommentMapper.selectCommentsByGoodsId(goodsId, userId, page);
         fillAppendList(result.getRecords(), userId);
+        fillCommentCounts(result.getRecords());
         return Result.ok(result);
     }
 
@@ -93,6 +96,7 @@ public class CommentServiceImpl implements ICommentService {
         }
         List<CommentVO> comments = goodsCommentMapper.selectCommentsByOrderId(orderId, userId);
         fillAppendList(comments, userId);
+        fillCommentCounts(comments);
         return Result.ok(comments);
     }
 
@@ -112,6 +116,58 @@ public class CommentServiceImpl implements ICommentService {
                 .collect(Collectors.groupingBy(CommentAppendVO::getMainCommentId));
         for (CommentVO comment : comments) {
             comment.setAppendList(appendMap.getOrDefault(comment.getId(), Collections.emptyList()));
+        }
+    }
+
+    /**
+     * 为评价列表批量填充每条评价下的评论（回复）总数，供列表页角标展示。
+     * <p>
+     * 一次 {@code GROUP BY review_id} 取回本页所有评价的计数，替代前端原先
+     * 「每条评价各发一次 /review-comment/list/{id}」的做法（详情页固定取 100 条
+     * 评价即 100 次串行 HTTP，页面空转 5~20 秒）。
+     * </p>
+     * <p>
+     * 过滤口径说明：取 {@code user_deleted = 0}，即与「展开评论区后实际渲染出的
+     * 条数」保持一致（前端 filterDeletedComments 会把用户自删的滤掉）。
+     * 这里刻意不复用 {@code ReviewCommentMapper.selectByReviewId} 的
+     * 「自己删的对自己可见」分支——否则角标会比展开后多出几条，对不上。
+     * </p>
+     * <p>
+     * 关于「回复的回复」：{@code ReviewCommentServiceImpl.buildCommentTree} 只组装两层，
+     * 会把 replyToCommentId 指向非根节点的行丢掉；正常 UI 路径下
+     * {@code submitReviewComment} 已把回复扁平化到根节点，故行数 == 渲染条数。
+     * 若库中存在历史脏数据（孙节点），这里的 COUNT(*) 会比前端递归统计略大。
+     * </p>
+     */
+    private void fillCommentCounts(List<CommentVO> comments) {
+        if (comments == null || comments.isEmpty()) return;
+        List<Long> reviewIds = comments.stream()
+                .map(CommentVO::getId)
+                .filter(java.util.Objects::nonNull)
+                .collect(Collectors.toList());
+        if (reviewIds.isEmpty()) return;
+        Map<Long, Integer> countMap = new HashMap<>();
+        try {
+            QueryWrapper<ReviewComment> qw = new QueryWrapper<ReviewComment>()
+                    .select("review_id", "COUNT(*) AS cnt")
+                    .in("review_id", reviewIds)
+                    .eq("deleted", 0)
+                    .eq("user_deleted", 0)
+                    .eq("status", 1)
+                    .groupBy("review_id");
+            for (Map<String, Object> row : reviewCommentMapper.selectMaps(qw)) {
+                Object rid = row.get("review_id");
+                Object cnt = row.get("cnt");
+                if (rid instanceof Number && cnt instanceof Number) {
+                    countMap.put(((Number) rid).longValue(), ((Number) cnt).intValue());
+                }
+            }
+        } catch (Exception e) {
+            // 计数失败不该让整个评价列表接口挂掉，退化为 0（前端角标不显示）
+            log.warn("批量统计评价评论数失败，角标将显示为0: {}", e.getMessage());
+        }
+        for (CommentVO comment : comments) {
+            comment.setCommentCount(countMap.getOrDefault(comment.getId(), 0));
         }
     }
 

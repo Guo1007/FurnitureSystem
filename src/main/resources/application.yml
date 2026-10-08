@@ -30,6 +30,16 @@ spring:
         queue-capacity: 200
       thread-name-prefix: async-
 
+    # 定时任务线程池（@Scheduled 使用）。
+    # Spring Boot 默认只有 1 个调度线程，而 AiKeepAliveScheduler 的心跳内部用
+    # .block(Duration.ofSeconds(30)) 同步等待，最坏情况下会独占该线程 30 秒，
+    # 把每分钟执行的 OrderTimeoutScheduler（订单超时取消）顺延同样时长。
+    # 这里给 3 个线程，让 AI 心跳与三个订单/库存定时任务互不阻塞。
+    scheduling:
+      pool:
+        size: 3
+      thread-name-prefix: sched-
+
   web:
     resources:
       static-locations: classpath:/static/

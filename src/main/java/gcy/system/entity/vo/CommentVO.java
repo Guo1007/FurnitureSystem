@@ -93,6 +93,17 @@ public class CommentVO {
     private List<CommentAppendVO> appendList;
 
     /**
+     * 该条评价下的评论（回复）总数，用于列表页角标。
+     * <p>
+     * 服务端一次 GROUP BY 批量算好：此前前端拿到评价列表后要对**每条**评价
+     * 单独请求一次 {@code /review-comment/list/{id}} 才能显示角标，
+     * 详情页固定取 100 条评价就是 100 次串行 HTTP。
+     * 口径与「展开评论区后实际渲染的条数」一致（排除已逻辑删除/用户自删/未过审）。
+     * </p>
+     */
+    private Integer commentCount;
+
+    /**
      * 创建时间
      */
     private LocalDateTime createTime;

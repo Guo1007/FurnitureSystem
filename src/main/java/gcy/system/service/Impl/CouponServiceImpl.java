@@ -190,7 +190,7 @@ public class CouponServiceImpl implements ICouponService {
             return Result.ok(list);
         }
         List<Long> couponIds = list.stream().map(UserCoupon::getCouponId).distinct().collect(Collectors.toList());
-        Map<Long, Coupon> couponMap = couponMapper.selectBatchIds(couponIds).stream()
+        Map<Long, Coupon> couponMap = couponMapper.selectByIds(couponIds).stream()
                 .collect(Collectors.toMap(Coupon::getId, c -> c));
 
         LocalDateTime now = LocalDateTime.now();

@@ -1188,7 +1188,11 @@ import {
 import { getFurnitureByTypeId } from "@/api/furniture.js";
 import ProductCard from "@/components/product/ProductCard.vue";
 import CouponPickerDialog from "@/components/coupon/CouponPickerDialog.vue";
-import { calcTotalDiscount, couponReason } from "@/utils/coupon.js";
+import {
+  calcTotalDiscount,
+  couponReason,
+  DEFAULT_MAX_RATIO,
+} from "@/utils/coupon.js";
 
 const cartStore = useCartStore();
 
@@ -1300,7 +1304,8 @@ const buyAvailableCount = computed(
 // 多张券总优惠：复用与弹窗、后端一致的算法（分类池与整单池分别递减 + 比例封顶）
 const buyDiscountEstimate = computed(() => {
   const ratio = Number(couponRules.value?.maxDiscountRatio);
-  const cap = Number.isFinite(ratio) && ratio > 0 && ratio <= 1 ? ratio : 0.8;
+  const cap =
+    Number.isFinite(ratio) && ratio > 0 && ratio <= 1 ? ratio : DEFAULT_MAX_RATIO;
   return calcTotalDiscount(
     selectedBuyCoupons.value,
     buyGoodsTotal.value,
@@ -1512,8 +1517,18 @@ const goToType = (id) => {
 };
 
 const loadRelatedProducts = async () => {
+  // 取当前商品的分类来查「相关」商品。
+  // 此前传的是 typeId: 0（后端语义为「全部商品」），取到的永远是全站最新 4 件
+  // 再排除自身，与当前商品的分类没有任何关系。
+  const tid = furniture.value?.typeId ?? furniture.value?.type_id ?? null;
+  if (tid == null) {
+    // 拿不到分类就不猜，宁可空着也不要退回 0 展示无关商品
+    relatedProducts.value = [];
+    return;
+  }
   try {
-    const res = await getFurnitureByTypeId({ typeId: 0, current: 1, size: 4 });
+    // 多取 1 条：当前商品本身也会命中该分类，过滤掉后仍能凑满 4 个
+    const res = await getFurnitureByTypeId({ typeId: tid, current: 1, size: 5 });
     if ((res.success || res.code === 200) && res.data) {
       relatedProducts.value = (res.data.records || [])
         .filter((p) => p.id != furnitureId.value)
@@ -1555,8 +1570,11 @@ const loadReviews = async () => {
           reviewCount: records.length,
         };
       }
-      // 加载每条评价的评论数
-      loadAllCommentCounts(records);
+      // 评论数由后端在评价列表里一并返回（commentCount），不再逐条请求
+      // /review-comment/list/{id} —— 原先固定 100 条评价就是 100 次串行 HTTP
+      for (const r of records) {
+        reviewCommentCountMap[r.id] = Number(r.commentCount) || 0;
+      }
       // 如果 URL 带了 reviewId，滚动到对应位置
       const targetReviewId = route.query.reviewId;
       const targetReviewCommentId = route.query.reviewCommentId;
@@ -1569,20 +1587,6 @@ const loadReviews = async () => {
     }
   } catch (e) {
     /* ignore */
-  }
-};
-
-// 加载所有评价的评论数（不展开评论内容）
-const loadAllCommentCounts = async (reviews) => {
-  for (const r of reviews) {
-    try {
-      const res = await getReviewComments(r.id);
-      if ((res.success || res.code === 200) && res.data) {
-        reviewCommentCountMap[r.id] = countComments(res.data);
-      }
-    } catch (e) {
-      reviewCommentCountMap[r.id] = 0;
-    }
   }
 };
 
@@ -1861,7 +1865,10 @@ const handleToggleFav = async () => {
 onMounted(async () => {
   loadUserInfo();
   loadTypeInfo();
-  loadFurnitureDetail(furnitureId.value);
+  // 详情与规格并行拉取，但要留下详情这个 Promise：
+  // loadRelatedProducts 依赖 furniture.typeId，游客路径下从发起详情请求到
+  // 调 loadRelatedProducts 之间没有任何 await 点，不 await 就会拿到空对象
+  const detailPromise = loadFurnitureDetail(furnitureId.value);
   loadSpecs(furnitureId.value);
   // 已登录才加载地址和收藏状态（游客浏览不触发需登录接口）
   if (isLoggedIn.value) {
@@ -1876,6 +1883,7 @@ onMounted(async () => {
     }
   }
   loadReviews();
+  await detailPromise;
   loadRelatedProducts();
 });
 

@@ -9,9 +9,35 @@
  * 1. 并发合并（in-flight dedup）：缓存未命中时并发发起的多个调用共享同一个 Promise，
  *    只会真正发出一次网络请求。
  * 2. 失败不缓存：请求失败时立即清空缓存，下一次调用会重新发起，不会把错误「缓存住」。
+ *    「失败」包含两种形态——网络/HTTP 层 reject，以及**业务层失败**（见 isBusinessFailure）。
  */
 
 const store = new Map(); // key -> { at: number, promise: Promise }
+
+/**
+ * 判定一个「已 resolve 的响应」是否其实是业务失败。
+ *
+ * 为什么需要这一步：`api/request.js` 的响应拦截器对**非 401 的业务错误**
+ * （`code !== 200 && success !== true`）是 `return res` —— 即 resolve 而非 reject，
+ * 让调用组件的 else 分支自己去展示 msg。所以只挂 `.catch` 拦不住业务错误，
+ * 形如 `{code: 500}` 的响应会被当作成功结果缓存整个 TTL，
+ * 期间切换路由、重新挂载组件都不会重试（模块级 Map 不随组件销毁），
+ * 用户只能整页刷新。分类列表最典型：抖一次，导航栏就空 60 秒。
+ *
+ * blob 响应需排除：拦截器对 `responseType === "blob"` 直接 `return response.data`，
+ * 拿到的不是统一响应体，没有 code 字段，靠 `"code" in res` 天然排除。
+ */
+const isBusinessFailure = (res) => {
+  if (res == null || typeof res !== "object") return false;
+  if (!("code" in res)) return false;
+  return !(res.code === 200 || res.code === "200" || res.success === true);
+};
+
+/** 只清掉「仍是本次发起的那条」记录，避免误删并发期间被别人重建的缓存 */
+const dropIfCurrent = (key, promise) => {
+  const cur = store.get(key);
+  if (cur && cur.promise === promise) store.delete(key);
+};
 
 /**
  * 发起一个可被合并/缓存的请求。
@@ -29,12 +55,17 @@ export function cachedRequest(key, ttl, fetcher, clone = true) {
     return clone ? hit.promise.then((res) => shallowCopy(res)) : hit.promise;
   }
 
-  const promise = fetcher().catch((err) => {
-    // 失败不缓存：清掉本次记录，保证下次能重新发起
-    const cur = store.get(key);
-    if (cur && cur.promise === promise) store.delete(key);
-    return Promise.reject(err);
-  });
+  const promise = fetcher()
+    .then((res) => {
+      // 业务失败同样不缓存（拦截器是 resolve 返回的，只有 .catch 拦不到）
+      if (isBusinessFailure(res)) dropIfCurrent(key, promise);
+      return res;
+    })
+    .catch((err) => {
+      // 失败不缓存：清掉本次记录，保证下次能重新发起
+      dropIfCurrent(key, promise);
+      return Promise.reject(err);
+    });
 
   store.set(key, { at: now, promise });
 

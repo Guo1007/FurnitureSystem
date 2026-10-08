@@ -69,7 +69,12 @@
               <span>{{ c.scopeText || "全场通用" }}</span>
               <span v-if="formatDate(c.expireTime)">· {{ formatDate(c.expireTime) }} 到期</span>
             </div>
-            <div class="cp-card__save">本单可抵 ¥{{ formatPrice(estimate(c)) }}</div>
+            <div v-if="blockReason(c)" class="cp-card__reason">
+              {{ blockReason(c) }}
+            </div>
+            <div v-else class="cp-card__save">
+              本单可抵 ¥{{ formatPrice(estimate(c)) }}
+            </div>
           </div>
 
           <!-- 勾选 -->
@@ -109,7 +114,11 @@
             ，实付 ¥{{ formatPrice(payable) }}
           </span>
           <span v-else class="cp-footer__tip">
-            {{ maxStackCount > 1 ? `最多可叠加 ${maxStackCount} 张券` : "当前仅可使用 1 张券" }}
+            {{
+              maxStackCount > 1
+                ? `最多可叠加 ${maxStackCount} 张券（折扣券限 1 张）`
+                : "当前仅可使用 1 张券"
+            }}
           </span>
         </div>
         <div class="cp-footer__btns">
@@ -129,7 +138,10 @@ import {
   calcTotalDiscount,
   couponReason,
   formatDay,
+  isDiscount,
   pickBestCoupons,
+  DEFAULT_MAX_RATIO,
+  DEFAULT_MAX_STACK_COUNT,
 } from "@/utils/coupon.js";
 
 const props = defineProps({
@@ -169,11 +181,11 @@ const draft = ref([]);
 
 const maxStackCount = computed(() => {
   const n = Number(props.rules?.maxStackCount);
-  return Number.isInteger(n) && n >= 1 ? n : 3;
+  return Number.isInteger(n) && n >= 1 ? n : DEFAULT_MAX_STACK_COUNT;
 });
 const maxRatio = computed(() => {
   const r = Number(props.rules?.maxDiscountRatio);
-  return Number.isFinite(r) && r > 0 && r <= 1 ? r : 0.8;
+  return Number.isFinite(r) && r > 0 && r <= 1 ? r : DEFAULT_MAX_RATIO;
 });
 
 watch(
@@ -236,13 +248,31 @@ const estimate = (c) => {
 const isOn = (c) => draft.value.includes(c.userCouponId);
 const isStackable = (c) => Number(c.stackable) === 1;
 
-/** 是否允许勾选：不可叠加券与已选其它券互斥；已达张数上限 */
+/** 折扣券每单限 1 张：已选了折扣券时，其余折扣券一律不能再勾 */
+const blockedByDiscount = (c) =>
+  isDiscount(c) && selectedCoupons.value.some(isDiscount);
+
+/** 是否允许勾选：折扣券限 1 张；不可叠加券与已选其它券互斥；已达张数上限 */
 const canCheck = (c) => {
   if (isOn(c)) return true;
   const cur = selectedCoupons.value;
   if (!cur.length) return true;
+  if (blockedByDiscount(c)) return false;
   if (cur.length >= maxStackCount.value) return false;
   return isStackable(c) && cur.every(isStackable);
+};
+
+/** 不可勾选的原因文案，直接显示在卡片上，避免用户点了没反应 */
+const blockReason = (c) => {
+  if (isOn(c)) return "";
+  const cur = selectedCoupons.value;
+  if (!cur.length) return "";
+  if (blockedByDiscount(c)) return "折扣券每单限 1 张";
+  if (cur.length >= maxStackCount.value)
+    return `最多叠加 ${maxStackCount.value} 张`;
+  if (!isStackable(c)) return "该券不可与已选券同用";
+  if (!cur.every(isStackable)) return "已选了不可叠加券";
+  return "";
 };
 
 const toggle = (c) => {
@@ -252,11 +282,10 @@ const toggle = (c) => {
     return;
   }
   if (isStackable(c)) {
-    // 可叠加券：清掉已选的不可叠加券
-    draft.value = [
-      ...selectedCoupons.value.filter(isStackable).map((x) => x.userCouponId),
-      c.userCouponId,
-    ];
+    // 可叠加券：清掉已选的不可叠加券；若本次勾的是折扣券，再清掉其它折扣券
+    const keep = selectedCoupons.value.filter(isStackable);
+    const rest = isDiscount(c) ? keep.filter((x) => !isDiscount(x)) : keep;
+    draft.value = [...rest.map((x) => x.userCouponId), c.userCouponId];
   } else {
     // 不可叠加券：独占
     draft.value = [c.userCouponId];

@@ -260,7 +260,11 @@ import CouponPickerDialog from "@/components/coupon/CouponPickerDialog.vue";
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { imgUrl } from "@/utils/img.js";
 import { formatPrice } from "@/utils/format.js";
-import { buildSubTotals, calcTotalDiscount } from "@/utils/coupon.js";
+import {
+  buildSubTotals,
+  calcTotalDiscount,
+  DEFAULT_MAX_RATIO,
+} from "@/utils/coupon.js";
 import { logger } from "@/utils/logger.js";
 import { useRequireLogin } from "@/composables/useRequireLogin.js";
 
@@ -315,7 +319,8 @@ const couponSubTotals = computed(() => buildSubTotals(cartStore.items));
 // 多张券总优惠：复用与弹窗、后端一致的算法（分类池与整单池分别递减 + 比例封顶）
 const discountEstimate = computed(() => {
   const ratio = Number(couponRules.value?.maxDiscountRatio);
-  const cap = Number.isFinite(ratio) && ratio > 0 && ratio <= 1 ? ratio : 0.8;
+  const cap =
+    Number.isFinite(ratio) && ratio > 0 && ratio <= 1 ? ratio : DEFAULT_MAX_RATIO;
   return calcTotalDiscount(
     selectedCoupons.value,
     cartTotalNum.value,

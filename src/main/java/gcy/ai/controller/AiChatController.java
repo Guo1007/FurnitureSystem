@@ -229,7 +229,7 @@ public class AiChatController {
                     .limit(5)
                     .map(Favorite::getFurnitureId)
                     .collect(Collectors.toList());
-            Map<Long, Furniture> furnitureMap = furnitureMapper.selectBatchIds(furnitureIds)
+            Map<Long, Furniture> furnitureMap = furnitureMapper.selectByIds(furnitureIds)
                     .stream()
                     .collect(Collectors.toMap(Furniture::getId, f -> f));
             ctx.append("该用户已收藏以下商品：");

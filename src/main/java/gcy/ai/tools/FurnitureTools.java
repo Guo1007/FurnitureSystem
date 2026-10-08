@@ -1,6 +1,7 @@
 package gcy.ai.tools;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import dev.langchain4j.agent.tool.Tool;
 import gcy.system.entity.dto.UserDTO;
 import gcy.system.entity.pojo.*;
@@ -10,8 +11,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
@@ -44,6 +47,17 @@ public class FurnitureTools {
     private final FavoriteMapper favoriteMapper;
 
     /**
+     * 单次工具调用返回的商品条数上限。
+     * <p>
+     * 工具方法的返回值会作为文本直接进模型上下文并被记忆窗口保留，而
+     * {@code LIKE '%关键词%'} 的前导通配符用不上索引、又没有 LIMIT 时，
+     * 模型传一个宽泛词（或空串）就会把整库商品拼成文本塞回去，
+     * 既浪费 token 也污染后续每一轮的上下文。
+     * </p>
+     */
+    private static final int TOOL_RESULT_LIMIT = 10;
+
+    /**
      * 根据商品名称模糊搜索商品。
      *
      * @param name 搜索关键词
@@ -51,11 +65,16 @@ public class FurnitureTools {
      */
     @Tool("根据商品名称模糊搜索商品，仅返回名称、ID和价格")
     public String searchFurniture(String name) {
-        log.debug("调用searchFurniture");
+        log.debug("调用searchFurniture, name={}", name);
+        // 空关键词不能丢进 like：会退化成 LIKE '%%' 全表扫，把整库商品都捞回来
+        if (name == null || name.trim().isEmpty()) {
+            return "请告诉我您想找什么家具，比如「沙发」「餐桌」「床」～";
+        }
         List<Furniture> list = furnitureMapper.selectList(
                 new LambdaQueryWrapper<Furniture>()
                         .select(Furniture::getId, Furniture::getFName, Furniture::getPrice, Furniture::getStock)
-                        .like(Furniture::getFName, name)
+                        .like(Furniture::getFName, name.trim())
+                        .last("LIMIT " + TOOL_RESULT_LIMIT)
         );
         if (list.isEmpty()) {
             return "未找到名称中包含「" + name + "」的商品";
@@ -64,6 +83,9 @@ public class FurnitureTools {
         for (Furniture f : list) {
             sb.append(String.format("- %s [商品:%d] | ¥%s | 库存:%d件\n",
                     f.getFName(), f.getId(), f.getPrice(), f.getStock()));
+        }
+        if (list.size() >= TOOL_RESULT_LIMIT) {
+            sb.append(String.format("（结果较多，仅列出前 %d 条，可提供更具体的关键词）\n", TOOL_RESULT_LIMIT));
         }
         return sb.toString();
     }
@@ -106,11 +128,16 @@ public class FurnitureTools {
     @Tool("查询指定商品的所有SKU规格及每个SKU的库存、价格信息。需要传入商品名称")
     public String querySkuInfo(String furnitureName) {
         log.debug("调用querySkuInfo, furnitureName={}", furnitureName);
+        // 空关键词会把整库商品当候选，下面「找到多个匹配」的分支会拼出极长文本
+        if (furnitureName == null || furnitureName.trim().isEmpty()) {
+            return "请告诉我具体是哪款商品，比如「北欧沙发」～";
+        }
 
         List<Furniture> furnitureList = furnitureMapper.selectList(
                 new LambdaQueryWrapper<Furniture>()
                         .select(Furniture::getId, Furniture::getFName)
-                        .like(Furniture::getFName, furnitureName)
+                        .like(Furniture::getFName, furnitureName.trim())
+                        .last("LIMIT " + TOOL_RESULT_LIMIT)
         );
         if (furnitureList.isEmpty()) {
             return "未找到名称中包含「" + furnitureName + "」的商品";
@@ -182,12 +209,34 @@ public class FurnitureTools {
         if (furnitureList.isEmpty()) {
             return "暂无商品数据";
         }
+        // 一次 GROUP BY 取回所有商品的 SKU 数量，替代原先「每个商品一条 COUNT(*)」的 N+1
+        // （商品表 1000 条时原实现要跑 1001 条串行 SQL，且全在 AI 对话线程上）
+        // 注意：这里刻意**不加** status 过滤，与原 selectCount 的语义保持一致
+        //（SkuMapper.sumStockByFurnitureId 只统计 status=1，两者口径不同，别混用）
+        Map<Long, Long> skuCountByFurniture = new HashMap<>();
+        try {
+            List<Long> furnitureIds = furnitureList.stream()
+                    .map(Furniture::getId)
+                    .collect(Collectors.toList());
+            QueryWrapper<Sku> qw = new QueryWrapper<Sku>()
+                    .select("furniture_id", "COUNT(*) AS cnt")
+                    .in("furniture_id", furnitureIds)
+                    .groupBy("furniture_id");
+            for (Map<String, Object> row : skuMapper.selectMaps(qw)) {
+                Object fid = row.get("furniture_id");
+                Object cnt = row.get("cnt");
+                if (fid instanceof Number && cnt instanceof Number) {
+                    skuCountByFurniture.put(((Number) fid).longValue(), ((Number) cnt).longValue());
+                }
+            }
+        } catch (Exception e) {
+            // 统计失败只影响 SKU 个数展示，库存总数仍要正常返回
+            log.warn("批量统计SKU数量失败，SKU个数将显示为0: {}", e.getMessage());
+        }
         StringBuilder sb = new StringBuilder("【库存概况】\n");
         int totalStock = 0;
         for (Furniture f : furnitureList) {
-            int skuCount = skuMapper.selectCount(
-                    new LambdaQueryWrapper<Sku>()
-                            .eq(Sku::getFurnitureId, f.getId())).intValue();
+            int skuCount = skuCountByFurniture.getOrDefault(f.getId(), 0L).intValue();
             sb.append(String.format("- %s: 库存%d件%s\n",
                     f.getFName(), f.getStock(), skuCount > 0 ? " (" + skuCount + "个SKU)" : ""));
             totalStock += f.getStock();
@@ -337,19 +386,33 @@ public class FurnitureTools {
 
     /**
      * 根据商品名称模糊查找唯一商品，匹配到多个时返回 null。
+     * <p>
+     * 先按精确名称查一次：命中即唯一，省掉「LIKE 捞一批再遍历找精确项」那一步；
+     * 兜底的 LIKE 带 LIMIT，避免宽泛关键词全表扫。语义与原先一致——
+     * 存在精确匹配时取精确项，反之若模糊匹配不唯一则返回 null。
+     * </p>
      */
     private Furniture findOneFurniture(String name) {
+        String keyword = name.trim();
+        Furniture exact = furnitureMapper.selectOne(
+                new LambdaQueryWrapper<Furniture>()
+                        .select(Furniture::getId, Furniture::getFName, Furniture::getPrice,
+                                Furniture::getStock, Furniture::getTypeId)
+                        .eq(Furniture::getFName, keyword)
+                        .last("LIMIT 1")
+        );
+        if (exact != null) return exact;
         List<Furniture> list = furnitureMapper.selectList(
                 new LambdaQueryWrapper<Furniture>()
-                        .select(Furniture::getId, Furniture::getFName, Furniture::getPrice, Furniture::getStock, Furniture::getTypeId)
-                        .like(Furniture::getFName, name.trim())
+                        .select(Furniture::getId, Furniture::getFName, Furniture::getPrice,
+                                Furniture::getStock, Furniture::getTypeId)
+                        .like(Furniture::getFName, keyword)
+                        .last("LIMIT " + TOOL_RESULT_LIMIT)
         );
         if (list.isEmpty()) return null;
         if (list.size() > 1) {
+            // 精确匹配已在上面返回，走到这里说明模糊命中多个且无一精确
             log.debug("findOneFurniture: 匹配到多个商品, name={}", name);
-            for (Furniture f : list) {
-                if (f.getFName().equals(name.trim())) return f;
-            }
             return null;
         }
         return list.get(0);
@@ -377,14 +440,20 @@ public class FurnitureTools {
         if (favorites.isEmpty()) {
             return "您还没有收藏任何商品，在商品详情页点击收藏按钮即可添加～";
         }
+        // 一次批量取回所有收藏的商品，替代原先「每条收藏一次 selectOne」的 N+1
+        List<Long> furnitureIds = favorites.stream()
+                .map(Favorite::getFurnitureId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .collect(Collectors.toList());
+        Map<Long, Furniture> furnitureMap = furnitureIds.isEmpty() ? Map.of()
+                : furnitureMapper.selectByIds(furnitureIds).stream()
+                        .collect(Collectors.toMap(Furniture::getId, f -> f));
         StringBuilder sb = new StringBuilder("【");
         sb.append(user.getUserName() != null ? user.getUserName() : "您");
         sb.append("的收藏商品】\n");
         for (Favorite fav : favorites) {
-            Furniture f = furnitureMapper.selectOne(
-                    new LambdaQueryWrapper<Furniture>()
-                            .select(Furniture::getId, Furniture::getFName, Furniture::getPrice, Furniture::getStock)
-                            .eq(Furniture::getId, fav.getFurnitureId()));
+            Furniture f = furnitureMap.get(fav.getFurnitureId());
             if (f != null) {
                 sb.append(String.format("· %s [商品:%d] | ¥%s | 库存: %d件\n",
                         f.getFName(), f.getId(), f.getPrice(), f.getStock()));

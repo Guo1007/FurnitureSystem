@@ -4,8 +4,10 @@
 -- 背景：furniture 表除 type_id 外没有任何二级索引，按 stock / sale_count /
 --       brand / is_recommended 查询（含排序）都会全表扫 + filesort；
 --       order 表缺 (user_id, deleted, user_deleted, create_time) 复合索引，
---       「我的订单」分页需先回表过滤再排序。
---       数据量小时不明显，数据量上来后这两处是主要慢查询来源。
+--       「我的订单」分页需先回表过滤再排序；
+--       且没有任何以 create_time 打头的索引，后台订单列表默认排序与仪表盘
+--       趋势图只能全表扫 + filesort。
+--       数据量小时不明显，数据量上来后这几处是主要慢查询来源。
 --
 -- 用法：在 furniture-system 库中执行本脚本即可，已存在的索引会自动跳过。
 -- ============================================================
@@ -43,6 +45,20 @@ SET @exist := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS
                WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'order' AND INDEX_NAME = 'idx_user_del_ctime');
 SET @sql := IF(@exist = 0,
                'CREATE INDEX idx_user_del_ctime ON `order`(user_id, deleted, user_deleted, create_time DESC)',
+               'SELECT 1');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- ---------- order：后台订单列表 / 仪表盘趋势 ----------
+
+-- 不带 user_id 的「排除已删 + 按下单时间倒序」：后台订单列表默认排序
+-- （OrderManageServiceImpl）与仪表盘订单趋势图（OrderMapper.selectOrderTrend）
+-- 原先只能全表扫 + filesort，每次翻页重算。
+-- 注意：本索引不替代上面的 idx_user_del_ctime —— 「我的订单」带 user_id 前缀，
+-- 走那条更优，两条各司其职，不要删掉任一条。
+SET @exist := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS
+               WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'order' AND INDEX_NAME = 'idx_del_ctime');
+SET @sql := IF(@exist = 0,
+               'CREATE INDEX idx_del_ctime ON `order`(deleted, create_time DESC)',
                'SELECT 1');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
