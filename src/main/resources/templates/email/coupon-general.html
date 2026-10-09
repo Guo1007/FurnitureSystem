@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>优惠券发放通知</title>
+</head>
+<!--
+  通用场景的邮件模板：中性通知，不道歉也不寒暄。
+  ⚠️ 三个模板的区别只在「文案与语气」，布局刻意保持一致。
+  券的面额/门槛/有效期一律由后端从券模板真实字段传入，模板里不得写死金额。
+-->
+<body style="margin: 0; padding: 0; background-color: #f5f5f5; font-family: 'Microsoft YaHei', Arial, sans-serif;">
+<div style="max-width: 480px; margin: 30px auto; background: #fff; border-radius: 4px; border: 1px solid #e8e8e8;">
+    <!-- Header 品牌区 -->
+    <div style="padding: 20px 30px; border-bottom: 1px solid #eee;">
+        <img src="cid:siteLogo" alt="家具商城" style="width: 32px; height: 32px; margin-right: 10px; display: inline-block; vertical-align: middle;">
+        <span style="font-size: 18px; font-weight: 700; color: #333; vertical-align: middle;">家具商城</span>
+    </div>
+    <!-- Content -->
+    <div style="padding: 32px 30px 8px; text-align: center;">
+        <div style="display: inline-block; width: 64px; height: 64px; border-radius: 50%; line-height: 64px; font-size: 32px; margin-bottom: 16px; background: #f5f5f5;">🎫</div>
+        <h2 style="font-size: 18px; color: #333; margin: 0 0 12px 0; font-weight: 600;">优惠券发放通知</h2>
+        <p style="color: #666; font-size: 14px; line-height: 1.8; margin: 0; text-align: left;">
+            <span th:text="${userName != null ? userName + '，您好：' : '您好：'}">您好：</span>
+        </p>
+        <p style="color: #666; font-size: 14px; line-height: 1.8; margin: 8px 0 0 0; text-align: left;">
+            您收到一张优惠券，具体信息如下，请在有效期内使用。
+        </p>
+    </div>
+    <!-- Coupon Info -->
+    <div style="margin: 20px 30px 24px; background: #fafafa; border-left: 3px solid #888; border-radius: 4px; padding: 16px 20px;">
+        <table style="width: 100%; border-collapse: collapse;">
+            <tr>
+                <td style="padding: 6px 0; color: #999; font-size: 13px; width: 80px;">券名称</td>
+                <td style="padding: 6px 0; color: #333; font-size: 13px; font-weight: 500;" th:text="${couponName}">优惠券</td>
+            </tr>
+            <tr>
+                <td style="padding: 6px 0; color: #999; font-size: 13px;">面　　额</td>
+                <td style="padding: 6px 0; color: #333; font-size: 15px; font-weight: 700;" th:text="${amountText}">¥20</td>
+            </tr>
+            <tr>
+                <td style="padding: 6px 0; color: #999; font-size: 13px;">使用门槛</td>
+                <td style="padding: 6px 0; color: #333; font-size: 13px;" th:text="${thresholdText}">满100可用</td>
+            </tr>
+            <tr>
+                <td style="padding: 6px 0; color: #999; font-size: 13px;">有效期</td>
+                <td style="padding: 6px 0; color: #333; font-size: 13px;" th:text="${validText}">发放后 30 天有效</td>
+            </tr>
+        </table>
+    </div>
+    <!-- 发放原因（可选） -->
+    <div th:if="${remark != null}" style="margin: 0 30px 24px; background: #fafafa; border-radius: 4px; padding: 16px 20px;">
+        <table style="width: 100%; border-collapse: collapse;">
+            <tr>
+                <td style="padding: 6px 0; color: #999; font-size: 13px; width: 80px; vertical-align: top;">说明</td>
+                <td style="padding: 6px 0; color: #333; font-size: 13px; line-height: 1.6;" th:text="${remark}">说明</td>
+            </tr>
+        </table>
+    </div>
+    <div style="padding: 0 30px 24px;">
+        <p style="color: #888; font-size: 13px; line-height: 1.8; margin: 0;">
+            您可以登录家具商城，在「个人中心 - 我的卡券」中查看并使用。
+        </p>
+    </div>
+    <!-- Footer -->
+    <div style="padding: 16px 30px; border-top: 1px solid #eee;">
+        <p style="color: #bbb; font-size: 12px; line-height: 1.8; margin: 0 0 6px 0;">
+            您收到这封邮件，是因为您是「家具商城」的注册用户。本邮件由系统自动发送，请勿直接回复。
+        </p>
+        <p style="color: #bbb; font-size: 12px; line-height: 1.8; margin: 0 0 6px 0;">
+            请勿将账号及密码等个人信息告知他人，谨防网络诈骗。
+        </p>
+        <p style="color: #bbb; font-size: 12px; margin: 0;" th:text="'发送时间：' + ${sendTime}">2026-01-01 12:00:00</p>
+    </div>
+</div>
+</body>
+</html>

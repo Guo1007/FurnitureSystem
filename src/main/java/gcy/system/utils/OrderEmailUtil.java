@@ -9,10 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * 订单状态邮件发送工具类。
- * <p>
- * 统一封装"查询订单所属用户并发送订单状态邮件"的逻辑，
- * 供用户端订单服务与管理端订单管理服务复用，避免两处重复维护、修改遗漏。
- * </p>
+ * 封装"查询订单用户并发送订单状态邮件"的逻辑，供用户端与管理端订单服务复用。
  *
  * @author 郭名城
  * @date 2026-08-11
@@ -24,16 +21,9 @@ public final class OrderEmailUtil {
     }
 
     /**
-     * 发送订单状态通知邮件。
-     * 根据订单所属用户查询其邮箱，存在且非空时发送；发送失败仅记录日志，不影响主流程。
+     * 发送订单状态通知邮件；用户邮箱为空则跳过，发送失败仅记日志不影响主流程。
      *
-     * @param emailService 邮件发送服务
-     * @param userMapper   用户 Mapper，用于查询订单所属用户
-     * @param order        订单对象，包含用户ID、订单ID、总金额
-     * @param title        邮件标题
-     * @param content      邮件正文内容
-     * @param statusIcon   订单状态图标（emoji）
-     * @param refundRemark 退款原因/处理备注（非退款场景传 null）
+     * @param refundRemark 退款原因/处理备注，非退款场景传 null
      */
     public static void sendOrderStatus(EmailService emailService, UserMapper userMapper,
                                        Order order, String title, String content,

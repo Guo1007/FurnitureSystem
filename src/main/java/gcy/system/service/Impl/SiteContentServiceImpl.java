@@ -34,7 +34,7 @@ public class SiteContentServiceImpl implements ISiteContentService {
                         .orderByAsc(SiteContent::getSortOrder)
         );
 
-        // 按 sectionGroup 分组，保持插入顺序；sectionGroup 为 null 的记录归入空分组，避免 groupingBy 抛 NPE
+        // 按 sectionGroup 分组并保持插入顺序；需先滤除 null 分组，否则 groupingBy 遇 null key 会抛 NPE
         Map<String, List<SiteContent>> grouped = list.stream()
                 .filter(s -> s.getSectionGroup() != null)
                 .collect(Collectors.groupingBy(

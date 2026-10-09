@@ -16,10 +16,6 @@ import java.util.List;
 
 /**
  * 评论管理控制器
- * <p>
- * 提供后台管理系统中评论、追评和审核评论的查询、审核、删除等管理功能。
- * 基础路径: /admin/comment
- * </p>
  *
  * @author 郭名城
  * @date 2026-07-30
@@ -33,11 +29,7 @@ public class CommentManageController {
     private final ICommentManageService commentManageService;
 
     /**
-     * 分页获取所有评论列表
-     *
-     * @param current 当前页码，默认值为1
-     * @param size    每页显示条数，默认值为10
-     * @return 包含分页评论数据的统一响应结果
+     * 分页获取评论列表
      */
     @Operation(summary = "分页获取所有评论列表")
     @GetMapping("/list")
@@ -49,9 +41,6 @@ public class CommentManageController {
 
     /**
      * 审核通过指定评论
-     *
-     * @param id 要审核通过的评论ID
-     * @return 包含操作结果的统一响应结果
      */
     @OperationLog("审核通过评论")
     @Operation(summary = "审核通过指定评论")
@@ -62,9 +51,6 @@ public class CommentManageController {
 
     /**
      * 驳回指定评论
-     *
-     * @param id 要驳回的评论ID
-     * @return 包含操作结果的统一响应结果
      */
     @OperationLog("驳回评论")
     @Operation(summary = "驳回指定评论")
@@ -75,11 +61,7 @@ public class CommentManageController {
     }
 
     /**
-     * 分页获取所有追评列表
-     *
-     * @param current 当前页码，默认值为1
-     * @param size    每页显示条数，默认值为10
-     * @return 包含分页追评数据的统一响应结果
+     * 分页获取追评列表
      */
     @Operation(summary = "分页获取所有追评列表")
     @GetMapping("/append/list")
@@ -91,9 +73,6 @@ public class CommentManageController {
 
     /**
      * 审核通过指定追评
-     *
-     * @param id 要审核通过的追评ID
-     * @return 包含操作结果的统一响应结果
      */
     @OperationLog("审核通过追评")
     @Operation(summary = "审核通过指定追评")
@@ -104,9 +83,6 @@ public class CommentManageController {
 
     /**
      * 驳回指定追评
-     *
-     * @param id 要驳回的追评ID
-     * @return 包含操作结果的统一响应结果
      */
     @OperationLog("驳回追评")
     @Operation(summary = "驳回指定追评")
@@ -117,11 +93,7 @@ public class CommentManageController {
     }
 
     /**
-     * 分页获取所有审核评论列表
-     *
-     * @param current 当前页码，默认值为1
-     * @param size    每页显示条数，默认值为10
-     * @return 包含分页审核评论数据的统一响应结果
+     * 分页获取审核评论列表
      */
     @Operation(summary = "分页获取所有审核评论列表")
     @GetMapping("/review-comment/list")
@@ -133,9 +105,6 @@ public class CommentManageController {
 
     /**
      * 审核通过指定审核评论
-     *
-     * @param id 要审核通过的审核评论ID
-     * @return 包含操作结果的统一响应结果
      */
     @OperationLog("审核通过评论回复")
     @Operation(summary = "审核通过指定审核评论")
@@ -146,9 +115,6 @@ public class CommentManageController {
 
     /**
      * 驳回指定审核评论
-     *
-     * @param id 要驳回的审核评论ID
-     * @return 包含操作结果的统一响应结果
      */
     @OperationLog("驳回评论回复")
     @Operation(summary = "驳回指定审核评论")
@@ -159,9 +125,7 @@ public class CommentManageController {
     }
 
     /**
-     * 获取待审核的评论数量
-     *
-     * @return 包含待审核数量的统一响应结果
+     * 获取待审核评论数量
      */
     @Operation(summary = "获取待审核评论数量")
     @GetMapping("/pending-count")
@@ -170,13 +134,7 @@ public class CommentManageController {
     }
 
     /**
-     * 获取各状态数量统计
-     * <p>
-     * 返回评价、追评、评价回复三种类型各状态（全部/待审核/已通过/已拒绝）的数量，
-     * 用于管理端 Tab 标签的计数显示。
-     * </p>
-     *
-     * @return 包含各状态数量统计的统一响应结果
+     * 统计评价、追评、评价回复三类各状态的数量，供管理端 Tab 计数展示。
      */
     @Operation(summary = "获取各状态数量统计")
     @GetMapping("/status-counts")
@@ -186,9 +144,6 @@ public class CommentManageController {
 
     /**
      * 删除指定评论
-     *
-     * @param id 要删除的评论ID
-     * @return 包含操作结果的统一响应结果
      */
     @OperationLog("删除评论")
     @Operation(summary = "删除指定评论")
@@ -199,9 +154,6 @@ public class CommentManageController {
 
     /**
      * 批量删除评论
-     *
-     * @param ids 要删除的评论ID列表，通过请求体JSON数组传递
-     * @return 包含操作结果的统一响应结果
      */
     @OperationLog("批量删除评论")
     @Operation(summary = "批量删除评论")
@@ -212,9 +164,6 @@ public class CommentManageController {
 
     /**
      * 删除指定追评
-     *
-     * @param id 要删除的追评ID
-     * @return 包含操作结果的统一响应结果
      */
     @OperationLog("删除追评")
     @Operation(summary = "删除指定追评")
@@ -225,9 +174,6 @@ public class CommentManageController {
 
     /**
      * 批量删除追评
-     *
-     * @param ids 要删除的追评ID列表，通过请求体JSON数组传递
-     * @return 包含操作结果的统一响应结果
      */
     @OperationLog("批量删除追评")
     @Operation(summary = "批量删除追评")
@@ -238,9 +184,6 @@ public class CommentManageController {
 
     /**
      * 删除指定审核评论
-     *
-     * @param id 要删除的审核评论ID
-     * @return 包含操作结果的统一响应结果
      */
     @OperationLog("删除评论回复")
     @Operation(summary = "删除指定审核评论")
@@ -251,9 +194,6 @@ public class CommentManageController {
 
     /**
      * 批量删除审核评论
-     *
-     * @param ids 要删除的审核评论ID列表，通过请求体JSON数组传递
-     * @return 包含操作结果的统一响应结果
      */
     @OperationLog("批量删除评论回复")
     @Operation(summary = "批量删除审核评论")
@@ -267,9 +207,6 @@ public class CommentManageController {
      */
     @Data
     public static class RejectRequest {
-        /**
-         * 拒绝原因
-         */
         @NotBlank(message = "拒绝原因不能为空")
         private String rejectReason;
     }

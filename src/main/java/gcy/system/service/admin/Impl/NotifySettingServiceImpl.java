@@ -104,9 +104,6 @@ public class NotifySettingServiceImpl implements INotifySettingService {
                 .collect(Collectors.toList());
     }
 
-    /**
-     * 解析逗号分隔的管理员ID字符串。
-     */
     public static List<Long> parseIds(String adminIds) {
         if (StrUtil.isBlank(adminIds)) {
             return List.of();

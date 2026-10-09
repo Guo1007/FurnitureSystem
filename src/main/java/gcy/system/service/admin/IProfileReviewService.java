@@ -13,20 +13,14 @@ public interface IProfileReviewService {
     /**
      * 分页获取昵称审核列表。
      *
-     * @param page   页码
-     * @param size   每页条数
      * @param status 状态筛选：空=全部，逗号分隔
-     * @return 分页数据
      */
     Result getNicknameList(Integer page, Integer size, String status);
 
     /**
      * 分页获取头像审核列表。
      *
-     * @param page   页码
-     * @param size   每页条数
      * @param status 状态筛选：空=全部，逗号分隔
-     * @return 分页数据
      */
     Result getIconList(Integer page, Integer size, String status);
 
@@ -57,8 +51,6 @@ public interface IProfileReviewService {
 
     /**
      * 获取昵称/头像审核各自的状态数量统计（全部/待审核/已通过/已拒绝/待复审）。
-     *
-     * @return 包含昵称、头像各状态数量的Result对象
      */
     Result getStatusCounts();
 }

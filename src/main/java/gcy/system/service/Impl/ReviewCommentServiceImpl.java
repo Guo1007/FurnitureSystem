@@ -12,13 +12,12 @@ import gcy.system.mapper.GoodsCommentMapper;
 import gcy.system.mapper.NotificationMapper;
 import gcy.system.mapper.ReviewCommentMapper;
 import gcy.system.service.IReviewCommentService;
+import gcy.system.utils.AfterCommit;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.spring.core.RocketMQTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -28,10 +27,6 @@ import java.util.stream.Collectors;
 
 /**
  * 评审评论服务实现类。
- * <p>
- * 负责评审评论和回复的查询、新增、删除等业务逻辑的具体实现，
- * 包括评论树形结构的构建以及评论删除时关联通知引用的清理。
- * </p>
  *
  * @author 郭名城
  * @date 2026-07-30
@@ -50,15 +45,7 @@ public class ReviewCommentServiceImpl implements IReviewCommentService {
     private final RocketMQTemplate rocketMQTemplate;
 
     /**
-     * 根据评审ID获取评论列表，并按树形结构组织后返回。
-     * <p>
-     * 先查询该评审下所有评论（含回复），再通过 {@link #buildCommentTree(List)}
-     * 将平铺列表转换为树形结构，根评论的 children 字段中包含其下所有子回复。
-     * </p>
-     *
-     * @param reviewId 评审ID，用于查询关联的评论
-     * @param userId   当前登录用户的ID，用于判断评论是否属于当前用户
-     * @return 包含树形评论列表的Result对象
+     * 查询评审下的评论列表，平铺结果组装为树形（子回复挂在根评论 children 下）。
      */
     @Override
     public Result getCommentsByReviewId(Long reviewId, Long userId) {
@@ -68,16 +55,7 @@ public class ReviewCommentServiceImpl implements IReviewCommentService {
     }
 
     /**
-     * 添加一条新的评论或回复。
-     * <p>
-     * 校验评论所属评审是否存在后，设置发布用户、初始状态（待审核）和创建时间，
-     * 然后插入数据库并记录操作日志。
-     * </p>
-     *
-     * @param comment 评论实体，包含评论内容、所属评审ID以及可选的回复目标评论ID
-     * @param userId  发表评论的用户ID
-     * @return 操作结果
-     * @throws BusinessException 当评论关联的评审ID为null时抛出，提示"评论目标不存在"
+     * 新增评论或回复，初始状态为待审核。
      */
     @Override
     @Transactional
@@ -89,7 +67,7 @@ public class ReviewCommentServiceImpl implements IReviewCommentService {
         if (goodsCommentMapper.selectById(comment.getReviewId()) == null) {
             throw new BusinessException("评论目标不存在");
         }
-        // 回复场景校验：被回复评论必须存在，且其作者与声明的回复目标一致（防止伪造 replyToUserId）
+        // 回复场景：被回复评论须存在，且作者与 replyToUserId 一致（防止伪造）
         if (comment.getReplyToCommentId() != null) {
             ReviewComment targetComment = reviewCommentMapper.selectById(comment.getReplyToCommentId());
             if (targetComment == null) {
@@ -111,16 +89,7 @@ public class ReviewCommentServiceImpl implements IReviewCommentService {
     }
 
     /**
-     * 逻辑删除指定的评论。
-     * <p>
-     * 首先校验评论是否存在以及操作用户是否为评论作者，校验通过后将评论标记为
-     * 用户已删除状态，同时清理通知表中对该评论的引用，避免后续展示无效数据。
-     * </p>
-     *
-     * @param commentId 要删除的评论ID
-     * @param userId    当前操作用户ID，用于校验是否为评论作者
-     * @return 操作结果
-     * @throws BusinessException 当评论不存在或当前用户不是评论作者时抛出
+     * 逻辑删除评论：置 user_deleted=1，并清理通知表中对该评论的引用。
      */
     @Override
     @Transactional
@@ -145,15 +114,7 @@ public class ReviewCommentServiceImpl implements IReviewCommentService {
     }
 
     /**
-     * 将扁平的评论列表转换为树形结构。
-     * <p>
-     * 遍历所有评论，按 {@code replyToCommentId} 分组建立父子关系：
-     * 没有父评论ID的作为根节点（顶层评论），有父评论ID的挂载到对应父评论的
-     * children 列表中，最终返回只包含根评论的列表。
-     * </p>
-     *
-     * @param allComments 所有评论的平铺列表，包含根评论和子回复
-     * @return 树形结构的根评论列表，子评论挂载在各自的children字段中
+     * 平铺评论列表组装为树形：无 replyToCommentId 的为根，其余挂到父评论 children。
      */
     private List<ReviewCommentVO> buildCommentTree(List<ReviewCommentVO> allComments) {
         Map<Long, List<ReviewCommentVO>> childrenMap = allComments.stream()
@@ -170,29 +131,14 @@ public class ReviewCommentServiceImpl implements IReviewCommentService {
     }
 
     /**
-     * 发送AI自动审核消息到MQ。
-     * <p>
-     * 发送失败仅记录日志，不阻塞主流程（审核为异步增强，非关键路径）。
-     * </p>
-     *
-     * @param type 审核类型
-     * @param id   对应记录的ID
+     * 发送AI自动审核消息；失败仅记日志，不阻塞主流程。
      */
     private void sendAiReviewMessage(String type, Long id) {
         try {
             AiReviewMessage msg = new AiReviewMessage(type, id);
             String json = JSONUtil.toJsonStr(msg);
-            // 与 CommentServiceImpl 一致：事务提交后再发 MQ，避免消费者查不到记录 / 回滚后消息已发出
-            if (TransactionSynchronizationManager.isSynchronizationActive()) {
-                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                    @Override
-                    public void afterCommit() {
-                        doSendAiReviewMessage(json, type, id);
-                    }
-                });
-            } else {
-                doSendAiReviewMessage(json, type, id);
-            }
+            // 走 AfterCommit 提交后再发 MQ：否则消费者查不到记录，回滚后消息也已发出
+            AfterCommit.run(() -> doSendAiReviewMessage(json, type, id));
         } catch (Exception e) {
             log.error("发送AI审核消息失败: type={}, id={}", type, id, e);
         }

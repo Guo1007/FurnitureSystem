@@ -14,6 +14,7 @@ import gcy.system.mapper.CouponMapper;
 import gcy.system.mapper.UserCouponMapper;
 import gcy.system.mapper.UserMapper;
 import gcy.system.service.ICouponService;
+import gcy.system.utils.CouponUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -22,9 +23,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -60,8 +59,6 @@ public class CouponServiceImpl implements ICouponService {
 
     private final StringRedisTemplate stringRedisTemplate;
 
-    private static final DateTimeFormatter MM_DD = DateTimeFormatter.ofPattern("MM-dd");
-
     /**
      * 领取 Lua 脚本：返回 1 成功，-1 已领完，-2 已达用户限制。
      */
@@ -89,8 +86,10 @@ public class CouponServiceImpl implements ICouponService {
 
     @Override
     public Result getClaimableList(Long userId) {
+        // 定向发放券（issue_type=1）不进领券中心，也不参与公开限量/限领计数。
         List<Coupon> coupons = couponMapper.selectList(new LambdaQueryWrapper<Coupon>()
                 .eq(Coupon::getStatus, 1)
+                .eq(Coupon::getIssueType, 1)
                 .orderByAsc(Coupon::getClaimStart)
                 .orderByDesc(Coupon::getId));
 
@@ -104,8 +103,7 @@ public class CouponServiceImpl implements ICouponService {
                 .stream()
                 .collect(Collectors.groupingBy(UserCoupon::getCouponId, Collectors.counting()));
 
-        // 全局已领数量：一次 multiGet + 一次 GROUP BY 回源，替代此前每券 2~3 次 Redis GET
-        // （30 张券原本要 60~90 次往返，Redis 被清空时更退化成 30 次 COUNT(*)）
+        // 全局已领数量：一次 multiGet + 一次 GROUP BY 回源
         Map<Long, Long> claimed = batchClaimedCount(coupons);
 
         List<CouponItemVO> result = coupons.stream()
@@ -146,8 +144,6 @@ public class CouponServiceImpl implements ICouponService {
             return 4;
         }
         // totalCount <= 0 视为「不限量」，与领取 Lua 脚本的 total > 0 判定保持一致。
-        // 此前这里写成 claimedCount >= totalCount，totalCount=0 时会误判为「已领完」，
-        // 与 Lua 侧「不限量可继续领」的语义自相矛盾。
         long totalCount = c.getTotalCount() == null ? 0L : c.getTotalCount().longValue();
         if (totalCount > 0 && claimedCount >= totalCount) {
             return 2; // 已领完
@@ -198,8 +194,8 @@ public class CouponServiceImpl implements ICouponService {
         long pageNo = (current != null && current > 0) ? current : 1L;
         long pageSize = (size != null && size > 0) ? size : 10L;
 
-        // 券类型在券模板（coupon）上，不在 user_coupon 上，所以按类型过滤要先把该类型的
-        // 模板ID捞出来、再据此过滤领取记录。模板由后台维护、数量很小，IN 列表不会失控。
+        // 券类型在券模板 coupon 上而非 user_coupon，按类型过滤需先取该类型模板ID；
+        // 模板由后台维护、数量很小，IN 列表可控。
         List<Long> typeCouponIds = null;
         if (type != null) {
             typeCouponIds = couponMapper.selectList(new LambdaQueryWrapper<Coupon>()
@@ -232,11 +228,8 @@ public class CouponServiceImpl implements ICouponService {
     }
 
     /**
-     * 把领取记录补全成展示用的 VO：关联券模板、纠正过期状态、逐字段拼装。
-     * <p>
-     * 全量（选券弹窗）与分页（我的卡券页）两条路径共用，避免出现
-     * 「列表页和弹窗对同一张券显示的字段或状态不一致」。
-     * </p>
+     * 领取记录补全为展示 VO：关联券模板、纠正过期状态。
+     * 全量（选券弹窗）与分页（我的卡券）共用，避免同一张券的展示字段或状态不一致。
      */
     private List<UserCouponVO> toUserCouponVOs(List<UserCoupon> list) {
         if (list == null || list.isEmpty()) {
@@ -248,7 +241,6 @@ public class CouponServiceImpl implements ICouponService {
 
         LocalDateTime now = LocalDateTime.now();
         // 过期纠正：先收集 id，一条 IN(...) 批量 UPDATE，避免读接口里逐条写库
-        // （原实现在 stream 内对每张过期券发一条 UPDATE，N 张过期券 = N 次往返，且方法无事务）
         Set<Long> expiredIds = list.stream()
                 .filter(uc -> uc.getStatus() == 0 && uc.getExpireTime() != null && uc.getExpireTime().isBefore(now))
                 .map(UserCoupon::getId)
@@ -302,7 +294,10 @@ public class CouponServiceImpl implements ICouponService {
         if (c.getStatus() != null && c.getStatus() == 0) {
             return Result.fail("优惠券已停用");
         }
-        // 领取时间窗
+        // 定向券不接受主动领取：列表已过滤，此处为第二道防线，防止直接拿 ID 调接口领取。
+        if (c.getIssueType() != null && c.getIssueType() == 2) {
+            return Result.fail("该优惠券不支持领取");
+        }
         LocalDateTime now = LocalDateTime.now();
         if (c.getClaimStart() != null && now.isBefore(c.getClaimStart())) {
             return Result.fail("不在领取时间范围内");
@@ -310,7 +305,6 @@ public class CouponServiceImpl implements ICouponService {
         if (c.getClaimEnd() != null && now.isAfter(c.getClaimEnd())) {
             return Result.fail("领取已结束");
         }
-        // 人群
         if (!matchTarget(c, regDaysOf(userId))) {
             return Result.fail(targetText(c));
         }
@@ -324,8 +318,7 @@ public class CouponServiceImpl implements ICouponService {
                     .eq(UserCoupon::getCouponId, couponId));
             stringRedisTemplate.opsForValue().setIfAbsent(countKey, String.valueOf(dbCount));
         }
-        // 用户限领计数同样需要回种：只回种 countKey 的话，Redis 重启后
-        // 每人限领计数从 0 重新开始，「每人限领 N 张」会退化成无限领。
+        // 用户限领计数同样要回种：否则 Redis 重启后限领计数归零，「每人限领 N 张」退化为无限领。
         if (stringRedisTemplate.opsForValue().get(userKey) == null) {
             long dbUserCount = userCouponMapper.selectCount(new LambdaQueryWrapper<UserCoupon>()
                     .eq(UserCoupon::getCouponId, couponId)
@@ -360,10 +353,8 @@ public class CouponServiceImpl implements ICouponService {
     }
 
     private LocalDateTime resolveExpireTime(Coupon c, LocalDateTime now) {
-        if (c.getValidType() != null && c.getValidType() == 2 && c.getValidDays() != null) {
-            return now.plusDays(c.getValidDays());
-        }
-        return c.getValidEnd();
+        // 统一走 CouponUtil：定向发放路径复用同一套过期时间规则，避免两处漂移
+        return CouponUtil.resolveExpireTime(c, now);
     }
 
     // ==================== 工具方法 ====================
@@ -373,7 +364,7 @@ public class CouponServiceImpl implements ICouponService {
         if (v != null) {
             return Long.parseLong(v);
         }
-        // Redis 缺失时回退到 DB 计数并种seed进 Redis
+        // Redis 缺失时回退 DB 计数并回种
         long count = userCouponMapper.selectCount(new LambdaQueryWrapper<UserCoupon>()
                 .eq(UserCoupon::getCouponId, couponId));
         stringRedisTemplate.opsForValue().setIfAbsent(COUPON_COUNT_KEY + couponId, String.valueOf(count));
@@ -381,17 +372,14 @@ public class CouponServiceImpl implements ICouponService {
     }
 
     /**
-     * 批量取「各券已领数量」：一次 Redis multiGet 拿齐，缺失的用一条 GROUP BY 回源后回种。
-     * <p>
-     * 替代此前每券单独 GET（列表页每张券还要调 2~3 次），30 张券从 60~90 次往返降到 1~2 次。
-     * </p>
+     * 批量取各券已领数量：一次 multiGet 拿齐，缺失的用一条 GROUP BY 回源后回种。
      */
     private Map<Long, Long> batchClaimedCount(List<Coupon> coupons) {
         Map<Long, Long> result = new HashMap<>();
         if (coupons == null || coupons.isEmpty()) {
             return result;
         }
-        List<Long> ids = coupons.stream().map(Coupon::getId).distinct().collect(Collectors.toList());
+        List<Long> ids = coupons.stream().map(Coupon::getId).distinct().toList();
         List<String> keys = ids.stream().map(id -> COUPON_COUNT_KEY + id).collect(Collectors.toList());
 
         List<String> values = null;
@@ -465,41 +453,26 @@ public class CouponServiceImpl implements ICouponService {
     }
 
     private String amountText(Coupon c) {
-        if (c.getType() == null) return "";
-        if (c.getType() == 2 && c.getDiscount() != null) {
-            String s = c.getDiscount().multiply(BigDecimal.TEN).setScale(1, RoundingMode.HALF_UP)
-                    .stripTrailingZeros().toPlainString();
-            return s + "折";
-        }
-        if (c.getAmount() != null) {
-            return "¥" + c.getAmount().stripTrailingZeros().toPlainString();
-        }
-        return "";
+        return CouponUtil.amountText(c);
     }
 
     private String scopeText(Coupon c) {
-        return c.getScope() != null && c.getScope() == 1 ? "分类券" : "全场";
+        return CouponUtil.scopeText(c);
     }
 
     private String validText(Coupon c) {
-        if (c.getValidType() != null && c.getValidType() == 2 && c.getValidDays() != null) {
-            return "领取后 " + c.getValidDays() + " 天有效";
-        }
-        return c.getValidEnd() != null ? "至 " + c.getValidEnd().format(MM_DD) : "不限";
+        // 起算说法用「领取后」：这是给「我的卡券」页看的，用户确实是领来的
+        return CouponUtil.validText(c, "领取后");
     }
 
     private String stateText(int state, Coupon c) {
-        switch (state) {
-            case 1:
-                return "即将开始";
-            case 2:
-                return c.getTotalCount() != null && getClaimedCount(c.getId()) >= c.getTotalCount()
-                        ? "已领完" : "已结束";
-            case 3:
-                return "已领取";
-            default:
-                return "可领";
-        }
+        return switch (state) {
+            case 1 -> "即将开始";
+            case 2 -> c.getTotalCount() != null && getClaimedCount(c.getId()) >= c.getTotalCount()
+                    ? "已领完" : "已结束";
+            case 3 -> "已领取";
+            default -> "可领";
+        };
     }
 
     private String statusText(Integer status) {

@@ -17,11 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 用户收藏服务实现类
- * <p>
- * 提供收藏列表分页查询、收藏状态检查、收藏/取消收藏切换等核心业务逻辑。
- * 基于 MyBatis-Plus 的 ServiceImpl 实现，依赖 FavoriteMapper 和 FurnitureMapper 完成数据操作。
- * </p>
+ * 用户收藏服务实现类。
  *
  * @author 郭名城
  * @date 2026-07-30
@@ -36,17 +32,7 @@ public class FavoriteServiceImpl extends ServiceImpl<FavoriteMapper, Favorite> i
     private final FurnitureMapper furnitureMapper;
 
     /**
-     * 根据用户ID分页查询收藏列表
-     * <p>
-     * 通过 FavoriteMapper 的自定义 SQL 关联查询家具详情，
-     * 将收藏记录与家具信息一并封装到 FavoriteVO 中返回。
-     * 当分页参数为 null 时，默认使用第1页、每页10条。
-     * </p>
-     *
-     * @param userId  用户ID，用于筛选该用户的收藏记录
-     * @param current 当前页码，为 null 时默认为 1
-     * @param size    每页条数，为 null 时默认为 10
-     * @return 包含分页 FavoriteVO 数据的统一响应结果
+     * 分页查询用户收藏列表，参数为 null 时默认第 1 页、每页 10 条。
      */
     @Override
     public Result getFavoritesByUserId(Long userId, Integer current, Integer size) {
@@ -56,15 +42,7 @@ public class FavoriteServiceImpl extends ServiceImpl<FavoriteMapper, Favorite> i
     }
 
     /**
-     * 检查用户是否已收藏指定家具
-     * <p>
-     * 调用 FavoriteMapper 查询用户与家具的收藏关联记录是否存在，
-     * 返回布尔值表示是否已收藏。
-     * </p>
-     *
-     * @param userId      用户ID，标识当前操作的收藏者
-     * @param furnitureId 家具ID，标识待检查的目标家具
-     * @return 包含布尔值（true 已收藏，false 未收藏）的统一响应结果
+     * 查询用户是否已收藏指定家具。
      */
     @Override
     public Result checkFavorite(Long userId, Long furnitureId) {
@@ -73,17 +51,8 @@ public class FavoriteServiceImpl extends ServiceImpl<FavoriteMapper, Favorite> i
     }
 
     /**
-     * 切换收藏状态（收藏/取消收藏）
-     * <p>
-     * 如果用户已收藏该家具，则删除收藏记录并返回 false；
-     * 如果未收藏，则先校验家具是否存在，存在则插入收藏记录并返回 true。
-     * 通过数据库唯一索引防止并发重复插入，捕获 DuplicateKeyException 后直接视为已收藏。
-     * </p>
-     *
-     * @param userId      用户ID，标识当前操作的用户
-     * @param furnitureId 家具ID，标识待切换收藏状态的目标家具
-     * @return 包含布尔值（true 表示已收藏，false 表示已取消收藏）的统一响应结果
-     * @throws BusinessException 当目标家具不存在或已下架时抛出业务异常
+     * 切换收藏状态：已收藏则取消并返回 false，未收藏则校验家具存在后收藏并返回 true。
+     * 依赖数据库唯一索引防并发重复插入，捕获 DuplicateKeyException 后视为已收藏。
      */
     @Override
     @Transactional
@@ -97,7 +66,6 @@ public class FavoriteServiceImpl extends ServiceImpl<FavoriteMapper, Favorite> i
             favoriteMapper.deleteById(existing.getId());
             return Result.ok(false);
         }
-        // 校验家具是否存在
         if (furnitureMapper.selectById(furnitureId) == null) {
             throw new BusinessException("商品不存在或已下架");
         }

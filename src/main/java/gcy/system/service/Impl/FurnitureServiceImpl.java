@@ -27,12 +27,7 @@ import java.util.concurrent.TimeUnit;
 import static gcy.system.utils.RedisConstants.*;
 
 /**
- * 家具服务实现类。
- * <p>
- * 提供家具信息的查询、搜索、排序、缓存管理等功能。
- * 使用Redis缓存提高查询性能，采用逻辑过期+互斥锁策略处理缓存击穿和缓存穿透问题，
- * 通过Redisson分布式锁保证缓存重建时的数据一致性。
- * </p>
+ * 家具服务实现类，缓存采用逻辑过期 + 互斥锁策略，配合 Redisson 分布式锁重建。
  *
  * @author 郭名城
  * @date 2026-07-30
@@ -51,17 +46,7 @@ public class FurnitureServiceImpl extends ServiceImpl<FurnitureMapper, Furniture
     private final RedissonClient redissonClient;
 
     /**
-     * 根据家具ID查询家具详情。
-     * <p>
-     * 采用三级缓存策略：首先从Redis缓存中查询；
-     * 若缓存命中且未过期则直接返回；若缓存命中但已逻辑过期，则获取分布式锁后异步重建缓存，同时返回旧数据；
-     * 若缓存完全缺失，则加互斥锁后查询数据库，查询结果写入Redis缓存，
-     * 若数据库中不存在则写入空值标记以防止缓存穿透。
-     * 在获取锁后执行Double-Check，避免重复查库。
-     * </p>
-     *
-     * @param id 家具ID
-     * @return 包含家具信息的Result对象；若家具不存在则返回404错误信息
+     * 查询家具详情：逻辑过期时返回旧值并异步重建，缓存缺失加互斥锁查库，无此家具写空值标记防穿透。
      */
     @Override
     public Result queryFurnitureById(Long id) {
@@ -130,23 +115,7 @@ public class FurnitureServiceImpl extends ServiceImpl<FurnitureMapper, Furniture
     }
 
     /**
-     * 根据家具类型ID分页查询家具列表，支持多条件筛选和排序。
-     * <p>
-     * 支持按家具名称模糊搜索、按品牌精确匹配、按库存状态筛选、按是否推荐筛选，
-     * 以及按价格（升/降序）、销量（降序）、最新（近三天创建时间降序）排序。
-     * 默认排序为"default"时不应用任何排序规则。
-     * </p>
-     *
-     * @param typeId        家具类型ID，为null或小于等于0时不筛选类型
-     * @param current       当前页码
-     * @param size          每页条数
-     * @param fName         家具名称关键词，支持模糊搜索，为null或空时不筛选
-     * @param stockStatus   库存状态：in_stock有库存、low_stock低库存、out_stock无库存，为null或空时不筛选
-     * @param brand         品牌名称，为null或空时不筛选
-     * @param sortBy        排序字段：price价格、sales销量、newest最新、default默认不排序
-     * @param sortOrder     排序方向：asc升序、desc降序（仅price字段使用此参数）
-     * @param isRecommended 是否推荐：1为推荐，其他值或不传则不筛选
-     * @return 包含分页家具列表的Result对象
+     * 分页查询家具列表，支持类型、名称、品牌、库存、推荐筛选及价格/销量/最新排序。
      */
     @Override
     public Result getFurnitureByType(Long typeId, Integer current, Integer size,
@@ -173,13 +142,7 @@ public class FurnitureServiceImpl extends ServiceImpl<FurnitureMapper, Furniture
     }
 
     /**
-     * 查询销量最高的前N件家具（热销榜）。
-     * <p>
-     * 通过OrderItemMapper查询订单明细表中销量最高的家具记录，返回包含家具名称和销售数量的VO列表。
-     * </p>
-     *
-     * @param limit 返回的家具数量上限
-     * @return 包含TopFurnitureVO列表的Result对象，列表中每项包含家具名称和销量
+     * 查询销量最高的前 N 件家具（热销榜）。
      */
     @Override
     public Result getTopSelling(Integer limit) {
@@ -188,15 +151,7 @@ public class FurnitureServiceImpl extends ServiceImpl<FurnitureMapper, Furniture
     }
 
     /**
-     * 根据排序字段和排序方向对MyBatis-Plus查询条件构造器应用排序规则。
-     * <p>
-     * 排序字段为空或为"default"时不应用任何排序。
-     * 支持的排序方式：价格升降序、销量降序、最新（近三天创建时间降序）。
-     * </p>
-     *
-     * @param wrapper   MyBatis-Plus查询条件构造器
-     * @param sortBy    排序字段：price按价格、sales按销量、newest按最新
-     * @param sortOrder 排序方向：asc升序、desc降序，仅对price字段生效
+     * 应用排序：sortBy 为空或 "default" 时不排序；newest 限近三天创建时间降序，仅 price 受 sortOrder 影响。
      */
     private void applySorting(LambdaQueryWrapper<Furniture> wrapper, String sortBy, String sortOrder) {
         if (StrUtil.isBlank(sortBy) || "default".equals(sortBy)) {
@@ -224,17 +179,7 @@ public class FurnitureServiceImpl extends ServiceImpl<FurnitureMapper, Furniture
     }
 
     /**
-     * 根据库存状态对MyBatis-Plus查询条件构造器应用库存筛选。
-     * <p>
-     * 支持的库存状态：
-     * in_stock（有库存，库存量大于0）、
-     * low_stock（低库存，库存量大于0且小于10）、
-     * out_stock（无库存，库存量等于0）。
-     * 其他值或为空时不应用任何筛选。
-     * </p>
-     *
-     * @param wrapper     MyBatis-Plus查询条件构造器
-     * @param stockStatus 库存状态字符串：in_stock、low_stock、out_stock
+     * 应用库存筛选：in_stock(stock>0)、low_stock(0<stock<10)、out_stock(stock=0)，其它值不筛选。
      */
     public static void applyStockStatusFilter(LambdaQueryWrapper<Furniture> wrapper, String stockStatus) {
         if ("in_stock".equals(stockStatus)) {
@@ -248,13 +193,7 @@ public class FurnitureServiceImpl extends ServiceImpl<FurnitureMapper, Furniture
     }
 
     /**
-     * 根据家具类型ID查询该类型下所有可用的品牌列表。
-     * <p>
-     * 通过FurnitureMapper执行去重查询，获取指定类型下所有出现过品牌名称的列表。
-     * </p>
-     *
-     * @param id 家具类型ID
-     * @return 包含品牌名称列表的Result对象；若未查询到任何品牌则返回失败信息
+     * 查询指定类型下去重后的品牌列表。
      */
     @Override
     public Result getFurnitureBrandsByTypeId(Long id) {
@@ -266,14 +205,7 @@ public class FurnitureServiceImpl extends ServiceImpl<FurnitureMapper, Furniture
     }
 
     /**
-     * 将家具数据保存到Redis缓存中，并设置逻辑过期时间。
-     * <p>
-     * 先从数据库查询家具信息，封装为RedisData对象（包含数据和逻辑过期时间）后写入Redis。
-     * 若数据库中不存在该家具，则写入空字符串作为空值标记，防止缓存穿透。
-     * </p>
-     *
-     * @param id            家具ID
-     * @param expireMinutes 缓存逻辑过期时长（分钟）
+     * 写入家具缓存：封装 RedisData 记录逻辑过期时间；家具不存在时写空值标记防穿透。
      */
     private void saveFurniture2Redis(Long id, long expireMinutes) {
         Furniture furniture = getById(id);
@@ -290,15 +222,7 @@ public class FurnitureServiceImpl extends ServiceImpl<FurnitureMapper, Furniture
     }
 
     /**
-     * 重建指定家具的Redis缓存数据。
-     * <p>
-     * 该方法在缓存逻辑过期后被调用，重新从数据库加载家具数据并写入Redis。
-     * 重建完成后释放当前线程持有的分布式锁。
-     * 若重建过程中发生异常，记录错误日志但不向外抛出，确保锁能被正确释放。
-     * </p>
-     *
-     * @param id   需要重建缓存的家具ID
-     * @param lock 当前线程持有的Redisson分布式锁，方法执行完毕后释放
+     * 逻辑过期后重建缓存，完成或异常均在 finally 中释放当前线程持有的分布式锁。
      */
     public void rebuildCache(Long id, RLock lock) {
         try {

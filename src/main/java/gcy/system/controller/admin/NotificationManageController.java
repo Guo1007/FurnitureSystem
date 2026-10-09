@@ -14,10 +14,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 /**
- * 通知管理控制器
- * <p>
- * 提供通知的发送、分页查询、更新、删除和批量删除等后台管理接口，
- * 所有接口均挂载在 /admin/notification 路径下。
+ * 通知管理控制器。
  *
  * @author 郭名城
  * @date 2026-07-30
@@ -31,12 +28,7 @@ public class NotificationManageController {
     private final INotificationService notificationService;
 
     /**
-     * 发送通知
-     * <p>
-     * POST /admin/notification/send —— 向指定用户或用户组发送一条通知消息。
-     *
-     * @param dto 发送通知的表单数据，包含通知标题、内容、接收者等信息
-     * @return 操作结果，封装在 {@link Result} 中
+     * 向指定用户或用户组发送通知。
      */
     @OperationLog("发送通知")
     @Operation(summary = "发送通知")
@@ -46,14 +38,7 @@ public class NotificationManageController {
     }
 
     /**
-     * 分页查询通知列表
-     * <p>
-     * GET /admin/notification/list —— 按分页参数和可选类型筛选条件查询通知列表。
-     *
-     * @param current 当前页码，从 1 开始，默认为 1
-     * @param size    每页显示的记录数，默认为 10
-     * @param type    通知类型（可选），传入时按该类型过滤，不传则查询全部类型
-     * @return 分页后的通知列表及分页信息，封装在 {@link Result} 中
+     * 分页查询通知列表，可按类型筛选。
      */
     @Operation(summary = "分页查询通知列表")
     @GetMapping("/list")
@@ -64,13 +49,7 @@ public class NotificationManageController {
     }
 
     /**
-     * 更新通知
-     * <p>
-     * PUT /admin/notification/update/{id} —— 根据通知 ID 修改已存在的通知内容。
-     *
-     * @param id  要更新的通知 ID（路径变量）
-     * @param dto 更新后的通知表单数据，包含修改后的标题、内容等信息
-     * @return 操作结果，封装在 {@link Result} 中
+     * 根据 ID 更新通知内容。
      */
     @OperationLog("更新通知")
     @Operation(summary = "更新通知")
@@ -80,12 +59,7 @@ public class NotificationManageController {
     }
 
     /**
-     * 删除单条通知
-     * <p>
-     * DELETE /admin/notification/delete/{id} —— 根据通知 ID 删除指定通知。
-     *
-     * @param id 要删除的通知 ID（路径变量）
-     * @return 操作结果，封装在 {@link Result} 中
+     * 根据 ID 删除单条通知。
      */
     @OperationLog("删除通知")
     @Operation(summary = "删除单条通知")
@@ -95,12 +69,7 @@ public class NotificationManageController {
     }
 
     /**
-     * 批量删除通知
-     * <p>
-     * DELETE /admin/notification/batch —— 根据请求体中传入的 ID 列表批量删除通知。
-     *
-     * @param ids 待删除的通知 ID 列表，以 JSON 数组形式放在请求体中
-     * @return 操作结果，成功时返回成功提示信息，失败时返回失败提示信息，封装在 {@link Result} 中
+     * 根据 ID 列表批量删除通知。
      */
     @OperationLog("批量删除通知")
     @Operation(summary = "批量删除通知")

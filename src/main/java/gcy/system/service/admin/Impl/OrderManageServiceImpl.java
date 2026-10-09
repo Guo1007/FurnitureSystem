@@ -38,12 +38,9 @@ import java.util.stream.Collectors;
 import static gcy.system.utils.OrderStatus.*;
 
 /**
- * 订单管理服务实现类
+ * 订单管理服务实现类。
  * <p>
- * 提供订单列表分页查询、订单发货、订单CSV导出以及待发货数量统计等核心业务功能的实现。
- * 继承自 MyBatis-Plus 的 ServiceImpl，实现 {@link IOrderManageService} 接口。
- * 发货操作使用乐观锁机制防止并发重复发货，并在状态变更后通过邮件通知用户。
- * </p>
+ * 发货用乐观锁（更新时附带 status 条件）防止并发重复发货。
  *
  * @author 郭名城
  * @date 2026-07-30
@@ -67,20 +64,7 @@ public class OrderManageServiceImpl extends ServiceImpl<OrderMapper, Order>
     private final FurnitureMapper furnitureMapper;
 
     /**
-     * 分页查询订单列表
-     * <p>
-     * 根据用户ID、订单状态、收货人电话、收货人姓名等条件进行组合过滤查询，
-     * 结果按创建时间降序排列。同时批量加载每个订单关联的订单项明细信息，
-     * 将订单实体及其订单项封装为 {@link OrderVO} 视图对象，以分页形式返回。
-     * </p>
-     *
-     * @param current   当前页码
-     * @param size      每页显示条数
-     * @param userId    用户ID（可选过滤条件，为null时不过滤）
-     * @param status    订单状态编码（可选过滤条件，为null时不过滤）
-     * @param phone     收货人电话（可选过滤条件，为空时不过滤，使用模糊匹配）
-     * @param consignee 收货人姓名（可选过滤条件，为空时不过滤，使用模糊匹配）
-     * @return 包含分页 {@link OrderVO} 列表及分页信息的 Result 对象
+     * 分页查询订单列表，按创建时间降序。
      */
     @Override
     public Result getOrderList(Integer current, Integer size, Integer userId,
@@ -142,17 +126,10 @@ public class OrderManageServiceImpl extends ServiceImpl<OrderMapper, Order>
     }
 
     /**
-     * 对指定订单执行发货操作
+     * 对指定订单发货。
      * <p>
-     * 校验订单是否存在及其当前状态：仅已支付（PAID）状态的订单允许发货，
-     * 已发货/已完成/已评价的订单直接返回成功（幂等处理），未支付或已取消的订单返回失败。
-     * 使用乐观锁机制（在更新时同时校验状态条件）防止并发重复发货。
-     * 发货成功后记录发货时间并通过邮件通知用户订单状态变更。
-     * </p>
-     *
-     * @param id 要发货的订单ID
-     * @return 操作结果的 Result 对象
-     * @throws BusinessException 当发货更新失败且订单状态未变为已发货/已完成/已评价时抛出
+     * 仅已支付(PAID)可发货；已发货/已完成/已评价视为幂等直接返回成功，其余状态返回失败。
+     * 更新时附带 status=PAID 条件防止并发重复发货。
      */
     @Override
     @Transactional
@@ -197,14 +174,9 @@ public class OrderManageServiceImpl extends ServiceImpl<OrderMapper, Order>
     private static final DateTimeFormatter CSV_DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     /**
-     * 导出全部订单数据为CSV格式
+     * 导出全部订单为 CSV 写入 w，调用方负责关闭。
      * <p>
-     * 从数据库查询所有订单记录（按创建时间降序），将订单的各个字段以CSV格式写入输出流。
-     * 每行包含：订单号、用户ID、收货人、电话、地址、金额、状态描述、备注、创建时间、支付时间、发货时间。
-     * 所有文本字段均经过CSV转义处理，防止特殊字符破坏CSV格式或引发公式注入。
-     * </p>
-     *
-     * @param w 用于输出CSV内容的 PrintWriter 字符输出流，由调用方负责关闭
+     * 文本字段均做转义，防特殊字符破坏格式或公式注入。
      */
     @Override
     public void exportOrders(PrintWriter w) {
@@ -250,15 +222,7 @@ public class OrderManageServiceImpl extends ServiceImpl<OrderMapper, Order>
     }
 
     /**
-     * 对CSV字段值进行安全转义处理
-     * <p>
-     * 对null值返回空字符串；对以等号、加号、减号、at符号开头的值添加制表符前缀，
-     * 防止Excel等电子表格软件将其解析为公式（CSV注入防护）；
-     * 对包含逗号、双引号或换行符的值使用双引号包裹并对内部双引号进行转义。
-     * </p>
-     *
-     * @param val 原始字段值，可能为null
-     * @return 转义后的CSV安全字符串
+     * CSV 字段转义：null 返回空串，=+-@ 开头加制表符前缀防公式注入，含逗号/引号/换行则双引号包裹。
      */
     private String csvEscape(String val) {
         if (val == null) return "";
@@ -272,13 +236,7 @@ public class OrderManageServiceImpl extends ServiceImpl<OrderMapper, Order>
     }
 
     /**
-     * 获取当前待发货的订单数量
-     * <p>
-     * 统计状态为已支付（PAID）的订单总数，用于后台管理界面的待办事项角标提示。
-     * 结果以键值对形式返回，键名为 "pendingShipCount"。
-     * </p>
-     *
-     * @return 包含待发货订单数量的 Result 对象
+     * 统计待发货(PAID)订单数，返回键名 pendingShipCount。
      */
     @Override
     public Result getPendingShipCount() {
@@ -288,14 +246,7 @@ public class OrderManageServiceImpl extends ServiceImpl<OrderMapper, Order>
     }
 
     /**
-     * 将 LocalDateTime 格式化为CSV安全日期字符串
-     * <p>
-     * 使用统一格式 "yyyy-MM-dd HH:mm:ss" 进行格式化，
-     * 并在日期字符串前添加制表符前缀，防止Excel将日期值自动转换或误解析。
-     * </p>
-     *
-     * @param dt 日期时间对象，可能为null
-     * @return 格式化后的日期字符串，null值返回空字符串
+     * 格式化为 yyyy-MM-dd HH:mm:ss，前置制表符防 Excel 误转换。
      */
     private String csvDate(LocalDateTime dt) {
         if (dt == null) return "";
@@ -303,13 +254,7 @@ public class OrderManageServiceImpl extends ServiceImpl<OrderMapper, Order>
     }
 
     /**
-     * 管理员同意退款申请。
-     * <p>
-     * 将订单状态由申请退款中(6)更新为退款审核中(7)，记录同意时间并邮件通知用户。
-     * </p>
-     *
-     * @param orderId 订单ID
-     * @return 包含操作结果的Result对象
+     * 同意退款：申请退款中(6) → 退款审核中(7)，记录同意时间并通知用户。
      */
     @Override
     @Transactional
@@ -338,14 +283,7 @@ public class OrderManageServiceImpl extends ServiceImpl<OrderMapper, Order>
     }
 
     /**
-     * 管理员拒绝退款申请。
-     * <p>
-     * 将订单状态恢复到退款前的原状态（refund_prev_status），记录拒绝原因并邮件通知用户。
-     * </p>
-     *
-     * @param orderId 订单ID
-     * @param remark  拒绝原因备注
-     * @return 包含操作结果的Result对象
+     * 拒绝退款：恢复到退款前的原状态(refund_prev_status)，记录拒绝原因并通知用户。
      */
     /**
      * 判断某个状态是否为「可回退的合法非退款态」。
@@ -379,8 +317,7 @@ public class OrderManageServiceImpl extends ServiceImpl<OrderMapper, Order>
         boolean success = update()
                 .set("status", prevStatus)
                 .set("refund_handle_remark", remark)
-                // 拒绝属于审核动作，应记入审核时间；此前误写成了「同意时间」refund_approve_time，
-                // 与另一条拒绝路径（审核退款不通过）写入的 refund_audit_time 不一致，时间线审计失真
+                // 拒绝属审核动作，应记入 refund_audit_time，与另一条拒绝路径保持一致
                 .set("refund_audit_time", LocalDateTime.now())
                 .set("refund_prev_status", null)
                 .eq("id", orderId)
@@ -397,16 +334,7 @@ public class OrderManageServiceImpl extends ServiceImpl<OrderMapper, Order>
     }
 
     /**
-     * 管理员审核退款。
-     * <p>
-     * 审核通过：订单变为已退款(8)，恢复库存并扣回销量；审核不通过：订单恢复到退款前原状态。
-     * 两种结果均邮件通知用户。
-     * </p>
-     *
-     * @param orderId 订单ID
-     * @param passed  审核是否通过
-     * @param remark  审核备注（不通过时必填原因）
-     * @return 包含操作结果的Result对象
+     * 审核退款：通过则订单置已退款(8)、恢复库存并扣回销量；不通过则恢复到退款前原状态。
      */
     @Override
     @Transactional
@@ -419,12 +347,10 @@ public class OrderManageServiceImpl extends ServiceImpl<OrderMapper, Order>
             return Result.fail("订单当前状态不支持此操作");
         }
         if (Boolean.TRUE.equals(passed)) {
-            // 审核通过：恢复库存 + 状态更新为已退款
             orderService.restoreStock(orderId);
-            // 仅在订单曾处于"已完成(3)/已评价(5)"时扣回销量：
-            // 这两类状态在确认收货时累加过 sale_count，退款需对称扣回；
-            // 已支付(1)/已发货(2)订单从未累加销量，扣减会导致销量失真甚至为负。
-            // 退款前状态同样需要合法性断言，脏数据兜底为「已支付」
+            // 仅"已完成(3)/已评价(5)"确认收货时累加过 sale_count，退款需对称扣回；
+            // 已支付(1)/已发货(2)从未累加销量，扣减会导致销量失真甚至为负。
+            // 退款前状态需合法性断言，脏数据兜底为「已支付」
             Integer prevRaw = order.getRefundPrevStatus();
             int prevStatus = (prevRaw != null && isValidRefundPrevStatus(prevRaw))
                     ? prevRaw : PAID.getCode();
@@ -458,13 +384,12 @@ public class OrderManageServiceImpl extends ServiceImpl<OrderMapper, Order>
             if (!success) {
                 throw new BusinessException("退款审核失败，请重试");
             }
-            orderService.returnCouponForOrder(orderId); // 退款成功归还已用优惠券
+            orderService.returnCouponForOrder(orderId);
             OrderEmailUtil.sendOrderStatus(emailService, userMapper, order, "退款成功",
                     "您的订单 #" + order.getId() + " 退款已到账，感谢您的理解与支持。",
                     "✅", null);
             log.info("退款审核通过: orderId={}", orderId);
         } else {
-            // 审核不通过：恢复原状态
             Integer prevRaw = order.getRefundPrevStatus();
             int prevStatus = (prevRaw != null && isValidRefundPrevStatus(prevRaw))
                     ? prevRaw : PAID.getCode();
@@ -491,9 +416,7 @@ public class OrderManageServiceImpl extends ServiceImpl<OrderMapper, Order>
     }
 
     /**
-     * 获取待处理退款数量（申请退款中 + 退款审核中）。
-     *
-     * @return 包含待处理退款数量的Result对象
+     * 统计待处理退款数（申请退款中 + 退款审核中）。
      */
     @Override
     public Result getPendingRefundCount() {
@@ -514,14 +437,7 @@ public class OrderManageServiceImpl extends ServiceImpl<OrderMapper, Order>
     }
 
     /**
-     * 删除单个订单（仅允许已完结订单）。
-     * <p>
-     * 已完结订单（已取消/已完成/已评价/已退款）不占用库存，删除时无需恢复库存；
-     * 在途订单（待支付/已支付/已发货）仍占用库存，拒绝直接删除。
-     * </p>
-     *
-     * @param orderId 订单ID
-     * @return 包含删除结果的Result对象
+     * 删除已完结订单（取消/完成/评价/退款）；在途订单仍占库存，拒绝删除。
      */
     @Override
     @Transactional
@@ -533,8 +449,8 @@ public class OrderManageServiceImpl extends ServiceImpl<OrderMapper, Order>
         if (!isDeletableStatus(order.getStatus())) {
             return Result.fail("在途订单仍占用库存，不能直接删除，请先取消订单或走退款流程");
         }
-        // 删除前归还该订单占用的优惠券：订单记录没了但 user_coupon 仍是「已用」状态的话，
-        // 用户这张券就永久消失了。归还逻辑按 status=1 且 orderId 匹配，重复调用是幂等的。
+        // 删除前归还优惠券：订单没了但 user_coupon 仍「已用」的话券会永久失效；
+        // 归还按 status=1 且 orderId 匹配，可重复调用（幂等）。
         orderService.returnCouponForOrder(orderId);
         // 同步清理订单明细，避免 order_item 变成无主孤儿数据
         orderItemService.remove(new LambdaQueryWrapper<OrderItem>()
@@ -545,13 +461,7 @@ public class OrderManageServiceImpl extends ServiceImpl<OrderMapper, Order>
     }
 
     /**
-     * 批量删除订单（仅允许已完结订单）。
-     * <p>
-     * 逐条校验状态，仅删除已完结订单；在途订单跳过并返回被跳过的数量。
-     * </p>
-     *
-     * @param ids 订单ID列表
-     * @return 包含删除结果的Result对象
+     * 批量删除已完结订单，在途订单跳过并返回跳过数量。
      */
     @Override
     @Transactional
@@ -586,10 +496,12 @@ public class OrderManageServiceImpl extends ServiceImpl<OrderMapper, Order>
     }
 
     /**
-     * 判断订单状态是否允许删除（已完结订单）。
-     *
-     * @param status 订单状态码
-     * @return 允许删除返回 true
+     * 是否可删除（仅已完结：取消/完成/评价/退款）。
+     * <p>
+     * 放宽白名单前先看 {@code OrderServiceImpl} 的 confirmPaid / doConfirmReceipt：
+     * 两处在 CAS 更新 0 行后 getById 重查状态且未判 null，当前安全是因为「在途订单删不掉」
+     * 这条约束钉死（用户端 deleteMyOrder 用同一套终态白名单）。
+     * 一旦允许删除在途订单，那两处会立刻 NPE，需一并补 null 判断。
      */
     private boolean isDeletableStatus(int status) {
         return status == CANCELLED.getCode()

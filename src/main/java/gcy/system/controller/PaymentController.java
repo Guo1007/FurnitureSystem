@@ -13,11 +13,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
 /**
- * 支付控制器，处理支付宝支付相关接口。
+ * 支付控制器：预下单与支付宝异步回调。
  * <p>
- * 提供预下单（生成付款页面）与支付异步回调接口。回调接口需放行匿名访问，
- * 由 {@link Anonymous} 注解标记，支付宝服务器无需携带登录凭证即可回调。
- * </p>
+ * 回调由支付宝服务器发起、无法携带登录凭证，故以 {@link Anonymous} 放行匿名访问。
  *
  * @author 郭名城
  * @date 2026-09-22
@@ -31,10 +29,7 @@ public class PaymentController {
     private final IPaymentService paymentService;
 
     /**
-     * 预下单：为指定订单生成支付宝付款页面。
-     *
-     * @param orderId 待支付订单ID
-     * @return Result 成功时 data 为支付宝返回的付款表单 HTML
+     * 预下单：为指定订单生成支付宝付款页面，成功时 data 为支付宝返回的付款表单 HTML。
      */
     @OperationLog("发起支付")
     @Operation(summary = "预下单（生成支付宝付款页面）")
@@ -45,13 +40,9 @@ public class PaymentController {
     }
 
     /**
-     * 主动查询订单支付状态（对账兜底）。
-     * <p>
-     * 前端付款页轮询调用，主动向支付宝查单，规避异步通知偶发延迟/丢失导致的订单状态不一致。
-     * </p>
+     * 主动向支付宝查单，兜底异步通知延迟/丢失导致的订单状态不一致。
      *
-     * @param orderId 订单ID
-     * @return Result.data 为 true 表示已支付，false 表示仍待支付
+     * @return data 为 true 表示已支付，false 表示仍待支付
      */
     @OperationLog("查询支付状态")
     @Operation(summary = "主动查询订单支付状态")
@@ -62,14 +53,8 @@ public class PaymentController {
     }
 
     /**
-     * 支付宝异步回调接口（支付宝服务器主动调用）。
-     * <p>
-     * 该接口匿名放行，返回固定文本 success/failure 供支付宝解析；
-     * 详细业务处理（验签、幂等、更新订单）见 {@link IPaymentService#handleNotify}。
-     * </p>
-     *
-     * @param request HTTP 请求，包含支付宝回传的参数与签名
-     * @return success / failure
+     * 支付宝异步回调。匿名放行，返回固定文本 success/failure 供支付宝解析；
+     * 验签、幂等、更新订单等处理见 {@link IPaymentService#handleNotify}。
      */
     @Anonymous
     @Operation(summary = "支付宝异步回调", hidden = true)

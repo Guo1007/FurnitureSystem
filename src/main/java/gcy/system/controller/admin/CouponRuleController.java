@@ -12,11 +12,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
 /**
- * 管理端优惠券叠加规则配置控制器，挂在 /admin/coupon-rule。
+ * 管理端优惠券叠加规则配置控制器。
  * <p>
- * 将下单时的券叠加限制（最大叠加张数、总抵扣上限比例）开放为后台可配置项，
- * 避免调整促销规则需要改代码重新发版。
- * </p>
+ * 把券叠加限制（最大张数、抵扣上限比例）开放为后台配置，避免调促销规则就得改代码发版。
  *
  * @author 郭名城
  * @date 2026-09-30
@@ -31,8 +29,6 @@ public class CouponRuleController {
 
     /**
      * 查询全部叠加规则配置。
-     *
-     * @return 规则列表
      */
     @Operation(summary = "查询优惠券叠加规则")
     @GetMapping
@@ -42,9 +38,6 @@ public class CouponRuleController {
 
     /**
      * 保存单条规则配置。
-     *
-     * @param dto 保存请求体
-     * @return 保存结果
      */
     @OperationLog("保存优惠券叠加规则")
     @Operation(summary = "保存优惠券叠加规则")

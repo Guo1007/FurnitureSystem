@@ -13,9 +13,10 @@
       />
       <el-button type="primary" @click="handleSearch">搜索</el-button>
       <el-button @click="resetSearch">重置</el-button>
-      <el-button type="success" style="margin-left: auto" @click="handleAdd"
-        >+ 新增优惠券</el-button
+      <el-button type="warning" style="margin-left: auto" @click="handleOpenGrant"
+        >定向发放</el-button
       >
+      <el-button type="success" @click="handleAdd">+ 新增优惠券</el-button>
     </div>
 
     <!-- 叠加规则设置 -->
@@ -66,6 +67,17 @@
     <!-- 表格 -->
     <el-table :data="tableData" v-loading="loading" border>
       <el-table-column prop="name" label="券名称" min-width="150" show-overflow-tooltip />
+      <el-table-column label="发放方式" width="110">
+        <template #default="{ row }">
+          <el-tag
+            size="small"
+            :type="row.issueType === 2 ? 'warning' : 'info'"
+            effect="plain"
+          >
+            {{ row.issueType === 2 ? "定向发放" : "公开领取" }}
+          </el-tag>
+        </template>
+      </el-table-column>
       <el-table-column label="叠加" width="100">
         <template #default="{ row }">
           <el-tag
@@ -168,6 +180,17 @@
         </el-form-item>
 
         <el-divider content-position="left">适用范围与发放</el-divider>
+        <el-form-item label="发放方式">
+          <el-radio-group v-model="formData.issueType">
+            <el-radio :value="1">公开领取</el-radio>
+            <el-radio :value="2">定向发放</el-radio>
+          </el-radio-group>
+          <div class="form-tip">
+            公开领取：上架到领券中心由用户自行领取，受发放总量与每人限领约束。<br />
+            定向发放：不进领券中心，只能由管理员在「定向发放」里发给指定用户（补偿／关怀用），
+            不受发放总量与每人限领约束。
+          </div>
+        </el-form-item>
         <el-row :gutter="16">
           <el-col :span="12">
             <el-form-item label="适用范围">
@@ -185,7 +208,7 @@
             </el-form-item>
           </el-col>
         </el-row>
-        <el-row :gutter="16">
+        <el-row :gutter="16" v-if="formData.issueType === 1">
           <el-col :span="12">
             <el-form-item label="发放总量">
               <el-input-number v-model="formData.totalCount" :min="0" style="width: 100%" />
@@ -200,7 +223,7 @@
         </el-row>
 
         <el-divider content-position="left">领取与有效期</el-divider>
-        <el-row :gutter="16">
+        <el-row :gutter="16" v-if="formData.issueType === 1">
           <el-col :span="12">
             <el-form-item label="领取开始">
               <el-date-picker v-model="formData.claimStart" type="datetime" placeholder="不限" value-format="YYYY-MM-DDTHH:mm:ss" style="width: 100%" />
@@ -235,7 +258,7 @@
         </el-form-item>
 
         <el-divider content-position="left">领取人群与状态</el-divider>
-        <el-row :gutter="16">
+        <el-row :gutter="16" v-if="formData.issueType === 1">
           <el-col :span="12">
             <el-form-item label="领取人群">
               <el-radio-group v-model="formData.targetType">
@@ -275,6 +298,109 @@
         </span>
       </template>
     </el-dialog>
+
+    <!-- 定向发放弹窗：选券 + 选用户 + 通知渠道 -->
+    <el-dialog
+      v-model="grantVisible"
+      title="定向发放优惠券"
+      width="620px"
+      top="8vh"
+      class="grant-dialog"
+    >
+      <el-form
+        ref="grantFormRef"
+        :model="grantForm"
+        :rules="grantRules"
+        label-width="100px"
+      >
+        <el-form-item label="优惠券" prop="couponId">
+          <el-select
+            v-model="grantForm.couponId"
+            placeholder="请选择要发放的券"
+            style="width: 100%"
+            :loading="grantCouponLoading"
+          >
+            <el-option
+              v-for="c in grantCouponOptions"
+              :key="c.id"
+              :label="`${c.name}（${ruleText(c)}）`"
+              :value="c.id"
+            />
+          </el-select>
+          <div class="form-tip">
+            这里只列出「定向发放」类型的券。公开领取的券受总量与限领约束，
+            不能定向发放 —— 需要的话请先复制一张并改为定向发放。
+          </div>
+        </el-form-item>
+
+        <el-form-item label="接收用户" prop="userIds">
+          <el-select
+            v-model="grantForm.userIds"
+            multiple
+            filterable
+            placeholder="搜索用户名或邮箱，可多选"
+            style="width: 100%"
+            :filter-method="searchUsers"
+            @focus="loadUsers"
+          >
+            <el-option
+              v-for="u in userList"
+              :key="u.id"
+              :label="`${u.userName} (${u.email || '无邮箱'})`"
+              :value="u.id"
+            />
+          </el-select>
+          <div class="form-tip">已选 {{ grantForm.userIds.length }} 人</div>
+        </el-form-item>
+
+        <el-form-item label="每人发放" prop="quantity">
+          <el-input-number v-model="grantForm.quantity" :min="1" :max="10" />
+          <span style="margin-left: 8px; color: var(--color-text-tertiary)">张</span>
+        </el-form-item>
+
+        <el-form-item label="发放场景" prop="scene">
+          <el-radio-group v-model="grantForm.scene">
+            <el-radio value="compensation">补偿</el-radio>
+            <el-radio value="care">关怀</el-radio>
+            <el-radio value="general">通用</el-radio>
+          </el-radio-group>
+          <div class="form-tip">
+            决定邮件与站内通知的语气。补偿场景的文案刻意克制 —— 收到的人多半刚遇到问题，
+            不要在原因里写促销措辞。
+          </div>
+        </el-form-item>
+
+        <el-form-item label="通知用户">
+          <el-checkbox v-model="grantForm.sendNotification"
+            >发送站内通知（推荐）</el-checkbox
+          >
+          <el-checkbox v-model="grantForm.sendEmail">同时发送邮件</el-checkbox>
+          <div class="form-tip">
+            站内通知送达可靠；邮件可能被误判为垃圾邮件，建议作为补充。
+            无邮箱的用户会自动跳过邮件。
+          </div>
+        </el-form-item>
+
+        <el-form-item label="发放原因">
+          <el-input
+            v-model="grantForm.remark"
+            type="textarea"
+            :rows="2"
+            maxlength="200"
+            show-word-limit
+            placeholder="可选。会出现在通知与邮件里，便于日后追溯为什么发这张券"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="grantVisible = false">取消</el-button>
+          <el-button type="primary" :loading="grantLoading" @click="submitGrant"
+            >确认发放</el-button
+          >
+        </span>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -288,11 +414,13 @@ import {
   getCouponInfo,
   getCouponList,
   getCouponRules,
+  grantCoupons,
   saveCouponRule,
   toggleCoupon,
   updateCoupon,
 } from "@/api/admin/coupon";
 import { getFurnitureTypeList } from "@/api/admin/furnitureType";
+import { getSimpleUserList } from "@/api/admin/user";
 
 const loading = ref(false);
 const submitLoading = ref(false);
@@ -329,6 +457,8 @@ const emptyForm = () => ({
   targetDays: 30,
   stackable: 0,
   statusOn: true,
+  // 发放方式：1-公开领取（默认，与改动前一致），2-定向发放
+  issueType: 1,
 });
 
 const formData = reactive(emptyForm());
@@ -429,7 +559,10 @@ const loadList = async () => {
     const res = await getCouponList(params);
     if (res.success || res.code === 200) {
       tableData.value = res.data.records || res.data || [];
-      total.value = res.data.total || res.data.length || 0;
+      // 分页总数在后端响应的顶层（Result.total），不在 data 里。
+      // 原先写的是 res.data.total || res.data.length，前者永远取不到、后者等于当前页条数，
+      // 结果 total 恒等于每页条数，翻页器永远只有一页。
+      total.value = Number(res.total) || 0;
     }
   } catch (e) {
     logger.error("加载优惠券失败:", e);
@@ -561,6 +694,95 @@ const submitForm = async () => {
 const handleSizeChange = () => {
   currentPage.value = 1;
   loadList();
+};
+
+// ==================== 定向发放 ====================
+const grantVisible = ref(false);
+const grantLoading = ref(false);
+const grantCouponLoading = ref(false);
+const grantFormRef = ref(null);
+/** 可发放的券：只含「定向发放」类型（后端按 issueType=2 过滤） */
+const grantCouponOptions = ref([]);
+const userList = ref([]);
+
+const emptyGrantForm = () => ({
+  couponId: undefined,
+  userIds: [],
+  quantity: 1,
+  scene: "general",
+  sendNotification: true,
+  sendEmail: false,
+  remark: "",
+});
+const grantForm = reactive(emptyGrantForm());
+
+const grantRules = reactive({
+  couponId: [{ required: true, message: "请选择要发放的券", trigger: "change" }],
+  userIds: [
+    {
+      required: true,
+      type: "array",
+      min: 1,
+      message: "请至少选择一个用户",
+      trigger: "change",
+    },
+  ],
+  quantity: [{ required: true, message: "请填写发放张数", trigger: "blur" }],
+});
+
+const handleOpenGrant = async () => {
+  Object.assign(grantForm, emptyGrantForm());
+  grantVisible.value = true;
+  grantCouponOptions.value = [];
+  grantCouponLoading.value = true;
+  try {
+    // issueType=2：让后端筛，别拉全量在前端过滤（券模板多了会漏）
+    const res = await getCouponList({ current: 1, size: 200, issueType: 2 });
+    if (res.success || res.code === 200) {
+      grantCouponOptions.value = res.data?.records || res.data || [];
+    } else {
+      ElMessage.error(res.msg || "加载可发放的券失败");
+    }
+  } catch (e) {
+    logger.error("加载可发放的券失败:", e);
+  } finally {
+    grantCouponLoading.value = false;
+  }
+  loadUsers();
+};
+
+const loadUsers = async (keyword) => {
+  try {
+    const res = await getSimpleUserList(keyword);
+    if (res.success || res.code === 200) {
+      userList.value = res.data || [];
+    }
+  } catch (e) {
+    logger.error("加载用户列表失败:", e);
+  }
+};
+const searchUsers = (kw) => loadUsers(kw);
+
+const submitGrant = async () => {
+  try {
+    await grantFormRef.value.validate();
+  } catch {
+    return; // 校验未通过，el-form 自己会标红
+  }
+  grantLoading.value = true;
+  try {
+    const res = await grantCoupons({ ...grantForm });
+    if (res.success || res.code === 200) {
+      ElMessage.success(res.msg || "发放成功");
+      grantVisible.value = false;
+    } else {
+      ElMessage.error(res.msg || "发放失败");
+    }
+  } catch (e) {
+    logger.error("定向发放失败:", e);
+  } finally {
+    grantLoading.value = false;
+  }
 };
 
 onMounted(() => {

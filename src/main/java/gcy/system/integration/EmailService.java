@@ -1,5 +1,6 @@
 package gcy.system.integration;
 
+import gcy.system.utils.CouponGrantScene;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
@@ -140,6 +141,47 @@ public class EmailService {
 
         String html = templateEngine.process("email/notification", context);
         sendHtmlEmail(to, title, html);
+    }
+
+    /**
+     * 定向发放优惠券的通知邮件。
+     * <p>
+     * 三套模板按「场景」分语气（见 {@link CouponGrantScene}）：补偿要克制诚恳、
+     * 关怀可以温暖、通用为中性。模板名由场景编码拼出，所以场景**必须经过白名单**
+     * （{@link CouponGrantScene#fromCode}），否则就成了模板路径注入。
+     * </p>
+     * <p>
+     * 券的面额 / 门槛 / 有效期由调用方从券模板的真实字段生成后传进来，
+     * <b>模板里不要写死任何具体金额</b> —— 否则换一张券文案就错了。
+     * </p>
+     *
+     * @param to            收件人邮箱
+     * @param userName      收件人昵称
+     * @param scene         场景编码：compensation / care / general（非法值回落 general）
+     * @param couponName    券名称
+     * @param amountText    面额文案，如「¥20」「8折」
+     * @param thresholdText 门槛文案，如「满100可用」
+     * @param validText     有效期文案，如「发放后 30 天有效」
+     * @param remark        发放原因，可为空
+     */
+    @Async
+    public void sendCouponGrantEmail(String to, String userName, String scene, String couponName,
+                                     String amountText, String thresholdText, String validText,
+                                     String remark) {
+        CouponGrantScene grantScene = CouponGrantScene.fromCode(scene);
+
+        Context context = new Context();
+        context.setVariable("userName", userName);
+        context.setVariable("couponName", couponName);
+        context.setVariable("amountText", amountText);
+        context.setVariable("thresholdText", thresholdText);
+        context.setVariable("validText", validText);
+        // 空串不传，模板里用 th:if 判断是否渲染这一块
+        context.setVariable("remark", (remark == null || remark.isBlank()) ? null : remark);
+        context.setVariable("sendTime", LocalDateTime.now().format(FORMATTER));
+
+        String html = templateEngine.process("email/coupon-" + grantScene.getCode(), context);
+        sendHtmlEmail(to, grantScene.getTitle(), html);
     }
 
     /**

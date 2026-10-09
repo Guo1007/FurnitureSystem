@@ -200,6 +200,11 @@ const handleRead = async (item) => {
     });
     return;
   }
+  // 优惠券通知（管理员定向发放）：跳转到「我的卡券」，别打开详情弹窗
+  if (item.type === "promotion") {
+    router.push({ name: "MyCoupons" });
+    return;
+  }
   detailItem.value = item;
   detailVisible.value = true;
 };

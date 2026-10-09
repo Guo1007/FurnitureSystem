@@ -19,23 +19,18 @@ import gcy.system.mapper.NotificationMapper;
 import gcy.system.mapper.SkuMapper;
 import gcy.system.service.Impl.FurnitureServiceImpl;
 import gcy.system.service.admin.IFurnitureManageService;
+import gcy.system.utils.AfterCommit;
 import gcy.system.utils.RedisConstants;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.math.BigDecimal;
 
 /**
- * 管理员家具管理服务实现类
- * <p>
- * 提供管理员后台对家具商品的增删改查功能，包括分页查询、新增、编辑和删除家具。
- * 在编辑和删除操作中会同步维护 Redis 缓存数据。
- * </p>
+ * 管理员家具管理服务实现类，编辑/删除后同步失效 Redis 家具缓存。
  *
  * @author 郭名城
  * @date 2026-07-30
@@ -57,19 +52,7 @@ public class FurnitureManageServiceImpl extends ServiceImpl<FurnitureMapper, Fur
     private final FavoriteMapper favoriteMapper;
 
     /**
-     * 分页查询家具列表
-     * <p>
-     * 支持按家具分类ID、家具名称（模糊查询）、库存状态和品牌进行筛选，返回分页结果。
-     * 库存状态筛选逻辑委托给 {@link FurnitureServiceImpl#applyStockStatusFilter} 处理。
-     * </p>
-     *
-     * @param current     当前页码
-     * @param size        每页条数
-     * @param typeId      家具分类ID，可为空（为空时不筛选分类）
-     * @param fName       家具名称关键词，可为空（为空时不筛选名称）
-     * @param stockStatus 库存状态筛选条件，可为空（为空时不筛选库存状态）
-     * @param brand       品牌名称，可为空（为空时不筛选品牌）
-     * @return 包含分页数据的 {@link Result} 对象，分页记录为 {@link Furniture} 列表
+     * 分页查询家具列表，支持分类、名称（模糊）、库存状态与品牌筛选。
      */
     @Override
     public Result getFurnitureList(Integer current, Integer size, Long typeId, String fName,
@@ -91,15 +74,7 @@ public class FurnitureManageServiceImpl extends ServiceImpl<FurnitureMapper, Fur
     }
 
     /**
-     * 新增家具
-     * <p>
-     * 将管理员提交的家具表单数据转换为 {@link Furniture} 实体并保存到数据库。
-     * 该方法在事务中执行，保存失败时抛出业务异常。
-     * </p>
-     *
-     * @param dto 管理员提交的家具表单数据，包含名称、图标、分类、品牌等字段
-     * @return 操作成功的 {@link Result} 对象
-     * @throws BusinessException 当家具保存失败时抛出，提示用户联系系统管理人员
+     * 新增家具；保存失败抛 {@link BusinessException}。
      */
     @Override
     @Transactional
@@ -117,16 +92,7 @@ public class FurnitureManageServiceImpl extends ServiceImpl<FurnitureMapper, Fur
     }
 
     /**
-     * 编辑家具信息
-     * <p>
-     * 根据传入的家具表单数据更新数据库中已有家具记录。如果家具存在关联的SKU，则从SKU汇总计算总库存和最低价格；
-     * 否则直接使用表单中的库存和价格数据。更新成功后删除对应的Redis缓存，确保缓存一致性。
-     * 该方法在事务中执行。
-     * </p>
-     *
-     * @param dto 管理员提交的家具表单数据，必须包含家具ID
-     * @return 修改成功时返回成功提示的 {@link Result} 对象；参数错误或家具不存在时返回失败信息
-     * @throws BusinessException 当数据库更新失败时抛出，提示用户联系系统管理人员
+     * 编辑家具信息；有 SKU 时库存与价格以 SKU 汇总为准（库存求和、取最低价）覆盖表单值。
      */
     @Override
     @Transactional
@@ -180,14 +146,9 @@ public class FurnitureManageServiceImpl extends ServiceImpl<FurnitureMapper, Fur
     }
 
     /**
-     * 事务提交之后再失效家具详情缓存。
+     * 事务提交后失效家具详情缓存。
      * <p>
-     * 若在事务提交前删除缓存，并发的用户请求会在缓存未命中时读到「尚未提交」的旧值并回写缓存，
-     * 事务提交后缓存中便长期保留旧价格/旧库存（本项目的读缓存会由逻辑过期+物理 TTL 兜底，
-     * 但回种的旧值仍会持续误导用户）。因此删除动作必须排在提交之后。
-     * </p>
-     *
-     * @param furnitureId 家具 ID
+     * 提交前删除，并发请求会在缓存未命中时读到未提交的旧值并回写，缓存长期保留旧价格/旧库存。
      */
     private void evictFurnitureCacheAfterCommit(Long furnitureId) {
         if (furnitureId == null) {
@@ -201,27 +162,11 @@ public class FurnitureManageServiceImpl extends ServiceImpl<FurnitureMapper, Fur
                 log.warn("提交后失效家具缓存失败: furnitureId={}", furnitureId, e);
             }
         };
-        if (TransactionSynchronizationManager.isSynchronizationActive()) {
-            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                @Override
-                public void afterCommit() {
-                    evict.run();
-                }
-            });
-        } else {
-            evict.run();
-        }
+        AfterCommit.run(evict);
     }
 
     /**
-     * 删除家具
-     * <p>
-     * 根据家具ID删除家具记录。删除成功后会清理通知表中对该家具的引用（将goodsId置为null），
-     * 并删除对应的Redis缓存。该方法在事务中执行。
-     * </p>
-     *
-     * @param furnitureId 要删除的家具ID
-     * @return 删除成功时返回成功提示的 {@link Result} 对象；删除失败时返回失败信息
+     * 删除家具，级联清理收藏记录、置空通知中的商品引用并失效缓存。
      */
     @Override
     @Transactional

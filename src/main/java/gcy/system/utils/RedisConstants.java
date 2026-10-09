@@ -4,18 +4,12 @@ package gcy.system.utils;
  * Redis Key 统一管理常量类。
  * <p>
  * 命名约定：前缀:业务:子业务 → 实际 key = 常量 + 业务ID。
- * 本类集中管理验证码、登录 Token、业务缓存、分布式锁及 AI/向量等所有 Redis Key 前缀与 TTL 常量，
- * 避免项目中散落硬编码的 Key 字符串。
- * </p>
  *
  * @author 郭名城
  * @date 2026-07-30
  */
 public final class RedisConstants {
 
-    /**
-     * 私有构造方法，防止外部实例化该工具常量类。
-     */
     private RedisConstants() {
     }
 
@@ -70,8 +64,7 @@ public final class RedisConstants {
     /**
      * 验证码发送 IP 限流 key，后接 类型:IP。
      * <p>
-     * 验证码接口是匿名的，仅按「账号」节流时，换一个账号即可绕开，
-     * 可被用来遍历邮箱无限触发外发邮件，耗尽 SMTP 配额。故补 IP 维度限流。
+     * 验证码接口匿名，只按账号节流可换账号绕过，遍历邮箱会耗尽 SMTP 配额，故补 IP 维度限流。
      */
     public static final String CODE_IP_LIMIT_KEY = "code:ip:limit:";
 
@@ -94,8 +87,7 @@ public final class RedisConstants {
     public static final Long LOGIN_USER_TTL = 36000L;
 
     /**
-     * 用户所有存活 Token 的 Set，后接 userId
-     * 用途：管理员改密/删用户时批量定位该用户的全部 token
+     * 用户所有存活 Token 的 Set，后接 userId；用于管理员改密/删用户时批量定位。
      */
     public static final String LOGIN_USER_TOKENS_SET = "login:user:tokens:set:";
 
@@ -107,9 +99,9 @@ public final class RedisConstants {
     /**
      * 登录态 Hash 中的「首次登录时间」字段（值：毫秒时间戳），用于实现绝对过期。
      * <p>
-     * 滑动续期意味着只要持续访问，Token 就能无限存活；一旦泄露，攻击者可长期持有。
-     * 这里记录登录时刻，续期时若已超过 {@link #LOGIN_USER_ABSOLUTE_TTL} 则强制失效。
-     * 使用 putIfAbsent 写入，保证「修改资料刷新登录态」不会重置该时间。
+     * 滑动续期下 Token 只要持续访问就能无限存活，泄露后攻击者可长期持有；
+     * 续期时超过 {@link #LOGIN_USER_ABSOLUTE_TTL} 即强制失效。
+     * 用 putIfAbsent 写入，保证「修改资料刷新登录态」不会重置该时间。
      */
     public static final String LOGIN_TIME_FIELD = "loginTime";
 

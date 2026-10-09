@@ -208,6 +208,14 @@ const handleClick = async (item) => {
     });
     return;
   }
+  // 优惠券通知（管理员定向发放）：跳转到「我的卡券」
+  // 通知表没有链接字段，跳转只能按 type 约定 —— 如果将来 promotion 类型
+  // 用于别的促销内容，这里要改成分得更细的类型，否则会跳错地方。
+  if (item.type === "promotion") {
+    showDropdown.value = false;
+    router.push({ name: "MyCoupons" });
+    return;
+  }
   // 打开详情弹窗
   detailItem.value = item;
   detailVisible.value = true;

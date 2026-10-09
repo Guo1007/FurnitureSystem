@@ -118,13 +118,11 @@ public class ProfileReviewServiceImpl implements IProfileReviewService {
         String newNickname = user.getPendingNickname();
         int originalStatus = user.getNicknameReviewStatus();
 
-        // 更新 user 表
         user.setUserName(newNickname);
         user.setPendingNickname(null);
         user.setNicknameReviewStatus(0);
         userMapper.updateById(user);
 
-        // 更新 log 表
         nicknameReviewLogMapper.update(null, new LambdaUpdateWrapper<NicknameReviewLog>()
                 .eq(NicknameReviewLog::getUserId, userId)
                 .eq(NicknameReviewLog::getStatus, originalStatus)
@@ -149,12 +147,10 @@ public class ProfileReviewServiceImpl implements IProfileReviewService {
 
         int originalStatus = user.getNicknameReviewStatus();
 
-        // 更新 user 表
         user.setPendingNickname(null);
         user.setNicknameReviewStatus(2);
         userMapper.updateById(user);
 
-        // 更新 log 表
         nicknameReviewLogMapper.update(null, new LambdaUpdateWrapper<NicknameReviewLog>()
                 .eq(NicknameReviewLog::getUserId, userId)
                 .eq(NicknameReviewLog::getStatus, originalStatus)
@@ -182,13 +178,11 @@ public class ProfileReviewServiceImpl implements IProfileReviewService {
 
         String newIcon = user.getPendingIcon();
 
-        // 更新 user 表
         user.setIcon(newIcon);
         user.setPendingIcon(null);
         user.setIconReviewStatus(0);
         userMapper.updateById(user);
 
-        // 更新 log 表
         iconReviewLogMapper.update(null, new LambdaUpdateWrapper<IconReviewLog>()
                 .eq(IconReviewLog::getUserId, userId)
                 .eq(IconReviewLog::getStatus, 1)
@@ -209,12 +203,10 @@ public class ProfileReviewServiceImpl implements IProfileReviewService {
             return Result.fail("该用户无待审核的头像");
         }
 
-        // 更新 user 表
         user.setPendingIcon(null);
         user.setIconReviewStatus(2);
         userMapper.updateById(user);
 
-        // 更新 log 表
         iconReviewLogMapper.update(null, new LambdaUpdateWrapper<IconReviewLog>()
                 .eq(IconReviewLog::getUserId, userId)
                 .eq(IconReviewLog::getStatus, 1)

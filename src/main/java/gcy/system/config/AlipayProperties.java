@@ -4,11 +4,7 @@ import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
- * 支付宝开放平台配置类。
- * <p>
- * 自动读取 application.yml 中 alipay 前缀的配置项，存放支付所需的应用ID、公私钥、
- * 网关地址与异步通知地址。默认网关指向沙箱环境，通过环境变量可切换为生产环境。
- * </p>
+ * 支付宝开放平台配置；默认网关指向沙箱，可通过环境变量切换生产。
  *
  * @author 郭名城
  * @date 2026-09-22

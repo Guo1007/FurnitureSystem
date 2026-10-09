@@ -17,12 +17,9 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * 管理员通知服务。
+ * 管理员通知服务：统一封装按通知类型读取配置、校验开关、解析收件人、发送邮件的流程。
  * <p>
- * 统一封装「按通知类型读取后台配置 → 校验开关 → 解析接收管理员 → 发送邮件」的流程，
- * 供有需要的业务模块（新订单、退款申请、库存预警等）复用，避免各处在业务代码中重复实现。
  * 发送失败仅记录日志，不影响主业务流程。
- * </p>
  *
  * @author 郭名城
  * @date 2026-08-12
@@ -39,14 +36,9 @@ public class AdminNotifyService {
     private final EmailService emailService;
 
     /**
-     * 根据通知类型解析该类型下应接收通知的管理员邮箱列表。
+     * 解析指定通知类型下应接收通知的管理员邮箱（仅 isAdmin=1 且已绑定邮箱）。
      * <p>
-     * 仅返回已开启通知、且为管理员（isAdmin=1）并已绑定邮箱的收件人。
      * 返回 null 表示配置缺失或开关未开启，调用方应直接跳过；返回空列表表示暂无有效收件人。
-     * </p>
-     *
-     * @param notifyType 通知类型（见 {@link NotifySettingServiceImpl} 中的 TYPE_* 常量）
-     * @return 有效管理员邮箱列表；配置缺失或未开启时返回 null
      */
     private List<String> resolveAdminEmails(String notifyType) {
         AdminNotifySetting setting = adminNotifySettingMapper.selectOne(
@@ -77,14 +69,7 @@ public class AdminNotifyService {
     }
 
     /**
-     * 发送普通管理员通知邮件（如新订单、退款申请）。
-     * <p>
-     * 受后台对应通知类型的开关与接收人配置控制；开关未开启或配置缺失时静默跳过。
-     * </p>
-     *
-     * @param notifyType 通知类型
-     * @param subject    邮件主题
-     * @param content    邮件正文
+     * 发送普通管理员通知邮件（新订单、退款申请等）；开关未开启或配置缺失时静默跳过。
      */
     public void sendNotification(String notifyType, String subject, String content) {
         try {
@@ -100,10 +85,9 @@ public class AdminNotifyService {
     }
 
     /**
-     * 发送库存预警邮件，受后台「库存预警」通知配置控制。
+     * 发送库存预警邮件，受后台「库存预警」配置控制。
      *
      * @param displayItems 邮件内展示的库存不足商品列表（已截取前 15 条）
-     * @param totalCount   库存不足商品总数
      */
     public void sendStockAlert(List<StockAlertItem> displayItems, int totalCount) {
         try {

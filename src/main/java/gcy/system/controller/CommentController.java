@@ -18,10 +18,6 @@ import org.springframework.web.multipart.MultipartFile;
 
 /**
  * 商品评论控制器
- * <p>
- * 提供评论相关的 REST API，包括评论的增删查、追评管理、以及评论图片和视频的上传功能。
- * 所有评论操作均基于当前登录用户进行权限校验。
- * </p>
  *
  * @author 郭名城
  * @date 2026-07-30
@@ -37,15 +33,7 @@ public class CommentController {
     private final OssService ossService;
 
     /**
-     * 根据商品ID获取评论列表（分页）
-     * <p>
-     * GET /comment/list/{goodsId}?current=1&size=10
-     * </p>
-     *
-     * @param goodsId 商品ID
-     * @param current 当前页码，默认值为1
-     * @param size    每页条数，默认值为10
-     * @return 包含分页评论数据的 Result 对象
+     * 分页查询商品评论列表。
      */
     @Operation(summary = "根据商品ID获取评论列表")
     @Anonymous
@@ -60,13 +48,7 @@ public class CommentController {
     }
 
     /**
-     * 根据订单ID获取评论列表
-     * <p>
-     * GET /comment/list/order/{orderId}
-     * </p>
-     *
-     * @param orderId 订单ID
-     * @return 包含该订单下所有评论数据的 Result 对象
+     * 查询订单下的评论列表。
      */
     @Operation(summary = "根据订单ID获取评论列表")
     @GetMapping("/list/order/{orderId}")
@@ -80,13 +62,7 @@ public class CommentController {
     }
 
     /**
-     * 新增商品评论
-     * <p>
-     * POST /comment/add
-     * </p>
-     *
-     * @param comment 评论实体对象，包含评论内容、商品ID、评分等信息
-     * @return 包含新增评论结果的 Result 对象
+     * 新增商品评论。
      */
     @Operation(summary = "新增商品评论")
     @PostMapping("/add")
@@ -96,13 +72,7 @@ public class CommentController {
     }
 
     /**
-     * 追加评论（追评）
-     * <p>
-     * POST /comment/append
-     * </p>
-     *
-     * @param append 追评实体对象，包含原评论ID和追加内容
-     * @return 包含追评操作结果的 Result 对象
+     * 追加评论（追评）。
      */
     @Operation(summary = "追加评论")
     @PostMapping("/append")
@@ -112,13 +82,7 @@ public class CommentController {
     }
 
     /**
-     * 删除评论
-     * <p>
-     * DELETE /comment/{commentId}
-     * </p>
-     *
-     * @param commentId 要删除的评论ID
-     * @return 包含删除操作结果的 Result 对象
+     * 删除评论。
      */
     @Operation(summary = "删除评论")
     @DeleteMapping("/{commentId}")
@@ -128,13 +92,7 @@ public class CommentController {
     }
 
     /**
-     * 删除追评
-     * <p>
-     * DELETE /comment/append/{appendId}
-     * </p>
-     *
-     * @param appendId 要删除的追评ID
-     * @return 包含删除操作结果的 Result 对象
+     * 删除追评。
      */
     @Operation(summary = "删除追评")
     @DeleteMapping("/append/{appendId}")
@@ -144,13 +102,7 @@ public class CommentController {
     }
 
     /**
-     * 删除评论回复
-     * <p>
-     * DELETE /comment/review/{reviewId}
-     * </p>
-     *
-     * @param reviewId 要删除的回复ID
-     * @return 包含删除操作结果的 Result 对象
+     * 删除评论回复。
      */
     @Operation(summary = "删除评论回复")
     @DeleteMapping("/review/{reviewId}")
@@ -160,13 +112,7 @@ public class CommentController {
     }
 
     /**
-     * 上传评论图片
-     * <p>
-     * POST /comment/upload/image
-     * </p>
-     *
-     * @param file 上传的图片文件（MultipartFile）
-     * @return 包含图片访问URL的 Result 对象
+     * 上传评论图片。
      */
     @Operation(summary = "上传评论图片")
     @PostMapping("/upload/image")
@@ -176,13 +122,7 @@ public class CommentController {
     }
 
     /**
-     * 上传评论视频
-     * <p>
-     * POST /comment/upload/video
-     * </p>
-     *
-     * @param file 上传的视频文件（MultipartFile）
-     * @return 包含视频访问URL的 Result 对象
+     * 上传评论视频。
      */
     @Operation(summary = "上传评论视频")
     @PostMapping("/upload/video")

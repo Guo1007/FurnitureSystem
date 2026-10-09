@@ -125,6 +125,16 @@ public class Coupon {
     private Integer stackable;
 
     /**
+     * 发放方式：1-公开领取（用户在领券中心可领），2-定向发放（只能由管理员发放）。
+     * <p>
+     * 定向发放的券**不进入公开领取流程**，因此不参与 Redis 的发放总量/每人限领计数
+     * （那两个计数器只由 {@code claim()} 维护）。这正是它能绕过限量的原因，
+     * 也决定了 {@code getClaimableList} 必须把它过滤掉。
+     * </p>
+     */
+    private Integer issueType;
+
+    /**
      * 状态：0-停用，1-启用
      */
     private Integer status;

@@ -17,10 +17,6 @@ import org.springframework.web.bind.annotation.*;
 
 /**
  * 订单控制器，处理订单相关的HTTP请求。
- * <p>
- * 提供订单的创建、查询列表、查看详情、支付、取消、确认收货及删除等功能。
- * 所有接口均返回统一的 {@link Result} 响应格式。
- * </p>
  *
  * @author 郭名城
  * @date 2026-07-30
@@ -37,12 +33,6 @@ public class OrderController {
 
     /**
      * 创建订单。
-     * <p>
-     * 接收购物车表单数据，调用订单服务生成新的订单记录。
-     * </p>
-     *
-     * @param dto 购物车表单数据传输对象，包含用户选购的商品信息
-     * @return 包含创建结果的统一响应对象
      */
     @OperationLog("创建订单")
     @Operation(summary = "创建订单")
@@ -54,12 +44,8 @@ public class OrderController {
     /**
      * 下单试算：只算钱，不下单。
      * <p>
-     * 前端「购物车页 / 购物车抽屉 / 商品详情立即购买 / 选券弹窗」全部用它取金额，
-     * 前端不再保留任何抵扣算法。无副作用，因此不加 {@code @OperationLog}（该类注解用于写操作）。
-     * </p>
-     *
-     * @param dto 试算请求，含商品明细与当前已勾选的券ID
-     * @return 商品总额、抵扣、实付、每张券的可用性与最优组合
+     * 前端各处取金额均走此接口，抵扣算法只在此实现；
+     * 无副作用，不加 {@code @OperationLog}（该注解用于写操作）。
      */
     @Operation(summary = "下单试算（算价/选券预览）")
     @PostMapping("/estimate")
@@ -68,12 +54,7 @@ public class OrderController {
     }
 
     /**
-     * 获取当前用户的订单列表，支持分页查询和状态筛选。
-     *
-     * @param page   页码，默认为第1页
-     * @param size   每页条数，默认为10条
-     * @param status 状态筛选（可选，支持逗号分隔多状态，如 "6,7,8"）
-     * @return 包含当前用户分页订单数据的统一响应对象
+     * 分页查询当前用户订单，status 支持逗号分隔多状态（如 "6,7,8"）。
      */
     @Operation(summary = "获取当前用户订单列表")
     @GetMapping("/list")
@@ -84,10 +65,7 @@ public class OrderController {
     }
 
     /**
-     * 根据订单ID获取订单详情。
-     *
-     * @param orderId 订单ID，用于标识唯一订单
-     * @return 包含指定订单详细信息的统一响应对象
+     * 查询订单详情。
      */
     @Operation(summary = "获取订单详情")
     @GetMapping("/detail/{orderId}")
@@ -96,10 +74,7 @@ public class OrderController {
     }
 
     /**
-     * 取消指定订单。
-     *
-     * @param orderId 待取消的订单ID
-     * @return 包含取消操作结果的统一响应对象
+     * 取消订单。
      */
     @OperationLog("取消订单")
     @Operation(summary = "取消订单")
@@ -110,12 +85,6 @@ public class OrderController {
 
     /**
      * 确认收货。
-     * <p>
-     * 将订单状态变更为已完成，表示用户已收到商品。
-     * </p>
-     *
-     * @param orderId 待确认收货的订单ID
-     * @return 包含确认收货操作结果的统一响应对象
      */
     @OperationLog("确认收货")
     @Operation(summary = "确认收货")
@@ -125,10 +94,7 @@ public class OrderController {
     }
 
     /**
-     * 删除指定订单。
-     *
-     * @param orderId 待删除的订单ID
-     * @return 包含删除操作结果的统一响应对象
+     * 删除订单。
      */
     @OperationLog("删除订单")
     @Operation(summary = "删除订单")
@@ -138,13 +104,7 @@ public class OrderController {
     }
 
     /**
-     * 用户申请退款。
-     * <p>
-     * 已支付/已发货/已完成/已评价的订单均可申请，申请后订单进入退款审核流程。
-     * </p>
-     *
-     * @param dto 退款申请请求体，包含订单ID和退款原因
-     * @return 包含申请结果的统一响应对象
+     * 申请退款：已支付/已发货/已完成/已评价的订单均可申请，申请后进入退款审核流程。
      */
     @OperationLog("申请退款")
     @Operation(summary = "申请退款")
@@ -155,14 +115,7 @@ public class OrderController {
     }
 
     /**
-     * 用户撤销退款申请。
-     * <p>
-     * 仅「申请退款中」的订单可撤销，撤销后回退到申请退款前的状态。
-     * 已由管理员受理（审核中/已退款）的订单不能再自行撤销。
-     * </p>
-     *
-     * @param orderId 订单ID
-     * @return 包含撤销结果的统一响应对象
+     * 撤销退款申请：仅「申请退款中」可撤销，回退到申请前状态；管理员已受理的不可撤销。
      */
     @OperationLog("撤销退款申请")
     @Operation(summary = "撤销退款申请")

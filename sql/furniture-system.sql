@@ -94,6 +94,7 @@ CREATE TABLE `coupon`  (
   `target_type` tinyint NOT NULL DEFAULT 0 COMMENT '领取人群：0-不限，1-新用户，2-老用户',
   `target_days` int NULL DEFAULT NULL COMMENT '新/老用户判定天数阈值',
   `stackable` tinyint NOT NULL DEFAULT 0 COMMENT '是否可叠加使用：0-不可叠加(只能单独用)，1-可叠加(可与其他可叠加券同用)',
+  `issue_type` tinyint NOT NULL DEFAULT 1 COMMENT '发放方式：1-公开领取(可被用户在领券中心领取)，2-定向发放(只能由管理员发放)',
   `status` tinyint NOT NULL DEFAULT 1 COMMENT '状态：0-停用，1-启用',
   `deleted` tinyint(1) NOT NULL DEFAULT 0 COMMENT '逻辑删除（0未删/1已删）',
   `create_time` datetime NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -3842,6 +3843,7 @@ CREATE TABLE `user_coupon`  (
   `got_time` datetime NULL DEFAULT CURRENT_TIMESTAMP COMMENT '领取时间',
   `use_time` datetime NULL DEFAULT NULL COMMENT '使用时间（可空）',
   `order_id` bigint NULL DEFAULT NULL COMMENT '使用的订单ID（可空）',
+  `source` tinyint NOT NULL DEFAULT 0 COMMENT '来源：0-用户领取，1-管理员定向发放',
   PRIMARY KEY (`id`) USING BTREE,
   INDEX `idx_user_coupon`(`user_id` ASC, `status` ASC) USING BTREE,
   INDEX `idx_coupon_id`(`coupon_id` ASC) USING BTREE

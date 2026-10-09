@@ -9,12 +9,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
 /**
- * 通知管理控制器
- * <p>
- * 提供通知相关的REST API接口，包括通知列表查询、未读数量统计、
- * 标记已读（单个/全部）以及删除通知等功能。
- * 所有接口均基于当前登录用户进行操作。
- * </p>
+ * 通知管理控制器，接口均基于当前登录用户操作。
  *
  * @author 郭名城
  * @date 2026-07-30
@@ -28,11 +23,7 @@ public class NotificationController {
     private final INotificationService notificationService;
 
     /**
-     * 分页查询当前用户的通知列表
-     *
-     * @param current 当前页码，默认值为1
-     * @param size    每页显示条数，默认值为10
-     * @return 包含分页通知数据的统一响应结果
+     * 分页查询当前用户的通知列表。
      */
     @Operation(summary = "分页查询当前用户的通知列表")
     @GetMapping("/list")
@@ -42,9 +33,7 @@ public class NotificationController {
     }
 
     /**
-     * 获取当前用户的未读通知数量
-     *
-     * @return 包含未读数量的统一响应结果
+     * 获取当前用户的未读通知数量。
      */
     @Operation(summary = "获取当前用户的未读通知数量")
     @GetMapping("/unread-count")
@@ -53,10 +42,7 @@ public class NotificationController {
     }
 
     /**
-     * 将指定通知标记为已读
-     *
-     * @param id 要标记为已读的通知ID
-     * @return 操作结果的统一响应
+     * 将指定通知标记为已读。
      */
     @Operation(summary = "将指定通知标记为已读")
     @PutMapping("/read/{id}")
@@ -65,9 +51,7 @@ public class NotificationController {
     }
 
     /**
-     * 将当前用户的所有未读通知标记为已读
-     *
-     * @return 操作结果的统一响应
+     * 将当前用户的所有未读通知标记为已读。
      */
     @Operation(summary = "将当前用户的所有未读通知标记为已读")
     @PutMapping("/read-all")
@@ -76,10 +60,7 @@ public class NotificationController {
     }
 
     /**
-     * 删除当前用户的一条通知记录
-     *
-     * @param id 要删除的通知ID
-     * @return 操作结果的统一响应
+     * 删除当前用户的一条通知记录。
      */
     @Operation(summary = "删除当前用户的一条通知记录")
     @DeleteMapping("/{id}")

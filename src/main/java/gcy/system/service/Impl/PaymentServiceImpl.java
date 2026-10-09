@@ -30,10 +30,6 @@ import java.util.Map;
 
 /**
  * 支付服务实现类，负责支付宝电脑网站支付的预下单与异步回调处理。
- * <p>
- * 预下单生成商户外单号并回调支付网关获取付款页面；回调接口负责验签、
- * 金额核对、幂等去重，并在到账后更新支付流水与订单状态。
- * </p>
  *
  * @author 郭名城
  * @date 2026-09-22
@@ -50,18 +46,12 @@ public class PaymentServiceImpl extends ServiceImpl<PaymentMapper, Payment> impl
     private final IOrderService orderService;
 
     /**
-     * 事务管理器。用于显式界定回调处理的事务边界——
-     * 本类内方法互调不会经过 Spring 代理，@Transactional 会失效，故使用事务模板。
+     * 本类方法互调不经过 Spring 代理、@Transactional 会失效，故用事务模板显式界定回调事务边界。
      */
     private final PlatformTransactionManager txManager;
 
     /**
-     * 预下单：校验订单归属与状态后，生成支付流水并调用支付宝电脑网站支付接口，
-     * 返回可自动提交的付款 HTML 表单。
-     *
-     * @param orderId 待支付订单ID
-     * @param userId  当前操作用户ID
-     * @return Result 成功时 data 为支付宝返回的付款表单 HTML
+     * 预下单，返回可自动提交的支付宝付款表单 HTML。
      */
     @Override
     public Result createPay(Long orderId, Long userId) {
@@ -121,18 +111,10 @@ public class PaymentServiceImpl extends ServiceImpl<PaymentMapper, Payment> impl
     }
 
     /**
-     * 处理支付宝异步回调。
+     * 处理支付宝异步回调，返回 "success" 告知支付宝不再重发。
      * <p>
-     * 流程：验签 → 仅处理成功/完成的交易 → 按 out_trade_no 定位流水 →
-     * 幂等去重 → 金额核对 → 更新流水与订单状态。返回 "success" 告知支付宝不再重发。
-     * <p>
-     * 「更新流水」与「确认订单」在同一事务内完成：若订单确认失败（如订单已被超时任务取消），
-     * 流水更新一并回滚并返回 "failure"，让支付宝按既定节奏重投，避免出现
-     * 「钱已收、流水已付、订单仍待支付」的资损中间态。
-     * </p>
-     *
-     * @param request HTTP 请求，包含支付宝回传的参数
-     * @return success / failure（订单确认失败时返回 failure 触发重试）
+     * 流水更新与订单确认在同一事务内：订单确认失败（如已被超时任务取消）时流水一并回滚并返回
+     * "failure" 触发重投，避免「钱已收、流水已付、订单仍待支付」的资损中间态。
      */
     @Override
     public String handleNotify(HttpServletRequest request) {
@@ -254,15 +236,7 @@ public class PaymentServiceImpl extends ServiceImpl<PaymentMapper, Payment> impl
     }
 
     /**
-     * 主动查询订单支付状态（对账兜底）。
-     * <p>
-     * 订单仍在待支付时，主动用支付宝 {@code alipay.trade.query} 查询该订单商户单号的
-     * 真实交易状态；若支付宝已扣款成功，则本地更新流水并确认订单已支付，返回 true。
-     * </p>
-     *
-     * @param orderId 待查订单ID
-     * @param userId  当前操作用户ID
-     * @return Result.data 为 true 表示已支付，false 表示仍待支付
+     * 主动查询订单支付状态（对账兜底），Result.data 为 true 表示已支付。
      */
     @Override
     public Result queryPayStatus(Long orderId, Long userId) {
@@ -273,7 +247,6 @@ public class PaymentServiceImpl extends ServiceImpl<PaymentMapper, Payment> impl
         if (!order.getUserId().equals(userId)) {
             return Result.fail("无权查看该订单！");
         }
-        // 非待支付状态：已支付类状态返回 true，其余返回 false
         if (order.getStatus() != OrderStatus.PENDING_PAYMENT.getCode()) {
             boolean paid = order.getStatus() == OrderStatus.PAID.getCode()
                     || order.getStatus() == OrderStatus.SHIPPED.getCode()
@@ -283,7 +256,6 @@ public class PaymentServiceImpl extends ServiceImpl<PaymentMapper, Payment> impl
             return Result.ok(paid);
         }
 
-        // 取该订单最近一条支付流水（含 payNo）
         Payment payment = lambdaQuery()
                 .eq(Payment::getOrderId, orderId)
                 .orderByDesc(Payment::getId)
@@ -310,7 +282,6 @@ public class PaymentServiceImpl extends ServiceImpl<PaymentMapper, Payment> impl
                                 orderId, payment.getTotalAmount(), amt);
                         return Result.ok(false);
                     }
-                    // 更新流水为已支付并回填交易号
                     lambdaUpdate()
                             .set(Payment::getStatus, 1)
                             .set(Payment::getTradeNo, resp.getTradeNo())
@@ -322,10 +293,8 @@ public class PaymentServiceImpl extends ServiceImpl<PaymentMapper, Payment> impl
                     return Result.ok(true);
                 }
             } else {
-                // 用户还没在支付宝侧付款时，支付宝固定返回 ACQ.TRADE_NOT_EXIST。
-                // 前端支付页每几秒轮询一次，若这里打 WARN/ERROR，一次未付款的支付
-                // 就会刷出几十条"错误"日志，把真正的故障淹没。故按 subCode 区分：
-                // 交易不存在 = 正常中间态（debug），其余才是真的异常（warn）。
+                // 用户未付款时支付宝固定返回 ACQ.TRADE_NOT_EXIST；前端每几秒轮询一次，
+                // 若按 WARN/ERROR 打会刷屏淹没真正故障，故交易不存在按 debug、其余按 warn。
                 if ("ACQ.TRADE_NOT_EXIST".equals(resp.getSubCode())) {
                     log.debug("主动查单：交易尚未创建（用户未付款）: orderId={}, payNo={}",
                             orderId, payment.getPayNo());
@@ -335,8 +304,7 @@ public class PaymentServiceImpl extends ServiceImpl<PaymentMapper, Payment> impl
                 }
             }
         } catch (Exception e) {
-            // 支付宝沙箱网关偶发返回 404 HTML（非 JSON），SDK 抛 AlipayApiException。
-            // 属于外部偶发，且轮询会重试，不必按 ERROR 打完整堆栈刷屏。
+            // 沙箱网关偶发返回 404 HTML（非 JSON）致 SDK 抛异常，属外部偶发且轮询会重试，按 warn 即可。
             log.warn("主动查单异常（外部网关，可重试）: orderId={}, msg={}",
                     orderId, e.getMessage());
         }

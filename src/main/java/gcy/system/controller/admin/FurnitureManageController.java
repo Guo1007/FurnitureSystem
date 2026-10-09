@@ -15,11 +15,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
- * 家具管理控制器
- * <p>
- * 提供后台管理系统中家具的增删改查及图片上传功能，
- * 所有接口均映射至 /admin/furniture 路径下。
- * </p>
+ * 家具管理控制器。
  *
  * @author 郭名城
  * @date 2026-07-30
@@ -35,19 +31,7 @@ public class FurnitureManageController {
     private final OssService ossService;
 
     /**
-     * 分页查询家具列表
-     * <p>
-     * GET /admin/furniture/list —— 支持按家具类型、名称、库存状态和品牌进行筛选，
-     * 返回分页后的家具数据。
-     * </p>
-     *
-     * @param current     当前页码，默认值为 1
-     * @param size        每页显示条数，默认值为 10
-     * @param typeId      家具类型 ID，可选
-     * @param fName       家具名称，可选，支持模糊查询
-     * @param stockStatus 库存状态，可选
-     * @param brand       品牌，可选
-     * @return 包含分页家具列表数据的 Result 对象
+     * 分页查询家具列表。
      */
     @Operation(summary = "分页查询家具列表")
     @GetMapping("/list")
@@ -61,13 +45,7 @@ public class FurnitureManageController {
     }
 
     /**
-     * 新增家具
-     * <p>
-     * POST /admin/furniture/add —— 接收家具表单数据并创建一条新的家具记录。
-     * </p>
-     *
-     * @param dto 家具表单数据传输对象，包含家具的名称、类型、价格、库存等信息，需通过校验
-     * @return 包含操作结果的 Result 对象
+     * 新增家具。
      */
     @OperationLog("新增商品")
     @Operation(summary = "新增家具")
@@ -77,13 +55,7 @@ public class FurnitureManageController {
     }
 
     /**
-     * 编辑家具
-     * <p>
-     * PUT /admin/furniture/edit —— 接收家具表单数据并更新已有的家具记录。
-     * </p>
-     *
-     * @param dto 家具表单数据传输对象，包含需要更新的家具信息，需通过校验
-     * @return 包含操作结果的 Result 对象
+     * 编辑家具。
      */
     @OperationLog("编辑商品")
     @Operation(summary = "编辑家具")
@@ -93,13 +65,7 @@ public class FurnitureManageController {
     }
 
     /**
-     * 上传家具图片
-     * <p>
-     * POST /admin/furniture/upload —— 将家具图片上传至 OSS，返回图片的访问 URL。
-     * </p>
-     *
-     * @param file 要上传的图片文件
-     * @return 包含上传后图片 URL 的 Result 对象
+     * 上传家具图片至 OSS，返回访问 URL。
      */
     @Operation(summary = "上传家具图片")
     @PostMapping("/upload")
@@ -114,13 +80,7 @@ public class FurnitureManageController {
 
 
     /**
-     * 删除家具
-     * <p>
-     * DELETE /admin/furniture/delete/{id} —— 根据家具 ID 删除指定的家具记录。
-     * </p>
-     *
-     * @param id 要删除的家具 ID
-     * @return 包含操作结果的 Result 对象
+     * 删除家具。
      */
     @OperationLog("删除商品")
     @Operation(summary = "删除家具")

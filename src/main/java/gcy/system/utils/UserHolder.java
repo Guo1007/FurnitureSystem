@@ -4,8 +4,7 @@ import gcy.system.entity.dto.UserDTO;
 
 /**
  * 用户上下文持有者工具类。
- * 基于 ThreadLocal 实现，用于在同一线程内存储和获取当前登录用户信息及令牌，
- * 避免在方法调用链路中逐层传递用户参数。
+ * 基于 ThreadLocal 在当前线程内保存登录用户信息与令牌，避免参数逐层传递。
  *
  * @author 郭名城
  * @date 2026-07-30
@@ -16,10 +15,7 @@ public class UserHolder {
     private static final ThreadLocal<String> tokenTl = new ThreadLocal<>();
 
     /**
-     * 将当前用户信息与令牌保存到当前线程的 ThreadLocal 中。
-     *
-     * @param user  当前登录的用户数据传输对象
-     * @param token 当前用户的认证令牌
+     * 保存当前登录用户信息与令牌到当前线程。
      */
     public static void saveUser(UserDTO user, String token) {
         tl.set(user);
@@ -27,18 +23,14 @@ public class UserHolder {
     }
 
     /**
-     * 从当前线程的 ThreadLocal 中获取已保存的用户信息。
-     *
-     * @return 当前登录的用户数据传输对象，若未保存则返回 null
+     * 获取当前线程保存的用户信息，未保存返回 null。
      */
     public static UserDTO getUser() {
         return tl.get();
     }
 
     /**
-     * 从当前线程的 ThreadLocal 中获取已保存的认证令牌。
-     *
-     * @return 当前用户的认证令牌，若未保存则返回 null
+     * 获取当前线程保存的认证令牌，未保存返回 null。
      */
     public static String getToken() {
         return tokenTl.get();

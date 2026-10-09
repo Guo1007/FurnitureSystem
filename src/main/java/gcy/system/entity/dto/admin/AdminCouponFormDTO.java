@@ -101,4 +101,13 @@ public class AdminCouponFormDTO {
 
     @Schema(description = "是否可叠加使用：0-不可叠加，1-可叠加")
     private Integer stackable;
+
+    /**
+     * 发放方式：1-公开领取（默认，用户在领券中心可领），2-定向发放（只能由管理员发放）。
+     * <p>
+     * 定向发放时不涉及「发放总量/每人限领/领取时间/领取人群」，前端表单会隐藏这几个字段。
+     * </p>
+     */
+    @Schema(description = "发放方式：1-公开领取，2-定向发放")
+    private Integer issueType;
 }

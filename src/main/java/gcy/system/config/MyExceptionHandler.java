@@ -23,13 +23,7 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 import java.util.stream.Collectors;
 
 /**
- * 全局异常处理器。
- * <p>
- * 使用 {@link RestControllerAdvice} 统一拦截 Controller 层抛出的各类异常，
- * 将异常信息转换为统一的 {@link Result} 响应格式返回给客户端。
- * 涵盖业务异常、参数校验异常、HTTP 方法不匹配、资源不存在、文件上传超限、
- * 数据库操作异常以及未知系统异常等多种场景。
- * </p>
+ * 全局异常处理器，将 Controller 层异常统一转换为 {@link Result} 响应。
  *
  * @author 郭名城
  * @date 2026-07-30
@@ -39,10 +33,7 @@ import java.util.stream.Collectors;
 public class MyExceptionHandler {
 
     /**
-     * 处理业务异常 {@link BusinessException}。
-     *
-     * @param e 业务异常对象，包含自定义的错误码和错误消息
-     * @return 包含业务异常错误码和错误消息的统一响应结果
+     * 处理 {@link BusinessException}，返回其自带的错误码与消息。
      */
     @ExceptionHandler(BusinessException.class)
     public Result handleBusinessException(BusinessException e) {
@@ -51,10 +42,7 @@ public class MyExceptionHandler {
     }
 
     /**
-     * 处理非法参数异常 {@link IllegalArgumentException}。
-     *
-     * @param e 非法参数异常对象
-     * @return 包含 HTTP 400 状态码和异常消息的统一响应结果
+     * 处理 {@link IllegalArgumentException}，返回 400。
      */
     @ExceptionHandler(IllegalArgumentException.class)
     public Result handleIllegalArgumentException(IllegalArgumentException e) {
@@ -63,10 +51,7 @@ public class MyExceptionHandler {
     }
 
     /**
-     * 处理 {@code @RequestBody} 注解的参数校验失败异常 {@link MethodArgumentNotValidException}。
-     *
-     * @param e 方法参数校验异常对象，包含校验失败的字段信息
-     * @return 包含 HTTP 422 状态码和第一个校验失败字段错误消息的统一响应结果
+     * 处理 {@code @RequestBody} 参数校验失败，返回第一个字段错误（422）。
      */
     @ExceptionHandler(MethodArgumentNotValidException.class)
     @ResponseStatus(HttpStatus.UNPROCESSABLE_ENTITY)
@@ -77,10 +62,7 @@ public class MyExceptionHandler {
     }
 
     /**
-     * 处理参数绑定异常 {@link BindException}（通常发生在 GET 请求表单参数绑定失败时）。
-     *
-     * @param e 参数绑定异常对象，包含绑定失败的字段信息
-     * @return 包含 HTTP 422 状态码和第一个绑定失败字段错误消息的统一响应结果
+     * 处理 GET 表单参数绑定失败，返回第一个字段错误（422）。
      */
     @ExceptionHandler(BindException.class)
     @ResponseStatus(HttpStatus.UNPROCESSABLE_ENTITY)
@@ -91,10 +73,7 @@ public class MyExceptionHandler {
     }
 
     /**
-     * 处理约束违反异常 {@link ConstraintViolationException}（通常发生在方法参数校验失败时，如 {@code @Validated} 在类级别使用）。
-     *
-     * @param e 约束违反异常对象，包含所有违反约束的详细信息
-     * @return 包含 HTTP 422 状态码和所有约束违反消息（以逗号分隔）的统一响应结果
+     * 处理方法参数约束校验失败，拼接全部违规消息返回（422）。
      */
     @ExceptionHandler(ConstraintViolationException.class)
     @ResponseStatus(HttpStatus.UNPROCESSABLE_ENTITY)
@@ -107,10 +86,7 @@ public class MyExceptionHandler {
     }
 
     /**
-     * 处理 HTTP 消息不可读异常 {@link HttpMessageNotReadableException}（如请求体 JSON 格式错误）。
-     *
-     * @param e HTTP 消息不可读异常对象
-     * @return 包含 HTTP 400 状态码和通用错误提示的统一响应结果
+     * 处理请求体不可读（如 JSON 格式错误），返回 400。
      */
     @ExceptionHandler(HttpMessageNotReadableException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
@@ -120,10 +96,7 @@ public class MyExceptionHandler {
     }
 
     /**
-     * 处理缺少必要请求参数异常 {@link MissingServletRequestParameterException}。
-     *
-     * @param e 缺少请求参数异常对象，包含缺失的参数名
-     * @return 包含 HTTP 400 状态码和缺失参数名称的统一响应结果
+     * 处理缺少必要请求参数，返回 400 并附缺失参数名。
      */
     @ExceptionHandler(MissingServletRequestParameterException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
@@ -133,10 +106,7 @@ public class MyExceptionHandler {
     }
 
     /**
-     * 处理方法参数类型不匹配异常 {@link MethodArgumentTypeMismatchException}。
-     *
-     * @param e 方法参数类型不匹配异常对象，包含参数名称和期望的类型
-     * @return 包含 HTTP 400 状态码和参数类型不匹配错误提示的统一响应结果
+     * 处理参数类型不匹配，返回 400。
      */
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
@@ -146,10 +116,7 @@ public class MyExceptionHandler {
     }
 
     /**
-     * 处理不支持的 HTTP 请求方法异常 {@link HttpRequestMethodNotSupportedException}。
-     *
-     * @param e 不支持的请求方法异常对象，包含客户端使用的 HTTP 方法
-     * @return 包含 HTTP 405 状态码和错误提示的统一响应结果
+     * 处理不支持的 HTTP 请求方法，返回 405。
      */
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
     @ResponseStatus(HttpStatus.METHOD_NOT_ALLOWED)
@@ -159,10 +126,7 @@ public class MyExceptionHandler {
     }
 
     /**
-     * 处理资源不存在异常 {@link NoResourceFoundException}。
-     *
-     * @param e 资源不存在异常对象，包含请求的资源路径
-     * @return 包含 HTTP 404 状态码和通用错误提示的统一响应结果
+     * 处理资源不存在，返回 404。
      */
     @ExceptionHandler(NoResourceFoundException.class)
     @ResponseStatus(HttpStatus.NOT_FOUND)
@@ -172,10 +136,7 @@ public class MyExceptionHandler {
     }
 
     /**
-     * 处理文件上传大小超限异常 {@link MaxUploadSizeExceededException}。
-     *
-     * @param e 文件上传大小超限异常对象
-     * @return 包含 HTTP 413 状态码和文件大小限制提示的统一响应结果
+     * 处理上传文件大小超限，提示不超过 5MB（413）。
      */
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     @ResponseStatus(HttpStatus.PAYLOAD_TOO_LARGE)
@@ -185,10 +146,7 @@ public class MyExceptionHandler {
     }
 
     /**
-     * 处理数据库数据完整性违反异常 {@link DataIntegrityViolationException}（如唯一约束冲突、外键约束冲突等）。
-     *
-     * @param e 数据完整性违反异常对象
-     * @return 包含 HTTP 500 状态码和通用错误提示的统一响应结果
+     * 处理数据库完整性约束冲突（唯一键/外键等），返回 500，不向前端暴露细节。
      */
     @ExceptionHandler(DataIntegrityViolationException.class)
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
@@ -198,10 +156,7 @@ public class MyExceptionHandler {
     }
 
     /**
-     * 处理所有未被上述处理器捕获的未知异常 {@link Exception}，作为全局兜底异常处理器。
-     *
-     * @param e 未知异常对象
-     * @return 包含 HTTP 500 状态码和通用系统繁忙提示的统一响应结果
+     * 兜底处理未捕获的异常，返回 500 通用提示。
      */
     @ExceptionHandler(Exception.class)
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)

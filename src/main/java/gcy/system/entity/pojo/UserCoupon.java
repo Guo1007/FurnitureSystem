@@ -61,4 +61,12 @@ public class UserCoupon {
      * 使用的订单ID（可空）
      */
     private Long orderId;
+
+    /**
+     * 来源：0-用户主动领取，1-管理员定向发放。
+     * <p>
+     * 用于区分「用户自己领的」与「我们发的」，是查询「补偿过谁」的依据。
+     * </p>
+     */
+    private Integer source;
 }

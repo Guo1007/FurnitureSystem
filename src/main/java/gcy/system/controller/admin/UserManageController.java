@@ -15,9 +15,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
 /**
- * 用户管理控制器
- * <p>
- * 提供管理员对系统用户的查询、编辑、删除等管理功能。
+ * 用户管理控制器。
  *
  * @author 郭名城
  * @date 2026-07-30
@@ -31,14 +29,7 @@ public class UserManageController {
     private final IUserManageService userManageService;
 
     /**
-     * 新增用户
-     * <p>
-     * 管理员创建新用户账号，可指定用户类型（普通用户/管理员）。
-     * 手机号和邮箱会进行唯一性校验，用户名不校验唯一性。
-     * </p>
-     *
-     * @param dto 新增用户表单数据传输对象
-     * @return 表示操作结果的统一返回结果
+     * 新增用户：手机号、邮箱校验唯一性，用户名不校验。
      */
     @OperationLog("新增用户")
     @Operation(summary = "新增用户")
@@ -48,16 +39,7 @@ public class UserManageController {
     }
 
     /**
-     * 分页获取用户列表
-     * <p>
-     * 支持按手机号、邮箱、管理员身份等条件进行筛选查询。
-     *
-     * @param current 当前页码，默认为 1
-     * @param size    每页显示条数，默认为 10
-     * @param phone   手机号筛选条件（可选）
-     * @param email   邮箱筛选条件（可选）
-     * @param isAdmin 是否为管理员筛选条件（可选）：1 表示管理员，0 表示普通用户
-     * @return 包含分页用户列表数据的统一返回结果
+     * 分页获取用户列表。
      */
     @Operation(summary = "分页获取用户列表")
     @GetMapping("/list")
@@ -70,12 +52,7 @@ public class UserManageController {
     }
 
     /**
-     * 编辑用户信息
-     * <p>
-     * 根据传入的用户表单数据更新指定用户的信息。
-     *
-     * @param dto 用户编辑表单数据传输对象，包含要修改的用户 ID 及新的用户信息
-     * @return 表示操作结果的统一返回结果
+     * 编辑用户信息。
      */
     @OperationLog("编辑用户")
     @Operation(summary = "编辑用户信息")
@@ -85,13 +62,7 @@ public class UserManageController {
     }
 
     /**
-     * 重置用户密码
-     * <p>
-     * 管理员为指定用户设置新密码，被重置的用户需重新登录。
-     * </p>
-     *
-     * @param dto 重置密码表单数据传输对象，包含用户ID和新密码
-     * @return 表示操作结果的统一返回结果
+     * 重置用户密码，重置后该用户需重新登录。
      */
     @OperationLog("重置密码")
     @Operation(summary = "重置用户密码")
@@ -101,10 +72,7 @@ public class UserManageController {
     }
 
     /**
-     * 根据用户 ID 删除用户
-     *
-     * @param id 要删除的用户唯一标识 ID
-     * @return 表示删除操作结果的统一返回结果
+     * 删除用户。
      */
     @OperationLog("删除用户")
     @Operation(summary = "删除用户")
@@ -114,12 +82,7 @@ public class UserManageController {
     }
 
     /**
-     * 获取精简用户列表
-     * <p>
-     * 用于下拉选择框等场景，支持按关键字模糊匹配用户名等信息。
-     *
-     * @param keyword 搜索关键字（可选），用于模糊匹配用户名或其他标识信息
-     * @return 包含精简用户列表数据的统一返回结果
+     * 获取精简用户列表，用于下拉选择框等场景。
      */
     @Operation(summary = "获取精简用户列表")
     @GetMapping("/simple")

@@ -1,6 +1,7 @@
 package gcy.system.controller.admin;
 
 import gcy.system.aspect.OperationLog;
+import gcy.system.entity.dto.CouponGrantDTO;
 import gcy.system.entity.dto.Result;
 import gcy.system.entity.dto.admin.AdminCouponFormDTO;
 import gcy.system.service.admin.ICouponManageService;
@@ -13,7 +14,7 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 /**
- * 管理端优惠券控制器，挂在 /admin/coupons。
+ * 管理端优惠券控制器。
  *
  * @author 郭名城
  * @date 2026-09-20
@@ -31,8 +32,10 @@ public class CouponManageController {
     @GetMapping("/list")
     public Result list(@Parameter(description = "当前页码") @RequestParam(defaultValue = "1") Integer current,
                        @Parameter(description = "每页条数") @RequestParam(defaultValue = "10") Integer size,
-                       @Parameter(description = "券名称模糊搜索") @RequestParam(required = false) String name) {
-        return couponManageService.page(current, size, name);
+                       @Parameter(description = "券名称模糊搜索") @RequestParam(required = false) String name,
+                       @Parameter(description = "发放方式过滤：1-公开领取，2-定向发放")
+                       @RequestParam(required = false) Integer issueType) {
+        return couponManageService.page(current, size, name, issueType);
     }
 
     @OperationLog("新增优惠券")
@@ -67,5 +70,17 @@ public class CouponManageController {
     @GetMapping("/info/{id}")
     public Result info(@Parameter(description = "优惠券ID") @PathVariable Long id) {
         return couponManageService.info(id);
+    }
+
+    /**
+     * 定向发放优惠券给指定用户（补偿 / 关怀 / 通用）。
+     * <p>
+     * 只接受「定向发放」类型的券（issue_type=2），详见 {@link ICouponManageService#grantCoupons(CouponGrantDTO)}。
+     */
+    @OperationLog("定向发放优惠券")
+    @Operation(summary = "定向发放优惠券")
+    @PostMapping("/grant")
+    public Result grant(@Parameter(description = "请求体") @Valid @RequestBody CouponGrantDTO dto) {
+        return couponManageService.grantCoupons(dto);
     }
 }

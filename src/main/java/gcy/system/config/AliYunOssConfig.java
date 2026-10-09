@@ -4,11 +4,7 @@ import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
- * 阿里云OSS配置类。
- * <p>
- * 自动读取 application.yml 中 aliyun.oss 前缀的配置项，
- * 包括 Endpoint、AccessKey、Bucket 等信息，用于文件上传到阿里云OSS。
- * </p>
+ * 阿里云 OSS 配置。
  *
  * @author 郭名城
  * @date 2026-07-30

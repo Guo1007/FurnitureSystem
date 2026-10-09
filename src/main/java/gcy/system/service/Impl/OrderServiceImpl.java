@@ -24,6 +24,7 @@ import gcy.system.service.IOrderItemService;
 import gcy.system.service.IOrderService;
 import gcy.system.service.admin.AdminNotifyService;
 import gcy.system.service.admin.Impl.NotifySettingServiceImpl;
+import gcy.system.utils.AfterCommit;
 import gcy.system.utils.OrderEmailUtil;
 import gcy.system.utils.UserHolder;
 import lombok.RequiredArgsConstructor;
@@ -34,9 +35,8 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.beans.factory.annotation.Value;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -50,8 +50,8 @@ import static gcy.system.utils.RedisConstants.CACHE_FURNITURE_KEY;
 import static gcy.system.utils.RedisConstants.ORDER_CREATE_KEY;
 
 /**
- * 订单服务实现类，负责订单的创建、支付、取消、删除、确认收货、超时取消及库存管理等核心业务流程。
- * 采用 Redisson 分布式锁防止重复下单，使用 CAS（Compare And Set）乐观锁保证状态变更的并发安全。
+ * 订单服务实现。
+ * Redisson 分布式锁防止重复下单；状态变更统一用 CAS 乐观锁保证并发安全。
  *
  * @author 郭名城
  * @date 2026-07-30
@@ -91,12 +91,12 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
      * 发货后自动确认收货的天数，取自 {@code order.auto-receive-days}（与 AutoReceiveScheduler 同源）。
      * 仅用于向前端下发「预计自动收货时间」，真正的自动收货仍由调度器执行。
      */
-    @org.springframework.beans.factory.annotation.Value("${order.auto-receive-days:10}")
+    @Value("${order.auto-receive-days:10}")
     private int autoReceiveDays;
 
     /**
-     * 事务管理器。用于显式控制下单事务边界，使「加锁 → 开事务 → 提交 → 解锁」顺序可控。
-     * 注意：本类内部方法互调不会经过 Spring 代理，@Transactional 会失效，故不使用注解。
+     * 用于显式控制下单事务边界，使「加锁 → 开事务 → 提交 → 解锁」顺序可控。
+     * 本类内部方法互调不过 Spring 代理，@Transactional 会失效，故不使用注解。
      */
     private final PlatformTransactionManager txManager;
 
@@ -109,17 +109,9 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     /**
      * 创建订单。
      * <p>
-     * 使用 Redisson 分布式锁防止同一用户并发重复下单。锁必须位于事务之外：
-     * 若事务注解加在本方法上，事务会在方法返回后才提交，而解锁写在 finally 中必然早于提交，
-     * 导致并发请求在事务未提交时拿到锁并读到旧快照。这里用事务模板把事务收在内层，
-     * 保证「提交之后才解锁」。
-     * </p>
-     * 校验收货信息完整性后遍历购物车：校验商品是否存在、库存是否充足（支持 SKU 规格与无规格两种模式），
-     * 扣减库存并计算订单总金额，最终保存订单主体及订单明细。
-     *
-     * @param dto 购物车下单数据传输对象，包含收货人、收货地址、联系电话和商品列表
-     * @return Result 成功时返回订单 ID，失败时返回错误提示信息
-     * @throws BusinessException 当商品数量无效、商品不存在或已下架、规格不匹配、库存不足、订单明细保存失败时抛出
+     * 锁必须位于事务之外：若把 @Transactional 加在本方法上，事务会在方法返回后才提交，
+     * 而 finally 中的解锁必然早于提交，并发请求会在事务未提交时拿到锁并读到旧快照。
+     * 这里用事务模板把事务收在内层，保证「提交之后才解锁」。
      */
     @Override
     public Result createOrder(CartFormDTO dto) {
@@ -161,8 +153,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         order.setCreateTime(LocalDateTime.now());
         order.setStatus(PENDING_PAYMENT.getCode());
         order.setUserId(userId);
-        // 算价：与「下单试算」共用同一段逻辑（纯读、无副作用）。
-        // 商品/规格/库存的校验都内含其中，扣库存留在下面单独做。
+        // 与「下单试算」共用同一段算价逻辑（纯读、无副作用），校验内含其中；扣库存单独放下面
         PricedCart cart = priceCart(items);
         BigDecimal totalAmount = cart.goodsTotal;
 
@@ -170,8 +161,8 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         Set<Long> touchedFurnitureIds = new HashSet<>();
         List<OrderItem> orderItems = new ArrayList<>();
 
-        // 扣库存。库存充足性校验已在 priceCart 内完成，这里只保留以「影响行数」
-        // 兜底的并发 CAS：校验与扣减之间商品可能被别人买走，失败即回滚整个下单事务。
+        // 库存充足性校验已在 priceCart 完成，这里只做以「影响行数」兜底的并发 CAS：
+        // 校验与扣减之间商品可能被别人买走，失败即回滚整个下单事务。
         for (PricedItem pi : cart.items) {
             if (pi.skuId != null) {
                 int rows = skuMapper.decrementStock(pi.skuId, pi.quantity);
@@ -189,12 +180,10 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
                     throw new BusinessException("商品 " + pi.furniture.getFName() + " 库存发生变化，请重新下单");
                 }
             }
-            // 记录库存变动涉及的商品，提交后再失效缓存：
-            // 不在事务内写缓存，事务回滚时缓存无法同步回滚，会留下脏数据
+            // 提交后再失效缓存：事务内写缓存无法随回滚同步撤销，会留下脏数据
             touchedFurnitureIds.add(pi.furnitureId);
         }
 
-        // 组装订单明细
         for (PricedItem pi : cart.items) {
             OrderItem orderItem = new OrderItem();
             orderItem.setFurnitureId(pi.furnitureId);
@@ -233,7 +222,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         if (!success) {
             throw new BusinessException("订单明细保存失败");
         }
-        // 订单创建成功后，将已用优惠券置为已用并关联订单（一条 IN(...) 批量 UPDATE，替代逐条核销）
+        // 批量核销本单优惠券，内部带 status=0 的 CAS，影响行数不足即抛异常回滚
         markCouponsUsed(userCouponIds, orderId, now);
         // 库存已落库，提交后再失效缓存（由读路径自动重建）
         evictFurnitureCacheAfterCommit(touchedFurnitureIds);
@@ -249,22 +238,17 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     /**
      * 一条已计价的购物车明细。
      * <p>
-     * 由 {@link #priceCart(List)} 产出，同时供「下单」（扣库存、落库）和「试算接口」使用，
-     * 两条路径共用同一份算价结果，金额不可能对不上。
-     * </p>
+     * 下单与试算共用 {@link #priceCart(List)} 的产出，金额口径必然一致。
      */
     private static class PricedItem {
-        /** 商品ID */
         final Long furnitureId;
-        /** 规格ID（无规格为 null） */
+        /** 规格ID，无规格时 null */
         final Long skuId;
-        /** 购买数量 */
         final int quantity;
         /** 命中的商品（取名称/图标，以及扣库存失败时的报错文案） */
         final Furniture furniture;
         /** 单价：有规格取规格价，否则取商品价 */
         final BigDecimal price;
-        /** 小计 = price × quantity */
         final BigDecimal itemTotal;
 
         PricedItem(Long furnitureId, Long skuId, int quantity, Furniture furniture,
@@ -282,13 +266,11 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
      * 一次算价的完整产物。
      */
     private static class PricedCart {
-        /** 商品总额 */
         final BigDecimal goodsTotal;
         /** 本单命中的商品分类ID集合，供分类券适用性校验 */
         final Set<Long> itemTypeIds;
         /** 各分类小计，供分类券门槛与抵扣上限使用 */
         final Map<Long, BigDecimal> subTotalByType;
-        /** 逐条明细 */
         final List<PricedItem> items;
 
         PricedCart(BigDecimal goodsTotal, Set<Long> itemTypeIds,
@@ -303,17 +285,9 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     /**
      * 购物车算价：校验商品/规格/库存并算出金额。
      * <p>
-     * <b>纯读、无任何副作用</b> —— 不扣库存、不落库、不加锁。正因如此，「下单试算」
-     * 可以直接复用本方法，这也是试算金额与下单金额必然一致的根本原因：
-     * 它们本来就是同一段代码。
-     * </p>
-     * <p>
-     * 校验失败一律抛 {@link BusinessException}，用户可见文案与下单时保持一致。
-     * 库存只做「读取判断」，真正地并发兜底由下单流程随后执行的 CAS 扣减负责。
-     * </p>
-     *
-     * @param items 购物车明细（来自请求体，只含「买什么、买几件」，单价一律查库）
-     * @return 商品总额、分类小计、命中分类与逐条计价明细
+     * 纯读、无副作用：不扣库存、不落库、不加锁。下单与试算复用同一段代码，故两边金额必然一致。
+     * 校验失败一律抛 {@link BusinessException}，文案与下单时一致；库存只做读取判断，
+     * 并发兜底由下单流程随后的 CAS 扣减负责。
      */
     private PricedCart priceCart(List<OrderItemDTO> items) {
         if (items == null || items.isEmpty()) {
@@ -325,8 +299,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         Map<Long, BigDecimal> subTotalByType = new HashMap<>();
         List<PricedItem> priced = new ArrayList<>();
 
-        // 循环外批量预加载：原实现在循环内对每件商品查家具、查规格、再 COUNT 一次规格，
-        // 20 件商品 ≈ 100+ 次 DB 往返且全部串行在一个事务里。这里压成 3 条查询。
+        // 循环外批量预加载，避免循环内逐件查家具/规格的 N+1
         Set<Long> furnitureIdSet = items.stream().map(OrderItemDTO::getFurnitureId)
                 .filter(Objects::nonNull).collect(Collectors.toSet());
         Map<Long, Furniture> furnitureMap = furnitureIdSet.isEmpty() ? Map.of()
@@ -399,13 +372,10 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     }
 
     /**
-     * 校验优惠券是否可用于本单：归属、未用、有效期内、门槛、适用范围。不满足抛异常。
+     * 校验优惠券是否可用于本单（下单路径），规则判定全部委托 {@link #evaluateCoupon}。
      * <p>
-     * 门槛按「适用基数」判断：全场券用整单金额，分类券（scope=1）只用该分类的商品小计，
-     * 否则会出现「订单里只有一件该分类的低价商品，却能使用高额分类券」的漏洞。
-     * </p>
-     *
-     * @param subTotalByType 各分类的商品小计（typeId -> 金额）
+     * 门槛按「适用基数」判断：全场券用整单金额，分类券只看该分类小计，
+     * 否则会出现「订单里只有一件该分类低价商品却能用高额分类券」的漏洞。
      */
     private Coupon validateCoupon(Long userId, Long userCouponId, BigDecimal goodsTotal, Set<Long> itemTypeIds,
                                   Map<Long, BigDecimal> subTotalByType, LocalDateTime now) {
@@ -413,32 +383,12 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         if (uc == null || !uc.getUserId().equals(userId)) {
             throw new BusinessException("优惠券不存在");
         }
-        if (uc.getStatus() != null && uc.getStatus() != 0) {
-            throw new BusinessException("优惠券不可用");
+        CouponEvaluation evaluation = evaluateCoupon(uc, couponMapper.selectById(uc.getCouponId()),
+                goodsTotal, itemTypeIds, subTotalByType, now);
+        if (!evaluation.usable()) {
+            throw new BusinessException(evaluation.reason);
         }
-        if (uc.getExpireTime() != null && uc.getExpireTime().isBefore(now)) {
-            throw new BusinessException("优惠券已过期");
-        }
-        Coupon c = couponMapper.selectById(uc.getCouponId());
-        if (c == null || c.getStatus() == null || c.getStatus() != 1) {
-            throw new BusinessException("优惠券已停用");
-        }
-        // 分类券以该分类小计为基数校验门槛与抵扣，全场券以整单金额为基数
-        BigDecimal applicableBase = resolveCouponBase(c, goodsTotal, subTotalByType);
-        BigDecimal threshold = c.getMinThreshold() == null ? BigDecimal.ZERO : c.getMinThreshold();
-        if (applicableBase.compareTo(threshold) < 0) {
-            throw new BusinessException("未满足优惠券使用门槛");
-        }
-        if (c.getScope() != null && c.getScope() == 1 && c.getTypeId() != null
-                && (itemTypeIds == null || !itemTypeIds.contains(c.getTypeId()))) {
-            throw new BusinessException("该优惠券不适用于所选商品");
-        }
-        // 按券类型校验关键字段，避免收到的券配置异常导致抵扣失真
-        if (c.getType() == null || (c.getType() == 2 && c.getDiscount() == null)
-                || (c.getType() != 2 && c.getAmount() == null)) {
-            throw new BusinessException("优惠券配置异常，请联系管理员");
-        }
-        return c;
+        return evaluation.coupon;
     }
 
     /**
@@ -473,14 +423,10 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     }
 
     /**
-     * 下单成功后，将使用的优惠券置为已用并关联订单。
-     * 必须校验影响行数：若并发下该券已被核销，此处会静默更新 0 行而不报错，
-     * 导致同一张券被多笔订单同时使用。
-     * 批量核销本单用到的优惠券：一条 {@code IN(...)} UPDATE 完成，避免 N 张券 N 次往返。
+     * 下单成功后批量核销本单优惠券并关联订单。
      * <p>
-     * 仍然带 {@code status = 0} 的 CAS 条件并校验影响行数：并发下若某张券已被核销，
-     * 影响行数会小于券数，此时直接抛异常回滚，不会静默「一券多用」。
-     * </p>
+     * 一条 {@code IN(...)} UPDATE 完成；带 {@code status = 0} 的 CAS 条件并校验影响行数：
+     * 并发下若某张券已被核销，影响行数会小于券数，直接抛异常回滚，避免静默「一券多用」。
      */
     private void markCouponsUsed(List<Long> userCouponIds, Long orderId, LocalDateTime now) {
         if (userCouponIds == null || userCouponIds.isEmpty()) {
@@ -510,16 +456,6 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     /**
      * 批量校验多张优惠券，并施加叠加规则：
      * 不可叠加券只能单独用一张；可叠加券总数受后台配置的「最大叠加张数」限制。
-     * <p>
-     * 注意 1：不对同一券模板去重——同一张券领取 N 份即对应 user_coupon 中 N 条独立记录，
-     * 本就应当可以分别使用；抵扣失控由「折扣券限 1 张」「最大叠加张数」「总抵扣上限比例」共同兜底。
-     * </p>
-     * <p>
-     * 注意 2：折扣券（type=2）每单限用 1 张。折扣券是比例型券，叠加是乘法链式衰减
-     * （两张 8 折 = 0.64 即 6.4 折，三张 = 5.12 折），且让利随订单金额线性放大，
-     * 与满减券「固定面额线性相加」的性质完全不同，运营无法预估让利规模，故不开放叠加。
-     * 折扣券仍可与满减券／无门槛券同用。
-     * </p>
      */
     private List<Coupon> validateCoupons(Long userId, List<Long> userCouponIds, BigDecimal goodsTotal,
                                          Set<Long> itemTypeIds, Map<Long, BigDecimal> subTotalByType,
@@ -598,13 +534,10 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     /**
      * 一张券在某单下的评估结果。
      * <p>
-     * 与 {@link #validateCoupon} 的关系：判定条件一一对应，区别只在于
-     * <b>这里返回原因字符串而不是抛异常</b>。试算要一次性评估用户的全部券，
-     * 一张不可用不该让整个请求失败。
-     * </p>
+     * 与 {@link #validateCoupon} 判定条件一一对应，区别是这里返回原因而非抛异常：
+     * 试算要一次性评估全部券，一张不可用不该让整个请求失败。
      */
     private static class CouponEvaluation {
-        /** 用户券记录 */
         final UserCoupon userCoupon;
         /** 券模板；模板缺失时为 null */
         final Coupon coupon;
@@ -625,9 +558,8 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     /**
      * 「最优组合」搜索的候选：一张具体的用户券。
      * <p>
-     * 刻意不复用 {@link Coupon} 本身做身份 —— 同一张模板可能被同一用户领了多份
-     * （user_coupon 多条记录共用一条 coupon），按对象身份去重会算错。
-     * </p>
+     * 刻意不复用 {@link Coupon} 做身份：同一模板可被同一用户领多份（多条 user_coupon 共用一条 coupon），
+     * 按对象身份去重会算错。
      */
     private static class CouponCandidate {
         final Long userCouponId;
@@ -646,14 +578,10 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     }
 
     /**
-     * 下单试算：算商品金额、评估每张券、算出当前所选抵扣、并给出最优组合。
+     * 下单试算：算商品金额、评估每张券、算出当前所选抵扣并给出最优组合。
      * <p>
-     * 全程只读：不扣库存、不落库、不核销券。算价走的是 {@link #priceCart(List)}，
-     * 与下单同一段代码，所以试算结果与下单实收必然一致（前提是购物车与券没变）。
-     * </p>
-     * <p>
-     * 与后端的约定：本接口是前端展示金额的<b>唯一</b>来源，前端不再保留任何抵扣算法。
-     * </p>
+     * 全程只读，算价走 {@link #priceCart(List)}，与下单同一段代码，两边金额必然一致。
+     * 本接口是前端展示金额的唯一来源，前端不再保留抵扣算法。
      */
     @Override
     public Result estimate(OrderEstimateDTO dto) {
@@ -729,8 +657,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     }
 
     /**
-     * 批量加载券模板（一次 IN 查询），替代逐张 user_coupon 回表查模板。
-     * 沿用 {@code CouponServiceImpl.getMyCoupons} 的「两次查询 + 内存 join」模式。
+     * 批量加载券模板（一次 IN 查询），沿用 {@code CouponServiceImpl.getMyCoupons} 的两次查询 + 内存 join 模式。
      */
     private Map<Long, Coupon> loadCouponTemplates(List<UserCoupon> userCoupons) {
         if (userCoupons == null || userCoupons.isEmpty()) {
@@ -750,10 +677,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
 
     /**
      * 评估一张券能否用于本单，返回原因而不是抛异常。
-     * <p>
-     * 判定顺序与前端 {@code couponReason} 对齐，保证前端「不可用」分组里
-     * 展示的原因文案与用户此前看到的一致。
-     * </p>
+     * 判定顺序与前端 {@code couponReason} 对齐，保证「不可用」分组的原因文案一致。
      */
     private CouponEvaluation evaluateCoupon(UserCoupon uc, Coupon c, BigDecimal goodsTotal,
                                             Set<Long> itemTypeIds, Map<Long, BigDecimal> subTotalByType,
@@ -820,14 +744,9 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     /**
      * 求解「最优券组合」，返回选中的 userCouponId 列表。
      * <p>
-     * 「不可叠加券与任何其它券互斥」这条约束决定了合法组合只有两种形态：
-     * ① 单独使用一张不可叠加券；② 使用若干张可叠加券（张数 ≤ maxStackCount，折扣券最多 1 张）。
-     * 两种形态各求最优再比较即可覆盖全部合法组合，无需穷举。
-     * </p>
-     * <p>
-     * 算法是「带排序启发的贪心 + 小规模排列择优」，不保证数学最优；
-     * 券种少、张数上限小，实际已足够。与前端原 {@code pickBestCoupons} 行为一致。
-     * </p>
+     * 「不可叠加券与其它券互斥」决定了合法组合只有两种形态：单独用一张不可叠加券，或用若干张可叠加券
+     * （张数 ≤ maxStackCount，折扣券最多 1 张）；两种形态各求最优再比较即可覆盖全部，无需穷举。
+     * 算法是带排序启发的贪心 + 小规模排列择优，不保证数学最优，券少张数上限小时已足够。
      */
     private List<Long> pickBestCouponIds(List<CouponEvaluation> evaluations, BigDecimal goodsTotal,
                                          Map<Long, BigDecimal> subTotalByType, int maxStackCount,
@@ -965,12 +884,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     }
 
     /**
-     * 根据当前登录用户 ID 分页查询订单列表。
-     * 仅返回未被用户删除的订单，按创建时间倒序排列，同时批量加载每个订单的明细并组装为 VO 返回。
-     *
-     * @param current 当前页码，为 null 时默认第 1 页
-     * @param size    每页记录数，为 null 时默认 10 条
-     * @return Result 包含分页订单 VO 列表的成功结果
+     * 分页查询当前用户的订单列表，取 user_deleted = 0，按创建时间倒序。
      */
     @Override
     public Result getOrderByUserId(Long current, Long size, String status) {
@@ -1019,11 +933,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     }
 
     /**
-     * 软删除指定订单（将 user_deleted 标记置为 1）。
-     * 仅当订单状态为已取消、已完成或已评价时允许删除，且仅允许订单所属用户操作。
-     *
-     * @param id 订单 ID
-     * @return Result 操作结果，成功或包含错误提示
+     * 软删除指定订单（user_deleted 置 1），仅限本人、且仅取消/完成/已评价/已退款状态可删。
      */
     @Override
     @Transactional
@@ -1054,13 +964,8 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     /**
      * 支付成功确认订单（支付宝异步回调触发）。
      * <p>
-     * 该方法不依赖当前登录用户，由支付网关回调验签、金额核对通过后调用，
-     * 使用 CAS 乐观锁将待支付订单更新为已支付，并记录支付时间；
-     * 若订单已支付或已发货则幂等返回成功。
-     * </p>
-     *
-     * @param orderId 待确认的订单ID
-     * @return Result 支付成功返回 ok，已支付则幂等返回成功，状态异常返回失败
+     * 不依赖登录用户（由支付网关回调验签、核对金额后调用），CAS 将待支付更新为已支付并记录支付时间；
+     * 订单已支付或已发货时幂等返回成功。
      */
     @Override
     @Transactional
@@ -1097,11 +1002,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     }
 
     /**
-     * 用户手动取消订单。
-     * 仅允许订单所属用户在待支付状态下取消，取消时恢复库存并更新订单状态。
-     *
-     * @param id 订单 ID
-     * @return Result 取消成功返回 ok，失败返回错误提示（如订单已支付、无权操作等）
+     * 用户手动取消订单，仅限本人在待支付状态下操作，取消时恢复库存并归还优惠券。
      */
     @Override
     @Transactional
@@ -1128,11 +1029,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     }
 
     /**
-     * 系统自动取消超时未支付订单。
-     * 无用户上下文，因此跳过用户归属校验；仅在订单仍处于待支付状态时执行取消操作。
-     *
-     * @param id 订单 ID
-     * @return Result 取消成功返回 ok；若订单状态已变更则幂等返回成功并记录日志
+     * 系统自动取消超时未支付订单；无用户上下文故跳过归属校验，状态已变更时幂等返回成功。
      */
     @Transactional
     public Result cancelTimeoutOrder(Long id) {
@@ -1151,11 +1048,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     }
 
     /**
-     * 取消订单的核心操作：恢复库存后使用 CAS 乐观锁将订单状态更新为已取消。
-     * 调用方需自行完成权限校验和锁控制。
-     *
-     * @param orderId 订单 ID
-     * @throws BusinessException 当商品不存在、库存恢复失败或订单状态更新失败时抛出
+     * 取消订单核心逻辑：CAS 将订单置为已取消后恢复库存；调用方需自行完成权限校验与锁控制。
      */
     private void doCancelOrder(Long orderId) {
         // 先 CAS 更新状态，确保只有一条线程能成功
@@ -1172,11 +1065,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     }
 
     /**
-     * 恢复指定订单占用的库存：遍历订单明细恢复 SKU 库存和家具总库存。
-     * 库存落库后于事务提交时统一失效缓存，由读路径重建。供订单取消和退款审核通过复用。
-     *
-     * @param orderId 订单 ID
-     * @throws BusinessException 当商品不存在或库存恢复失败时抛出
+     * 恢复订单占用的库存（SKU 与家具总库存），提交后再失效缓存由读路径重建；取消与退款审核通过复用。
      */
     @Override
     public void restoreStock(Long orderId) {
@@ -1184,8 +1073,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         wrapper.eq(OrderItem::getOrderId, orderId);
         List<OrderItem> items = orderItemService.list(wrapper);
         Set<Long> touchedFurnitureIds = new HashSet<>();
-        // 先按 id 聚合数量（同一件商品可能在明细里出现多次），再用两条批量 SQL 一次回库，
-        // 替代原先「每件明细 1~2 条 UPDATE」的循环写法。
+        // 先按 id 聚合数量（同一商品可能在明细里出现多次），再用两条批量 SQL 一次回库
         Map<Long, Integer> skuQty = new HashMap<>();
         Map<Long, Integer> furnitureQty = new HashMap<>();
         for (OrderItem item : items) {
@@ -1219,17 +1107,8 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     }
 
     /**
-     * 用户申请退款。
-     * <p>
-     * 校验订单归属和状态（仅已支付/已发货/已完成/已评价可申请），
-     * 使用 CAS 乐观锁将状态更新为申请退款中(6)，并记录退款原因、原状态和申请时间。
-     * 已处于退款流程中的订单幂等返回成功。
-     * </p>
-     *
-     * @param orderId      订单ID
-     * @param refundReason 退款原因
-     * @param userId       当前操作用户ID
-     * @return 包含申请结果的操作结果对象
+     * 用户申请退款：CAS 将已支付/已发货/已完成/已评价的订单置为申请退款中(6)，
+     * 并记录退款原因、原状态与申请时间；已处于退款流程中的订单幂等返回成功。
      */
     @Override
     @Transactional
@@ -1275,13 +1154,6 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
 
     /**
      * 用户撤销退款申请，订单回退到申请退款前的状态。
-     * <p>
-     * 此前 {@code REFUND_APPLYING} 状态的唯一出口是管理员审核，用户误申请后
-     * 无法自行撤销，只能等管理员处理。
-     *
-     * @param orderId 订单ID
-     * @param userId  操作用户ID（用于归属校验）
-     * @return 操作结果
      */
     @Override
     public Result cancelRefund(Long orderId, Long userId) {
@@ -1295,8 +1167,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         if (order.getStatus() != REFUND_APPLYING.getCode()) {
             return Result.fail("当前订单状态不支持撤销退款申请");
         }
-        // 回退目标必须是合法的非退款态；脏数据（NULL 或本身是退款态）兜底为已支付，
-        // 避免撤销后订单停留在一个非法状态上。
+        // 回退目标必须是合法非退款态；脏数据（NULL 或本身是退款态）兜底为已支付，避免停在非法状态
         Integer prev = order.getRefundPrevStatus();
         if (prev == null || !isValidRefundPrevStatus(prev)) {
             log.warn("订单退款前状态异常，撤销时兜底为已支付: orderId={}, refundPrevStatus={}", orderId, prev);
@@ -1330,13 +1201,8 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     }
 
     /**
-     * 确认收货。
-     * 仅允许订单所属用户在已发货状态下操作，使用 CAS 乐观锁将状态更新为已完成，
-     * 并记录收货时间。确认成功后累加对应商品的销量计数，并发送确认收货邮件通知。
-     *
-     * @param id 订单 ID
-     * @return Result 确认成功返回 ok；若订单已确认或已评价则幂等返回成功
-     * @throws BusinessException 当 CAS 更新失败且订单状态未变为已完成/已评价时抛出
+     * 用户确认收货：CAS 将已发货订单置为已完成并记录收货时间，成功后累加商品销量并发送通知；
+     * 订单已确认或已评价时幂等返回成功，仅限订单所属用户操作。
      */
     @Override
     @Transactional
@@ -1369,14 +1235,8 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     }
 
     /**
-     * 确认收货的核心逻辑，不校验操作者身份。
-     * <p>
-     * 抽出该方法是为了让「自动确认收货」调度器复用同一套结算逻辑
-     * （状态 CAS、销量累加、缓存失效、邮件通知），避免调度器另写一份导致行为不一致。
-     * 对外接口 {@link #confirmReceipt(Long)} 负责先做归属与状态校验。
-     *
-     * @param order 已校验过归属与状态的订单
-     * @return 操作结果
+     * 确认收货核心逻辑，不校验操作者身份；供「自动确认收货」调度器复用同一套结算逻辑
+     * （状态 CAS、销量累加、缓存失效、邮件通知），避免两处行为不一致。
      */
     private Result doConfirmReceipt(Order order) {
         Long id = order.getId();
@@ -1397,7 +1257,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         try {
             List<OrderItem> items = orderItemService.lambdaQuery()
                     .eq(OrderItem::getOrderId, id).list();
-            // 同 id 合并后一条批量 UPDATE，替代逐条累加（20 件明细 = 20 次往返）
+            // 同 id 合并后一条批量 UPDATE，替代逐条累加
             Map<Long, Integer> saleQty = new HashMap<>();
             for (OrderItem item : items) {
                 if (item.getFurnitureId() != null && item.getQuantity() != 0) {
@@ -1423,13 +1283,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     }
 
     /**
-     * 供调度器调用：自动确认收货（不校验操作者身份）。
-     * <p>
-     * 发货后若用户一直不点确认，订单会永久停留在「已发货」：不结算、不能评价、
-     * 售后窗口也无法关闭。这里由调度器在超过配置天数后代为确认。
-     *
-     * @param orderId 订单ID
-     * @return 操作结果
+     * 供调度器调用：自动确认收货（不校验操作者身份），超过配置天数后代用户确认，避免订单永久停留在已发货。
      */
     @Override
     public Result autoConfirmReceipt(Long orderId) {
@@ -1445,17 +1299,11 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     }
 
     /**
-     * 在事务提交之后失效家具缓存（只删除，不回写）。
+     * 在事务提交后失效家具缓存（只删除，不回写）。
      * <p>
-     * 为什么不在事务内写缓存：
-     * 事务内的库存/价格变更尚未提交，一旦后续校验失败回滚，数据库恢复原值，
-     * 而 Redis 中已写入的值不会回滚，会留下脏数据；且早期实现遗漏了物理 TTL，
-     * 脏数据会永久驻留。这里改为仅删除，由读路径
-     * （互斥锁 + 双检 + 逻辑过期 + 物理 TTL）在下一次访问时按数据库最新值重建。
-     * </p>
-     * 若当前不存在事务（如单测或独立调用），则立即删除。
-     *
-     * @param furnitureIds 库存或信息发生变动的家具 ID
+     * 不在事务内写缓存：事务内的库存/价格变更一旦回滚，DB 恢复原值而 Redis 写入不会回滚，留下脏数据；
+     * 这里只删除，由读路径（互斥锁 + 双检 + 逻辑过期 + 物理 TTL）在下次访问时按 DB 最新值重建。
+     * 当前无事务（单测/独立调用）时立即删除。
      */
     private void evictFurnitureCacheAfterCommit(Set<Long> furnitureIds) {
         if (furnitureIds == null || furnitureIds.isEmpty()) {
@@ -1472,25 +1320,11 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
                 }
             }
         };
-        if (TransactionSynchronizationManager.isSynchronizationActive()) {
-            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                @Override
-                public void afterCommit() {
-                    evict.run();
-                }
-            });
-        } else {
-            evict.run();
-        }
+        AfterCommit.run(evict);
     }
 
     /**
-     * 根据 SKU ID 构建规格文本描述。
-     * 通过批量查询规格组名称和规格值名称，组装为 "规格组:规格值,规格组:规格值" 格式的字符串。
-     * 若该 SKU 没有关联规格，则返回 null。
-     *
-     * @param skuId SKU ID
-     * @return 规格文本描述，如 "颜色:红色,尺寸:大号"；若该 SKU 无规格关联则返回 null
+     * 构建 SKU 规格文本，如 "颜色:红色,尺寸:大号"；无关联规格时返回 null。
      */
     private String buildSkuSpecText(Long skuId) {
         List<SkuSpec> specs = skuSpecMapper.selectList(

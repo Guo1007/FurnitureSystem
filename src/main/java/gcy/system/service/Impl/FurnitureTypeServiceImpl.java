@@ -23,10 +23,6 @@ import static gcy.system.utils.RedisConstants.*;
 
 /**
  * 家具类型服务实现类。
- * <p>
- * 提供家具类型列表的查询功能，使用 Redis 缓存和 Redisson 分布式锁来保证缓存一致性，
- * 缓存未命中时查询数据库并回写缓存。获取锁失败时降级为直接查询数据库。
- * </p>
  *
  * @author 郭名城
  * @date 2026-07-30
@@ -41,15 +37,9 @@ public class FurnitureTypeServiceImpl extends ServiceImpl<FurnitureTypeMapper, F
     private final RedissonClient redissonClient;
 
     /**
-     * 查询家具类型列表。
+     * 查询家具类型列表：缓存优先，未命中用 Redisson 锁串行回源。
      * <p>
-     * 采用"缓存优先"策略：先查 Redis 缓存，命中则直接返回；
-     * 若缓存值为空字符串（表示数据库中无数据），则返回空列表，避免缓存穿透；
-     * 若缓存未命中，使用 Redisson 分布式锁控制并发，由获取锁的线程查询数据库并回写缓存，
-     * 未获取到锁的线程降级为直接查询数据库。
-     * </p>
-     *
-     * @return 包含家具类型列表的通用结果对象，列表为空时返回空集合
+     * 缓存空串表示库中无数据，直接返回空列表以防穿透；抢锁失败者降级直查 DB。
      */
     @Override
     public Result queryFurnitureTypeList() {

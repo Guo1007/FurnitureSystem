@@ -56,7 +56,7 @@
         >
           <!-- 左侧面额 -->
           <div class="cp-card__face">
-            <div class="cp-card__value">{{ faceValue(c) }}</div>
+            <div class="cp-card__value">{{ c.amountText }}</div>
             <div class="cp-card__cond">
               {{ Number(c.minThreshold) > 0 ? `满${c.minThreshold}` : "无门槛" }}
             </div>
@@ -78,7 +78,7 @@
               {{ blockReason(c) }}
             </div>
             <div v-else class="cp-card__save">
-              {{ amountText(c) }}
+              {{ saveText(c) }}
             </div>
           </div>
 
@@ -95,7 +95,7 @@
         </div>
         <div v-for="c in unavailable" :key="c.userCouponId" class="cp-card is-grey">
           <div class="cp-card__face">
-            <div class="cp-card__value">{{ faceValue(c) }}</div>
+            <div class="cp-card__value">{{ c.amountText }}</div>
             <div class="cp-card__cond">
               {{ Number(c.minThreshold) > 0 ? `满${c.minThreshold}` : "无门槛" }}
             </div>
@@ -255,8 +255,12 @@ const selectedCoupons = computed(() =>
 
 /* ---------- 金额（全部来自后端） ---------- */
 
-/** 卡片上的「本单可抵」：结果没回来时不编数字 */
-const amountText = (c) =>
+/**
+ * 卡片上的「本单可抵」：结果没回来时不编数字。
+ * 名字刻意不叫 amountText —— 券对象上已经有一个后端给的 `amountText`（券面额），
+ * 两个同名会让人分不清哪个是哪个。
+ */
+const saveText = (c) =>
   loaded.value
     ? `本单可抵 ¥${formatPrice(estimateOf(c.userCouponId))}`
     : "本单可抵金额待计算";
@@ -338,13 +342,10 @@ const close = () => {
 };
 
 /* ---------- 展示 ---------- */
-const faceValue = (c) => {
-  if (c.type === 2 && c.discount) {
-    const d = Number(c.discount) * 10;
-    return `${Number.isInteger(d) ? d : d.toFixed(1)}折`;
-  }
-  return `¥${formatPrice(c.amount || 0)}`;
-};
+// 券面额直接用后端给的 c.amountText，不在这里重算。
+// 原先这里有个 faceValue() 自己拼「¥10.00」，而后端拼的是「¥10」——
+// 同一张券在「我的卡券」页显示 ¥10、在弹窗里显示 ¥10.00。
+// 文案统一由后端产出，前端不再有第二份格式化逻辑。
 const formatPrice = (v) => {
   const n = Number(v) || 0;
   return n.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });

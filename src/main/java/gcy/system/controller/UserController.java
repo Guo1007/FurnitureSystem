@@ -18,9 +18,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
- * 用户控制器，处理与用户相关的HTTP请求，包括注册、登录、登出、密码管理、信息更新和头像上传等功能。
- * <p>
- * 所有接口均以 "/user" 为根路径。
+ * 用户控制器，处理用户注册、登录与资料相关接口。
  *
  * @author 郭名城
  * @date 2026-07-30
@@ -38,11 +36,6 @@ public class UserController {
 
     /**
      * 发送注册验证码。
-     * <p>
-     * POST /user/r_code
-     *
-     * @param registerFormDTO 注册表单数据，包含用户注册所需信息（如邮箱等）
-     * @return 包含发送结果的 {@link Result} 对象
      */
     @Operation(summary = "发送注册验证码")
     @Anonymous
@@ -53,11 +46,6 @@ public class UserController {
 
     /**
      * 发送登录验证码。
-     * <p>
-     * POST /user/code
-     *
-     * @param loginFormDTO 登录表单数据，包含用户登录所需信息（如账号等）
-     * @return 包含发送结果的 {@link Result} 对象
      */
     @Operation(summary = "发送登录验证码")
     @Anonymous
@@ -67,13 +55,7 @@ public class UserController {
     }
 
     /**
-     * 发送修改邮箱验证码。
-     * <p>
-     * POST /user/email-code
-     * 校验新邮箱格式且未被其他账号绑定后，向新邮箱发送验证码，供修改邮箱时校验归属。
-     *
-     * @param dto 用户信息更新表单数据，包含目标新邮箱（email 字段）
-     * @return 包含发送结果的 {@link Result} 对象
+     * 向新邮箱发送验证码，发送前校验邮箱格式且该邮箱未被其他账号绑定。
      */
     @Operation(summary = "发送修改邮箱验证码")
     @PostMapping("/email-code")
@@ -90,11 +72,6 @@ public class UserController {
 
     /**
      * 重置密码。
-     * <p>
-     * POST /user/reset-password
-     *
-     * @param dto 重置密码表单数据，包含新密码及验证码等必要信息
-     * @return 包含操作结果的 {@link Result} 对象
      */
     @OperationLog("重置密码")
     @Operation(summary = "重置密码")
@@ -106,11 +83,6 @@ public class UserController {
 
     /**
      * 用户登录。
-     * <p>
-     * POST /user/login
-     *
-     * @param loginFormDTO 登录表单数据，包含登录凭证（如账号、验证码或密码等）
-     * @return 包含登录结果的 {@link Result} 对象，登录成功时通常包含用户信息和令牌
      */
     @OperationLog("用户登录")
     @Operation(summary = "用户登录")
@@ -122,10 +94,6 @@ public class UserController {
 
     /**
      * 用户登出。
-     * <p>
-     * POST /user/logout
-     *
-     * @return 包含登出结果的 {@link Result} 对象
      */
     @OperationLog("用户登出")
     @Operation(summary = "用户登出")
@@ -135,13 +103,7 @@ public class UserController {
     }
 
     /**
-     * 注销当前登录用户的账号（不可逆）。
-     * <p>
-     * POST /user/deactivate
-     * 注销后账号无法登录，历史订单与评价数据保留；绑定的手机号/邮箱会被释放，可被重新注册使用。
-     * 前端需二次确认后调用。
-     *
-     * @return 包含注销结果的 {@link Result} 对象
+     * 注销当前账号（不可逆）。注销后无法登录，历史订单与评价保留，绑定的手机号/邮箱释放可被重新注册；前端需二次确认。
      */
     @OperationLog("注销账号")
     @Operation(summary = "注销账号")
@@ -152,11 +114,6 @@ public class UserController {
 
     /**
      * 用户注册。
-     * <p>
-     * POST /user/register
-     *
-     * @param registerFormDTO 注册表单数据，包含邮箱、密码等注册所需信息
-     * @return 包含注册结果的 {@link Result} 对象
      */
     @OperationLog("用户注册")
     @Operation(summary = "用户注册")
@@ -167,11 +124,7 @@ public class UserController {
     }
 
     /**
-     * 获取当前登录用户的信息。
-     * <p>
-     * GET /user/me
-     *
-     * @return 包含当前用户信息的 {@link Result} 对象，其中包含用户基本信息和是否有密码的标志
+     * 获取当前登录用户信息，含是否已设置密码的标志。
      */
     @OperationLog("获取当前用户信息")
     @Operation(summary = "获取当前登录用户信息")
@@ -184,11 +137,6 @@ public class UserController {
 
     /**
      * 修改当前登录用户的密码。
-     * <p>
-     * PUT /user/password
-     *
-     * @param dto 密码修改表单数据，包含旧密码和新密码
-     * @return 包含操作结果的 {@link Result} 对象
      */
     @OperationLog("修改密码")
     @Operation(summary = "修改密码")
@@ -199,11 +147,6 @@ public class UserController {
 
     /**
      * 更新当前登录用户的个人信息。
-     * <p>
-     * PUT /user/update
-     *
-     * @param dto 用户信息更新表单数据，包含需要修改的用户字段（如昵称、头像等）
-     * @return 包含操作结果的 {@link Result} 对象
      */
     @OperationLog("更新个人信息")
     @Operation(summary = "更新个人信息")
@@ -213,12 +156,7 @@ public class UserController {
     }
 
     /**
-     * 上传用户头像。
-     * <p>
-     * POST /user/upload/avatar
-     *
-     * @param file 用户上传的头像文件，通过表单字段 "file" 提交
-     * @return 包含头像文件访问路径的 {@link Result} 对象
+     * 上传用户头像，返回文件访问路径。
      */
     @Operation(summary = "上传用户头像")
     @PostMapping("/upload/avatar")

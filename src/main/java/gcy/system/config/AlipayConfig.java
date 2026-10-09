@@ -7,11 +7,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * 支付宝客户端配置类。
- * <p>
- * 基于 {@link AlipayProperties} 构建全局唯一的 {@link AlipayClient}，
- * 统一封装应用ID、应用私钥、支付宝公钥、格式与签名方式（RSA2）。
- * </p>
+ * 支付宝客户端配置：构建全局唯一的 {@link AlipayClient}。
  *
  * @author 郭名城
  * @date 2026-09-22
@@ -24,8 +20,6 @@ public class AlipayConfig {
 
     /**
      * 构建支付宝客户端 Bean。
-     *
-     * @return 配置完成的 AlipayClient 实例
      */
     @Bean
     public AlipayClient alipayClient() {

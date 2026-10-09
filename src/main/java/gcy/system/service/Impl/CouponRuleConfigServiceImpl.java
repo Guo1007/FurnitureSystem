@@ -39,31 +39,27 @@ import java.util.concurrent.TimeUnit;
 public class CouponRuleConfigServiceImpl
         extends ServiceImpl<CouponRuleConfigMapper, CouponRuleConfig> implements ICouponRuleConfigService {
 
-    /**
-     * 规则缓存在 Redis 中的 key。
-     */
     private static final String RULE_CACHE_KEY = "coupon:rule:config";
 
     /**
-     * 规则缓存有效期（分钟）。配置变更时会主动失效，此处仅作兜底。
+     * 规则缓存兜底有效期（分钟）；配置变更时会主动失效。
      */
     private static final long RULE_CACHE_TTL_MINUTES = 60L;
 
     /**
-     * 规则标识：单笔订单最多可叠加使用的优惠券张数。
+     * 单笔订单最多可叠加使用的优惠券张数。
      */
     private static final String KEY_MAX_STACK_COUNT = "max_stack_count";
 
     /**
-     * 规则标识：多张券叠加时总抵扣占商品总额的上限百分比。
+     * 多张券叠加时总抵扣占商品总额的上限百分比。
      */
     private static final String KEY_MAX_DISCOUNT_RATIO = "max_discount_ratio";
 
     private final StringRedisTemplate stringRedisTemplate;
 
     /**
-     * 读取全部规则（缓存优先），返回 ruleKey -> CouponRuleConfig。
-     * 任何异常都降级为空 Map，由调用方使用默认值。
+     * 读取全部规则（缓存优先）；缓存与查表异常一律降级为空 Map，由调用方回落到默认值。
      */
     private Map<String, CouponRuleConfig> loadRuleMap() {
         Map<String, CouponRuleConfig> result = new LinkedHashMap<>();

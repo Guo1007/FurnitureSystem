@@ -10,11 +10,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
 /**
- * 收藏控制器
- * <p>
- * 处理用户收藏相关的HTTP请求，包括收藏列表查询、收藏状态检查和收藏切换操作。
- * 基础请求路径为 /favorite。
- * </p>
+ * 收藏控制器。
  *
  * @author 郭名城
  * @date 2026-07-30
@@ -28,15 +24,7 @@ public class FavoriteController {
     private final IFavoriteService favoriteService;
 
     /**
-     * 获取当前用户的收藏列表
-     * <p>
-     * GET /favorite/list?current=1&amp;size=10
-     * 从当前登录用户上下文中获取用户ID，查询该用户的收藏记录并分页返回。
-     * </p>
-     *
-     * @param current 当前页码，默认值为1
-     * @param size    每页记录数，默认值为10
-     * @return 包含分页收藏记录的结果对象
+     * 分页查询当前用户的收藏列表。
      */
     @Operation(summary = "获取当前用户的收藏列表")
     @GetMapping("/list")
@@ -47,14 +35,7 @@ public class FavoriteController {
     }
 
     /**
-     * 检查指定家具是否已被当前用户收藏
-     * <p>
-     * GET /favorite/check/{furnitureId}
-     * 根据家具ID和当前登录用户判断该家具是否已存在于用户的收藏列表中。
-     * </p>
-     *
-     * @param furnitureId 家具的唯一标识ID
-     * @return 包含收藏状态（已收藏/未收藏）的结果对象
+     * 查询当前用户是否已收藏指定家具。
      */
     @Operation(summary = "检查指定家具是否已被收藏")
     @GetMapping("/check/{furnitureId}")
@@ -64,14 +45,7 @@ public class FavoriteController {
     }
 
     /**
-     * 切换指定家具的收藏状态
-     * <p>
-     * POST /favorite/toggle/{furnitureId}
-     * 如果该家具未被当前用户收藏则添加收藏，如果已收藏则取消收藏。
-     * </p>
-     *
-     * @param furnitureId 家具的唯一标识ID
-     * @return 包含切换后收藏状态的结果对象
+     * 切换指定家具的收藏状态：未收藏则收藏，已收藏则取消。
      */
     @Operation(summary = "切换指定家具的收藏状态")
     @PostMapping("/toggle/{furnitureId}")

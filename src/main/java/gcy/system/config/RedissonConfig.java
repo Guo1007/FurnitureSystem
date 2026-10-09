@@ -8,12 +8,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * Redisson 配置类，用于创建并管理 Redisson 客户端 Bean。
- * <p>
- * 该类从 Spring 配置中读取 Redis 的主机和端口信息，
- * 通过 {@link Bean} 注解将 {@link RedissonClient} 实例注册到 Spring 容器中，
- * 供其他组件注入并使用分布式锁、分布式集合等功能。
- * </p>
+ * Redisson 客户端配置，提供分布式锁能力。
  *
  * @author 郭名城
  * @date 2026-07-30
@@ -28,14 +23,7 @@ public class RedissonConfig {
     private int redisPort;
 
     /**
-     * 创建并配置 Redisson 客户端 Bean。
-     * <p>
-     * 使用单服务器模式连接 Redis，地址由配置文件中的
-     * {@code spring.data.redis.host} 和 {@code spring.data.redis.port} 属性指定，
-     * 默认值为 localhost:6379。
-     * </p>
-     *
-     * @return 配置好的 {@link RedissonClient} 实例，用于与 Redis 交互
+     * 单机模式连接 Redis。
      */
     @Bean
     public RedissonClient redissonClient() {

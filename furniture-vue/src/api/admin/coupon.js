@@ -30,6 +30,18 @@ export function toggleCoupon(id) {
   return request({ url: `/admin/coupons/toggle/${id}`, method: "put" });
 }
 
+/**
+ * 定向发放优惠券给指定用户（补偿 / 关怀 / 通用）。
+ * 只能发「定向发放」类型的券（issueType=2）。
+ *
+ * @param {{ couponId: number, userIds: number[], quantity?: number,
+ *           scene?: 'compensation'|'care'|'general',
+ *           sendNotification?: boolean, sendEmail?: boolean, remark?: string }} data
+ */
+export function grantCoupons(data) {
+  return request({ url: "/admin/coupons/grant", method: "post", data });
+}
+
 /** 查询优惠券叠加规则配置（最大叠加张数 / 总抵扣上限比例） */
 export function getCouponRules() {
   return request({ url: "/admin/coupon-rule", method: "get" });

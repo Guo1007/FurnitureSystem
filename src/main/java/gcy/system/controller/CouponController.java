@@ -11,8 +11,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
 /**
- * 用户端优惠券控制器。
- * <p>提供可领券列表、我的券、领取三个接口，均需登录。</p>
+ * 用户端优惠券控制器，接口均需登录。
  *
  * @author 郭名城
  * @date 2026-09-20
@@ -49,14 +48,10 @@ public class CouponController {
     /**
      * 我的优惠券列表（分页），供「个人中心 - 我的卡券」页面使用。
      * <p>
-     * 与 {@link #mine} 的区别：那个返回**全量**列表，供选券弹窗使用（它要展示并评估
-     * 用户的每一张券）；本接口按页取，避免券多时一次性把整张表拉回来。
-     * </p>
+     * 与 {@link #mine} 的区别：{@link #mine} 返回全量供选券弹窗展示评估，本接口按页取。
      *
-     * @param status  状态过滤：0-未用，1-已用，2-已过期；不传返回全部
-     * @param type    券类型过滤：1-满减，2-折扣，3-无门槛；不传返回全部
-     * @param current 页码，默认 1
-     * @param size    每页条数，默认 10
+     * @param status 状态过滤：0-未用，1-已用，2-已过期；不传返回全部
+     * @param type   券类型过滤：1-满减，2-折扣，3-无门槛；不传返回全部
      */
     @Operation(summary = "我的优惠券列表（分页）")
     @GetMapping("/user/coupons/mine/page")
@@ -78,13 +73,9 @@ public class CouponController {
     }
 
     /**
-     * 叠加规则（选券弹窗用）。
-     * <p>
-     * 前端需要据此约束可勾选的张数并计算「最优组合」，避免与后端裁决结果不一致。
-     * 最终仍以后端下单时的校验为准。
-     * </p>
+     * 叠加规则（选券弹窗用），供前端约束可勾选张数并计算最优组合；最终以后端下单校验为准。
      *
-     * @return 包含 maxStackCount（最大叠加张数）与 maxDiscountRatio（总抵扣上限比例，0~1）的结果
+     * @return maxStackCount（最大叠加张数）与 maxDiscountRatio（总抵扣上限比例，0~1）
      */
     @Operation(summary = "优惠券叠加规则")
     @GetMapping("/user/coupons/rules")
