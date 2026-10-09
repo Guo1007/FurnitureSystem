@@ -8,6 +8,21 @@ export const createOrder = (data) => {
   });
 };
 
+/**
+ * 下单试算：只算钱，不下单。
+ * 前端所有优惠金额展示（购物车页 / 抽屉 / 详情页立即购买 / 选券弹窗）都走这个接口，
+ * 前端不再保留任何抵扣算法 —— 后端是唯一实现，也就不会出现两边算得不一样。
+ *
+ * @param {{ itemList: Array, userCouponIds?: Array }} data
+ */
+export const estimateOrder = (data) => {
+  return request({
+    url: "/order/estimate",
+    method: "post",
+    data,
+  });
+};
+
 export const getUserOrders = (params) => {
   return request({
     url: "/order/list",

@@ -25,7 +25,7 @@
 
       <template v-else>
         <div class="coupon-list">
-          <div v-for="item in visibleCoupons" :key="item.userCouponId" class="coupon-card mine">
+          <div v-for="item in couponList" :key="item.userCouponId" class="coupon-card mine">
             <div class="coupon-left">
               <span class="coupon-amount">{{ item.amountText }}</span>
               <span class="coupon-cond">
@@ -44,12 +44,24 @@
           </div>
         </div>
 
-        <div v-if="visibleCoupons.length === 0" class="empty">
+        <div v-if="couponList.length === 0" class="empty">
           <el-empty description="还没有领取过该类型优惠券">
             <router-link to="/coupons">
               <el-button type="primary">去领券中心</el-button>
             </router-link>
           </el-empty>
+        </div>
+
+        <div class="pagination-wrapper" v-if="total > 0">
+          <el-pagination
+            v-model:current-page="currentPage"
+            v-model:page-size="pageSize"
+            :page-sizes="[10, 20, 50]"
+            :total="total"
+            layout="total, sizes, prev, pager, next"
+            @size-change="handleSizeChange"
+            @current-change="handleCurrentChange"
+          />
         </div>
       </template>
     </div>
@@ -57,34 +69,68 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from "vue";
+import { onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
-import { getMyCoupons } from "@/api/coupon";
+import { ElMessage } from "element-plus";
+import { getMyCouponsPage } from "@/api/coupon";
 import { logger } from "@/utils/logger.js";
 
 const router = useRouter();
 const goBack = () => router.back();
 
-const loading = ref(false);
-const mineList = ref([]);
+const loading = ref(true);
+const couponList = ref([]);
+const total = ref(0);
+const currentPage = ref(1);
+const pageSize = ref(10);
+/** 券类型 Tab，值为字符串："0" 全部 / "1" 满减 / "2" 折扣 / "3" 无门槛 */
 const activeType = ref("0");
 
-const visibleCoupons = computed(() =>
-  Number(activeType.value) === 0
-    ? mineList.value
-    : mineList.value.filter((c) => c.type === Number(activeType.value)),
-);
-
+/**
+ * 加载当前页。
+ * 类型筛选交给后端：分页之后前端再 filter 只会筛「当前这一页」，
+ * 出现「明明有满减券却提示没有」的假空态。
+ */
 const loadMine = async () => {
   loading.value = true;
   try {
-    const res = await getMyCoupons();
-    mineList.value = (res.success || res.code === 200) ? res.data || [] : [];
+    const res = await getMyCouponsPage({
+      // "0" 代表全部，转成 0 后是 falsy，不传给后端
+      type: Number(activeType.value) || undefined,
+      current: currentPage.value,
+      size: pageSize.value,
+    });
+    if (res.success || res.code === 200) {
+      couponList.value = res.data?.records || [];
+      total.value = Number(res.data?.total) || 0;
+    } else {
+      couponList.value = [];
+      total.value = 0;
+      // 网络层错误已由 request 拦截器统一提示，这里只处理业务错误
+      ElMessage.warning(res.msg || "加载我的卡券失败");
+    }
   } catch (e) {
     logger.error("加载我的券失败:", e);
+    couponList.value = [];
+    total.value = 0;
   } finally {
     loading.value = false;
   }
+};
+
+// 切类型回到第 1 页：否则在第 3 页切到「折扣券」可能落到一个空页
+watch(activeType, () => {
+  currentPage.value = 1;
+  loadMine();
+});
+
+const handleSizeChange = () => {
+  currentPage.value = 1;
+  loadMine();
+};
+
+const handleCurrentChange = () => {
+  loadMine();
 };
 
 const formatDate = (t) => {
@@ -107,5 +153,11 @@ onMounted(loadMine);
   margin: 4px 0 8px;
   font-size: var(--text-2xl);
   color: var(--color-text-primary);
+}
+
+.pagination-wrapper {
+  display: flex;
+  justify-content: center;
+  margin-top: 32px;
 }
 </style>

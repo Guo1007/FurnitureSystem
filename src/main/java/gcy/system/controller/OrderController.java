@@ -2,6 +2,7 @@ package gcy.system.controller;
 
 import gcy.system.aspect.OperationLog;
 import gcy.system.entity.dto.CartFormDTO;
+import gcy.system.entity.dto.OrderEstimateDTO;
 import gcy.system.entity.dto.RefundApplyDTO;
 import gcy.system.entity.dto.Result;
 import gcy.system.service.IOrderItemService;
@@ -48,6 +49,22 @@ public class OrderController {
     @PostMapping("/create")
     public Result createOrder(@Parameter(description = "请求体") @Valid @RequestBody CartFormDTO dto) {
         return orderService.createOrder(dto);
+    }
+
+    /**
+     * 下单试算：只算钱，不下单。
+     * <p>
+     * 前端「购物车页 / 购物车抽屉 / 商品详情立即购买 / 选券弹窗」全部用它取金额，
+     * 前端不再保留任何抵扣算法。无副作用，因此不加 {@code @OperationLog}（该类注解用于写操作）。
+     * </p>
+     *
+     * @param dto 试算请求，含商品明细与当前已勾选的券ID
+     * @return 商品总额、抵扣、实付、每张券的可用性与最优组合
+     */
+    @Operation(summary = "下单试算（算价/选券预览）")
+    @PostMapping("/estimate")
+    public Result estimate(@Parameter(description = "请求体") @Valid @RequestBody OrderEstimateDTO dto) {
+        return orderService.estimate(dto);
     }
 
     /**

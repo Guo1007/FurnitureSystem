@@ -137,7 +137,9 @@
               <button class="coupon-picker" @click="openCouponDialog">
                 <span v-if="selectedCouponIds.length">
                   {{ couponText }}
-                  <em class="picker-save">-{{ formatPrice(discountEstimate) }}</em>
+                  <em v-if="discountEstimate > 0" class="picker-save"
+                    >-{{ formatPrice(discountEstimate) }}</em
+                  >
                 </span>
                 <span v-else>选择优惠券</span>
                 <span class="arrow">›</span>
@@ -148,10 +150,7 @@
               v-model="showCouponDialog"
               v-model:selected-ids="selectedCouponIds"
               :coupons="cartCoupons"
-              :total-amount="selectedTotalNum"
-              :sub-totals="couponSubTotals.map"
-              :sub-totals-unknown="couponSubTotals.unknown"
-              :rules="couponRules"
+              :items="checkoutItems"
             />
 
             <div class="summary-row total">
@@ -208,16 +207,12 @@ import { useRouter } from "vue-router";
 import { useCartStore } from "@/stores/cart.js";
 import { getAddressList } from "@/api/address.js";
 import { getFurnitureByTypeId } from "@/api/furniture.js";
-import { getCouponRules, getMyCoupons } from "@/api/coupon.js";
+import { getMyCoupons } from "@/api/coupon.js";
 import CouponPickerDialog from "@/components/coupon/CouponPickerDialog.vue";
 import { createOrder } from "@/api/order.js";
 import { imgUrl } from "@/utils/img.js";
 import { formatPrice } from "@/utils/format.js";
-import {
-  buildSubTotals,
-  calcTotalDiscount,
-  DEFAULT_MAX_RATIO,
-} from "@/utils/coupon.js";
+import { useCouponEstimate } from "@/composables/useCouponEstimate.js";
 import { ElMessage } from "element-plus";
 import { logger } from "@/utils/logger.js";
 import ProductCard from "@/components/product/ProductCard.vue";
@@ -238,7 +233,6 @@ const cartCoupons = ref([]);
 /** 已选中的 userCouponId 数组 */
 const selectedCouponIds = ref([]);
 const showCouponDialog = ref(false);
-const couponRules = ref({});
 
 const selectedTotalNum = computed(
   () =>
@@ -255,15 +249,10 @@ const selectedCoupons = computed(() =>
 );
 
 /**
- * 选中商品的分类小计，供分类券核算门槛与抵扣上限。
- * 购物车为本地存储，历史数据可能缺 typeId，此时 unknown=true，
- * 分类券基数回退为整单金额，避免被误判为不可用。
+ * 参与结算的商品明细，格式 [{ furnitureId, skuId, quantity }]。
+ * 只传「买什么、买几件」——单价与优惠金额都由后端算。
  */
-const couponSubTotals = computed(() =>
-  buildSubTotals(
-    cartStore.items.filter((i) => selectedIds.value.includes(i.cartItemId)),
-  ),
-);
+const checkoutItems = computed(() => cartStore.getCartData(selectedIds.value));
 
 const loadCoupons = async () => {
   if (!localStorage.getItem("token")) return;
@@ -274,33 +263,18 @@ const loadCoupons = async () => {
   selectedCouponIds.value = selectedCouponIds.value.filter((id) => valid.has(id));
 };
 
-const loadCouponRules = async () => {
-  try {
-    const res = await getCouponRules();
-    couponRules.value = res?.data || {};
-  } catch (e) {
-    logger.warn("加载优惠券叠加规则失败，使用默认规则:", e);
-    couponRules.value = {};
-  }
-};
-
 const openCouponDialog = () => {
   showCouponDialog.value = true;
 };
 
-// 券组合变化后重新估算抵扣（复用与弹窗、后端一致的算法）
-const discountEstimate = computed(() => {
-  const ratio = Number(couponRules.value?.maxDiscountRatio);
-  const cap =
-    Number.isFinite(ratio) && ratio > 0 && ratio <= 1 ? ratio : DEFAULT_MAX_RATIO;
-  return calcTotalDiscount(
-    selectedCoupons.value,
-    selectedTotalNum.value,
-    couponSubTotals.value.map,
-    cap,
-    couponSubTotals.value.unknown,
-  );
-});
+/**
+ * 抵扣金额全部由后端试算（POST /order/estimate），前端不再保留任何抵扣算法。
+ * 商品或已选券一变就自动重算，界面自然退化成「不显示优惠、按原价结算」而不是虚报。
+ */
+const { discount: discountEstimate } = useCouponEstimate(
+  () => checkoutItems.value,
+  () => selectedCouponIds.value,
+);
 
 const couponText = computed(() => {
   const n = selectedCouponIds.value.length;
@@ -396,7 +370,6 @@ onMounted(async () => {
       /* ignore */
     }
     loadCoupons();
-    loadCouponRules();
   }
 
   // Recent products

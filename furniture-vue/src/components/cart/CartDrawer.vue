@@ -104,7 +104,9 @@
           <button class="picker" @click="openCouponDialog">
             <span v-if="selectedCouponIds.length">
               {{ couponText }}
-              <em class="picker-save">-{{ formatPrice(discountEstimate) }}</em>
+              <em v-if="discountEstimate > 0" class="picker-save"
+                >-{{ formatPrice(discountEstimate) }}</em
+              >
             </span>
             <span v-else>选择优惠券</span>
             <span class="arrow">›</span>
@@ -116,10 +118,7 @@
         v-model="showCouponDialog"
         v-model:selected-ids="selectedCouponIds"
         :coupons="mineCoupons"
-        :total-amount="cartTotalNum"
-        :sub-totals="couponSubTotals.map"
-        :sub-totals-unknown="couponSubTotals.unknown"
-        :rules="couponRules"
+        :items="checkoutItems"
       />
 
       <!-- 收货地址 -->
@@ -229,10 +228,10 @@
             <span class="total-count">共 {{ cartStore.totalCount }} 件</span>
             <span class="total-price">
               <template v-if="discountEstimate > 0">
-                <span class="og-price">¥{{ formatPrice(cartStore.totalPrice) }}</span>
+                <span class="og-price">¥{{ formatPrice(displayTotal) }}</span>
                 -{{ formatPrice(discountEstimate) }}
               </template>
-              合计：¥{{ formatPrice(cartStore.totalPrice - discountEstimate) }}
+              合计：¥{{ formatPrice(displayTotal - discountEstimate) }}
             </span>
           </div>
           <div class="footer-actions">
@@ -255,16 +254,12 @@ import { useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
 import { createOrder } from "@/api/order.js";
 import { getAddressList, saveAddress } from "@/api/address.js";
-import { getCouponRules, getMyCoupons } from "@/api/coupon.js";
+import { getMyCoupons } from "@/api/coupon.js";
 import CouponPickerDialog from "@/components/coupon/CouponPickerDialog.vue";
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { imgUrl } from "@/utils/img.js";
 import { formatPrice } from "@/utils/format.js";
-import {
-  buildSubTotals,
-  calcTotalDiscount,
-  DEFAULT_MAX_RATIO,
-} from "@/utils/coupon.js";
+import { useCouponEstimate } from "@/composables/useCouponEstimate.js";
 import { logger } from "@/utils/logger.js";
 import { useRequireLogin } from "@/composables/useRequireLogin.js";
 
@@ -277,9 +272,6 @@ const mineCoupons = ref([]);
 /** 已选中的 userCouponId 数组 */
 const selectedCouponIds = ref([]);
 const showCouponDialog = ref(false);
-const couponRules = ref({});
-
-const cartTotalNum = computed(() => Number(cartStore.totalPrice || 0));
 
 const loadCoupons = async () => {
   const res = await getMyCoupons();
@@ -289,15 +281,15 @@ const loadCoupons = async () => {
   selectedCouponIds.value = selectedCouponIds.value.filter((id) => valid.has(id));
 };
 
-const loadCouponRules = async () => {
-  try {
-    const res = await getCouponRules();
-    couponRules.value = res?.data || {};
-  } catch (e) {
-    logger.warn("加载优惠券叠加规则失败，使用默认规则:", e);
-    couponRules.value = {};
-  }
-};
+/**
+ * 本次结算的商品明细。
+ *
+ * 用 checkoutIds 而不是整车 —— 抽屉允许「只结算购物车页勾选的那部分」，
+ * 而结算用的就是 getCartData(checkoutIds)（checkoutIds 为空时它返回整车）。
+ * 这样「估算的商品集」与「下单的商品集」严格是同一份，不会出现
+ * 「优惠按整车算、订单按勾选下」的不一致。
+ */
+const checkoutItems = computed(() => cartStore.getCartData(cartStore.checkoutIds));
 
 const openCouponDialog = () => {
   showCouponDialog.value = true;
@@ -310,25 +302,27 @@ const selectedCoupons = computed(() =>
 );
 
 /**
- * 购物车内商品的分类小计，供分类券核算门槛与抵扣上限。
- * 历史 localStorage 数据可能缺 typeId，此时 unknown=true，
- * 分类券基数回退为整单金额，避免被误判为不可用。
+ * 金额一律由后端试算（POST /order/estimate），前端不再保留任何抵扣算法。
+ * 商品或已选券一变就自动重算。
  */
-const couponSubTotals = computed(() => buildSubTotals(cartStore.items));
+const {
+  loaded: estimateLoaded,
+  goodsTotal,
+  discount: discountEstimate,
+} = useCouponEstimate(
+  () => checkoutItems.value,
+  () => selectedCouponIds.value,
+);
 
-// 多张券总优惠：复用与弹窗、后端一致的算法（分类池与整单池分别递减 + 比例封顶）
-const discountEstimate = computed(() => {
-  const ratio = Number(couponRules.value?.maxDiscountRatio);
-  const cap =
-    Number.isFinite(ratio) && ratio > 0 && ratio <= 1 ? ratio : DEFAULT_MAX_RATIO;
-  return calcTotalDiscount(
-    selectedCoupons.value,
-    cartTotalNum.value,
-    couponSubTotals.value.map,
-    cap,
-    couponSubTotals.value.unknown,
-  );
-});
+/**
+ * 合计展示金额：优先后端按数据库价格算出的商品总额，未算出来时退回本地购物车价，
+ * 避免加载期间闪一个 ¥0.00。
+ */
+const displayTotal = computed(() =>
+  estimateLoaded.value
+    ? goodsTotal.value
+    : Number(cartStore.totalPrice || 0),
+);
 
 const couponText = computed(() => {
   const n = selectedCouponIds.value.length;
@@ -522,7 +516,6 @@ watch(
       if (localStorage.getItem("token")) {
         loadAddresses();
         loadCoupons();
-        loadCouponRules();
       }
     } else {
       // 抽屉关闭时清除本次结算的勾选集合，避免残留影响下次结算

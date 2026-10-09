@@ -3,6 +3,7 @@ package gcy.system.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
 import gcy.system.entity.dto.CartFormDTO;
+import gcy.system.entity.dto.OrderEstimateDTO;
 import gcy.system.entity.dto.Result;
 import gcy.system.entity.pojo.Order;
 
@@ -22,6 +23,17 @@ public interface IOrderService extends IService<Order> {
      * @return 包含创建结果的操作结果对象
      */
     Result createOrder(CartFormDTO dto);
+
+    /**
+     * 下单试算：只算钱，不下单、不扣库存、不核销券。
+     * <p>
+     * 前端所有优惠金额展示都以本接口为准 —— 前端不再保留任何抵扣算法，
+     * 这里与 {@link #createOrder} 共用同一段算价逻辑，保证试算与实收一致。
+     *
+     * @param dto 试算请求，含商品明细与当前已勾选的券ID
+     * @return 商品总额、抵扣、实付、每张券的可用性与最优组合
+     */
+    Result estimate(OrderEstimateDTO dto);
 
     /**
      * 根据用户ID分页查询该用户的订单列表。

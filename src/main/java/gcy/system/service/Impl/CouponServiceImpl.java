@@ -3,6 +3,7 @@ package gcy.system.service.Impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import gcy.system.entity.dto.Result;
 import gcy.system.entity.pojo.Coupon;
 import gcy.system.entity.pojo.User;
@@ -189,6 +190,58 @@ public class CouponServiceImpl implements ICouponService {
         if (list.isEmpty()) {
             return Result.ok(list);
         }
+        return Result.ok(toUserCouponVOs(list));
+    }
+
+    @Override
+    public Result getMyCouponsPage(Long userId, Integer status, Integer type, Long current, Long size) {
+        long pageNo = (current != null && current > 0) ? current : 1L;
+        long pageSize = (size != null && size > 0) ? size : 10L;
+
+        // 券类型在券模板（coupon）上，不在 user_coupon 上，所以按类型过滤要先把该类型的
+        // 模板ID捞出来、再据此过滤领取记录。模板由后台维护、数量很小，IN 列表不会失控。
+        List<Long> typeCouponIds = null;
+        if (type != null) {
+            typeCouponIds = couponMapper.selectList(new LambdaQueryWrapper<Coupon>()
+                            .select(Coupon::getId)
+                            .eq(Coupon::getType, type))
+                    .stream().map(Coupon::getId).collect(Collectors.toList());
+            if (typeCouponIds.isEmpty()) {
+                // 该类型下一张券模板都没有，必定是空页，不必再查一次
+                Page<UserCouponVO> emptyPage = new Page<>(pageNo, pageSize, 0);
+                emptyPage.setRecords(new ArrayList<>());
+                return Result.ok(emptyPage);
+            }
+        }
+
+        LambdaQueryWrapper<UserCoupon> wrapper = new LambdaQueryWrapper<UserCoupon>()
+                .eq(UserCoupon::getUserId, userId)
+                .orderByDesc(UserCoupon::getGotTime);
+        if (status != null) {
+            wrapper.eq(UserCoupon::getStatus, status);
+        }
+        if (typeCouponIds != null) {
+            wrapper.in(UserCoupon::getCouponId, typeCouponIds);
+        }
+
+        Page<UserCoupon> result = userCouponMapper.selectPage(new Page<>(pageNo, pageSize), wrapper);
+        // 分页元信息沿用 count 查询的结果，只替换 records 为 VO
+        Page<UserCouponVO> voPage = new Page<>(result.getCurrent(), result.getSize(), result.getTotal());
+        voPage.setRecords(toUserCouponVOs(result.getRecords()));
+        return Result.ok(voPage);
+    }
+
+    /**
+     * 把领取记录补全成展示用的 VO：关联券模板、纠正过期状态、逐字段拼装。
+     * <p>
+     * 全量（选券弹窗）与分页（我的卡券页）两条路径共用，避免出现
+     * 「列表页和弹窗对同一张券显示的字段或状态不一致」。
+     * </p>
+     */
+    private List<UserCouponVO> toUserCouponVOs(List<UserCoupon> list) {
+        if (list == null || list.isEmpty()) {
+            return new ArrayList<>();
+        }
         List<Long> couponIds = list.stream().map(UserCoupon::getCouponId).distinct().collect(Collectors.toList());
         Map<Long, Coupon> couponMap = couponMapper.selectByIds(couponIds).stream()
                 .collect(Collectors.toMap(Coupon::getId, c -> c));
@@ -206,7 +259,7 @@ public class CouponServiceImpl implements ICouponService {
                     .set(UserCoupon::getStatus, 2));
         }
 
-        List<UserCouponVO> vos = list.stream()
+        return list.stream()
                 .map(uc -> {
                     // 同步内存状态，保证本次返回给前端的就是纠正后的状态
                     if (expiredIds.contains(uc.getId())) {
@@ -235,7 +288,6 @@ public class CouponServiceImpl implements ICouponService {
                     return vo;
                 })
                 .collect(Collectors.toList());
-        return Result.ok(vos);
     }
 
     // ==================== 领取 ====================

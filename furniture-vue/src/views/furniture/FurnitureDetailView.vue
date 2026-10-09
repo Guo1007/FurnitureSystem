@@ -1037,7 +1037,9 @@
           <button class="picker" @click="showBuyCouponDialog = true">
             <span v-if="selectedBuyCouponIds.length">
               {{ buyCouponText }}
-              <em class="picker-save">-{{ formatPrice(buyDiscountEstimate) }}</em>
+              <em v-if="buyDiscountEstimate > 0" class="picker-save"
+                >-{{ formatPrice(buyDiscountEstimate) }}</em
+              >
             </span>
             <span v-else>{{ buyAvailableCount ? "选择优惠券" : "暂无可用优惠券" }}</span>
             <span class="arrow">›</span>
@@ -1048,21 +1050,18 @@
           v-model="showBuyCouponDialog"
           v-model:selected-ids="selectedBuyCouponIds"
           :coupons="buyCoupons"
-          :total-amount="buyGoodsTotal"
-          :sub-totals="buySubTotals.map"
-          :sub-totals-unknown="buySubTotals.unknown"
-          :rules="couponRules"
+          :items="buyCheckoutItems"
         />
       </div>
 
       <!-- 应付合计 -->
       <div class="buy-total">
         <div v-if="buyDiscountEstimate > 0" class="buy-og">
-          商品总额 ¥{{ formatPrice(buyGoodsTotal) }}，优惠
+          商品总额 ¥{{ formatPrice(displayBuyTotal) }}，优惠
           -{{ formatPrice(buyDiscountEstimate) }}
         </div>
         <div class="buy-pay">
-          应付金额：<b>¥{{ formatPrice(buyGoodsTotal - buyDiscountEstimate) }}</b>
+          应付金额：<b>¥{{ formatPrice(displayBuyTotal - buyDiscountEstimate) }}</b>
         </div>
       </div>
 
@@ -1179,7 +1178,7 @@ import { useCartStore } from "@/stores/cart.js";
 import { checkFavorite, toggleFavorite } from "@/api/favorite.js";
 import { getAddressList, saveAddress } from "@/api/address.js";
 import { deleteAppend, deleteReview, getComments } from "@/api/comment.js";
-import { getCouponRules, getMyCoupons } from "@/api/coupon.js";
+import { getMyCoupons } from "@/api/coupon.js";
 import {
   addReviewComment,
   deleteReviewComment,
@@ -1188,11 +1187,7 @@ import {
 import { getFurnitureByTypeId } from "@/api/furniture.js";
 import ProductCard from "@/components/product/ProductCard.vue";
 import CouponPickerDialog from "@/components/coupon/CouponPickerDialog.vue";
-import {
-  calcTotalDiscount,
-  couponReason,
-  DEFAULT_MAX_RATIO,
-} from "@/utils/coupon.js";
+import { useCouponEstimate } from "@/composables/useCouponEstimate.js";
 
 const cartStore = useCartStore();
 
@@ -1265,20 +1260,47 @@ const buyCoupons = ref([]);
 /** 已选中的 userCouponId 数组 */
 const selectedBuyCouponIds = ref([]);
 const showBuyCouponDialog = ref(false);
-const couponRules = ref({});
+
+/** 本地估算的商品总额，仅作为试算结果回来之前的展示兜底 */
 const buyGoodsTotal = computed(() =>
   Math.round(Number(displayPrice.value || 0) * Number(quantity.value || 1) * 100) / 100,
 );
 
 /**
- * 单件商品的分类小计：整单金额即该商品所在分类的金额。
- * 商品详情缺 typeId 时标记 unknown，分类券基数回退为整单金额，避免被误判为不可用。
+ * 试算用的商品明细。只在「立即购买」弹窗打开时才有值 ——
+ * 详情页本身不展示优惠，没必要一进页面就打一次试算接口。
  */
-const buySubTotals = computed(() => {
-  const tid = furniture.value?.typeId ?? furniture.value?.type_id ?? null;
-  if (tid == null) return { map: {}, unknown: true };
-  return { map: { [String(tid)]: buyGoodsTotal.value }, unknown: false };
+const buyCheckoutItems = computed(() => {
+  if (!buyDialogVisible.value) return [];
+  const fid = furniture.value?.id;
+  if (!fid) return [];
+  return [
+    {
+      furnitureId: fid,
+      skuId: selectedSku.value?.id ?? null,
+      quantity: Number(quantity.value) || 1,
+    },
+  ];
 });
+
+/**
+ * 金额一律由后端试算，前端不再保留任何抵扣算法。
+ * 商品/规格/数量或已选券一变就自动重算。
+ */
+const {
+  loaded: estimateLoaded,
+  goodsTotal: estimateGoodsTotal,
+  discount: buyDiscountEstimate,
+  isUsable,
+} = useCouponEstimate(
+  () => buyCheckoutItems.value,
+  () => selectedBuyCouponIds.value,
+);
+
+/** 展示用商品总额：优先后端按数据库价格算出的，未算出来时退回本地价，避免闪 ¥0.00 */
+const displayBuyTotal = computed(() =>
+  estimateLoaded.value ? estimateGoodsTotal.value : buyGoodsTotal.value,
+);
 
 /** 已选券对象（按当前券列表还原） */
 const selectedBuyCoupons = computed(() =>
@@ -1287,33 +1309,13 @@ const selectedBuyCoupons = computed(() =>
     .filter(Boolean),
 );
 
-/** 可用券数量（判定口径与弹窗一致，用于「暂无可用优惠券」提示） */
+/**
+ * 可用券数量，用于「暂无可用优惠券」提示。
+ * 试算结果没回来时 isUsable 返回 true，此时按「有券可选」展示，不会误报成没有可用券。
+ */
 const buyAvailableCount = computed(
-  () =>
-    buyCoupons.value.filter(
-      (c) =>
-        !couponReason(
-          c,
-          buyGoodsTotal.value,
-          buySubTotals.value.map,
-          buySubTotals.value.unknown,
-        ),
-    ).length,
+  () => buyCoupons.value.filter((c) => isUsable(c.userCouponId)).length,
 );
-
-// 多张券总优惠：复用与弹窗、后端一致的算法（分类池与整单池分别递减 + 比例封顶）
-const buyDiscountEstimate = computed(() => {
-  const ratio = Number(couponRules.value?.maxDiscountRatio);
-  const cap =
-    Number.isFinite(ratio) && ratio > 0 && ratio <= 1 ? ratio : DEFAULT_MAX_RATIO;
-  return calcTotalDiscount(
-    selectedBuyCoupons.value,
-    buyGoodsTotal.value,
-    buySubTotals.value.map,
-    cap,
-    buySubTotals.value.unknown,
-  );
-});
 
 const buyCouponText = computed(() => {
   const n = selectedBuyCouponIds.value.length;
@@ -1331,23 +1333,14 @@ const loadBuyCoupons = async () => {
   selectedBuyCouponIds.value = selectedBuyCouponIds.value.filter((id) => valid.has(id));
 };
 
-const loadCouponRules = async () => {
-  try {
-    const res = await getCouponRules();
-    couponRules.value = res?.data || {};
-  } catch (e) {
-    logger.warn("加载优惠券叠加规则失败，使用默认规则:", e);
-    couponRules.value = {};
-  }
-};
-
 watch(buyDialogVisible, (open) => {
   if (open) {
     selectedBuyCouponIds.value = [];
     // 每次打开下单弹窗都恢复默认勾选，避免上次取消的选择影响下次
     saveAddressToBook.value = true;
     loadBuyCoupons();
-    loadCouponRules();
+    // 优惠金额由 useCouponEstimate 在明细变化时自动试算，这里无需手动触发
+
   }
 });
 

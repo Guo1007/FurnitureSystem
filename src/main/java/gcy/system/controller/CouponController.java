@@ -47,6 +47,28 @@ public class CouponController {
     }
 
     /**
+     * 我的优惠券列表（分页），供「个人中心 - 我的卡券」页面使用。
+     * <p>
+     * 与 {@link #mine} 的区别：那个返回**全量**列表，供选券弹窗使用（它要展示并评估
+     * 用户的每一张券）；本接口按页取，避免券多时一次性把整张表拉回来。
+     * </p>
+     *
+     * @param status  状态过滤：0-未用，1-已用，2-已过期；不传返回全部
+     * @param type    券类型过滤：1-满减，2-折扣，3-无门槛；不传返回全部
+     * @param current 页码，默认 1
+     * @param size    每页条数，默认 10
+     */
+    @Operation(summary = "我的优惠券列表（分页）")
+    @GetMapping("/user/coupons/mine/page")
+    public Result minePage(
+            @Parameter(description = "状态过滤") @RequestParam(required = false) Integer status,
+            @Parameter(description = "券类型过滤") @RequestParam(required = false) Integer type,
+            @Parameter(description = "当前页码") @RequestParam(defaultValue = "1") Long current,
+            @Parameter(description = "每页条数") @RequestParam(defaultValue = "10") Long size) {
+        return couponService.getMyCouponsPage(UserHolder.getUser().getId(), status, type, current, size);
+    }
+
+    /**
      * 领取优惠券。
      */
     @Operation(summary = "领取优惠券")

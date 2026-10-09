@@ -7,11 +7,14 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import gcy.system.entity.dto.CartFormDTO;
+import gcy.system.entity.dto.OrderEstimateDTO;
 import gcy.system.entity.dto.OrderItemDTO;
 import gcy.system.entity.dto.Result;
 import gcy.system.entity.dto.StockDeltaDTO;
 import gcy.system.entity.dto.UserDTO;
 import gcy.system.entity.pojo.*;
+import gcy.system.entity.vo.CouponEstimateVO;
+import gcy.system.entity.vo.CouponOptionVO;
 import gcy.system.entity.vo.OrderVO;
 import gcy.system.exception.BusinessException;
 import gcy.system.integration.EmailService;
@@ -124,7 +127,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         Long userId = user.getId();
         String lockKey = ORDER_CREATE_KEY + userId;
         RLock lock = redissonClient.getLock(lockKey);
-        boolean locked = false;
+        boolean locked;
         try {
             locked = lock.tryLock(5, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
@@ -139,10 +142,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
             // 事务在锁的内层开启：提交完成后 unlock 才执行
             return new TransactionTemplate(txManager).execute(status -> doCreateOrder(dto, userId));
         } finally {
-            // 未持锁时不可 unlock，否则抛 IllegalMonitorStateException 掩盖真实错误
-            if (locked) {
-                lock.unlock();
-            }
+            lock.unlock();
         }
     }
 
@@ -161,13 +161,169 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         order.setCreateTime(LocalDateTime.now());
         order.setStatus(PENDING_PAYMENT.getCode());
         order.setUserId(userId);
-        BigDecimal totalAmount = BigDecimal.ZERO;
-        Set<Long> itemTypeIds = new HashSet<>();
-        // 按分类汇总商品小计，供分类券校验门槛与抵扣上限使用（分类券只对本分类金额生效）
-        Map<Long, BigDecimal> subTotalByType = new HashMap<>();
+        // 算价：与「下单试算」共用同一段逻辑（纯读、无副作用）。
+        // 商品/规格/库存的校验都内含其中，扣库存留在下面单独做。
+        PricedCart cart = priceCart(items);
+        BigDecimal totalAmount = cart.goodsTotal;
+
         // 库存发生变动的商品，待事务提交后统一失效缓存
         Set<Long> touchedFurnitureIds = new HashSet<>();
         List<OrderItem> orderItems = new ArrayList<>();
+
+        // 扣库存。库存充足性校验已在 priceCart 内完成，这里只保留以「影响行数」
+        // 兜底的并发 CAS：校验与扣减之间商品可能被别人买走，失败即回滚整个下单事务。
+        for (PricedItem pi : cart.items) {
+            if (pi.skuId != null) {
+                int rows = skuMapper.decrementStock(pi.skuId, pi.quantity);
+                if (rows == 0) {
+                    throw new BusinessException("商品 " + pi.furniture.getFName() + " 库存发生变化，请重新下单");
+                }
+                // 同步扣减家具总库存，失败则回滚整个下单事务（防止 SKU 已扣而总库存未扣的台账不一致）
+                int furRows = furnitureMapper.decrementStock(pi.furnitureId, pi.quantity);
+                if (furRows == 0) {
+                    throw new BusinessException("商品 " + pi.furniture.getFName() + " 库存发生变化，请重新下单");
+                }
+            } else {
+                int rows = furnitureMapper.decrementStock(pi.furnitureId, pi.quantity);
+                if (rows == 0) {
+                    throw new BusinessException("商品 " + pi.furniture.getFName() + " 库存发生变化，请重新下单");
+                }
+            }
+            // 记录库存变动涉及的商品，提交后再失效缓存：
+            // 不在事务内写缓存，事务回滚时缓存无法同步回滚，会留下脏数据
+            touchedFurnitureIds.add(pi.furnitureId);
+        }
+
+        // 组装订单明细
+        for (PricedItem pi : cart.items) {
+            OrderItem orderItem = new OrderItem();
+            orderItem.setFurnitureId(pi.furnitureId);
+            orderItem.setSkuId(pi.skuId);
+            orderItem.setPrice(pi.price);
+            orderItem.setQuantity(pi.quantity);
+            orderItem.setItemTotalPrice(pi.itemTotal);
+            orderItem.setFurnitureName(pi.furniture.getFName());
+            orderItem.setFurnitureIcon(pi.furniture.getFIcon());
+            if (pi.skuId != null) {
+                orderItem.setSkuSpec(buildSkuSpecText(pi.skuId));
+            }
+            orderItems.add(orderItem);
+        }
+        order.setTotalPrice(totalAmount);
+        LocalDateTime now = LocalDateTime.now();
+        // 优惠券抵扣（支持多张：可叠加的券可同时使用，不可叠加的券只能单独用）
+        List<Long> userCouponIds = collectCouponIds(dto);
+        if (!userCouponIds.isEmpty()) {
+            // 叠加张数上限取自后台配置，未配置时使用服务内置默认值
+            int maxStackCount = couponRuleConfigService.getMaxStackCount();
+            List<Coupon> usedCoupons = validateCoupons(userId, userCouponIds, totalAmount,
+                    cart.itemTypeIds, cart.subTotalByType, now, maxStackCount);
+            BigDecimal discount = calcCouponsDiscount(usedCoupons, totalAmount, cart.subTotalByType,
+                    couponRuleConfigService.getMaxDiscountRatio());
+            order.setCouponId(usedCoupons.get(0).getId());
+            order.setCouponDiscount(discount);
+            order.setTotalPrice(totalAmount.subtract(discount).max(BigDecimal.ZERO));
+        }
+        save(order);
+        Long orderId = order.getId();
+        for (OrderItem item : orderItems) {
+            item.setOrderId(orderId);
+        }
+        boolean success = orderItemService.saveBatch(orderItems);
+        if (!success) {
+            throw new BusinessException("订单明细保存失败");
+        }
+        // 订单创建成功后，将已用优惠券置为已用并关联订单（一条 IN(...) 批量 UPDATE，替代逐条核销）
+        markCouponsUsed(userCouponIds, orderId, now);
+        // 库存已落库，提交后再失效缓存（由读路径自动重建）
+        evictFurnitureCacheAfterCommit(touchedFurnitureIds);
+        log.info("订单创建成功: orderId={}, userId={}, amount={}", orderId, userId, order.getTotalPrice());
+        // 通知管理员有新订单（金额为优惠后实付，避免与订单实付不符）
+        adminNotifyService.sendNotification(NotifySettingServiceImpl.TYPE_NEW_ORDER, "🛒 新订单通知",
+                "系统产生了新订单，请及时处理。\n订单号：" + orderId + "\n实付金额：¥" + order.getTotalPrice());
+        return Result.ok(orderId);
+    }
+
+    // ==================== 算价（下单与试算共用） ====================
+
+    /**
+     * 一条已计价的购物车明细。
+     * <p>
+     * 由 {@link #priceCart(List)} 产出，同时供「下单」（扣库存、落库）和「试算接口」使用，
+     * 两条路径共用同一份算价结果，金额不可能对不上。
+     * </p>
+     */
+    private static class PricedItem {
+        /** 商品ID */
+        final Long furnitureId;
+        /** 规格ID（无规格为 null） */
+        final Long skuId;
+        /** 购买数量 */
+        final int quantity;
+        /** 命中的商品（取名称/图标，以及扣库存失败时的报错文案） */
+        final Furniture furniture;
+        /** 单价：有规格取规格价，否则取商品价 */
+        final BigDecimal price;
+        /** 小计 = price × quantity */
+        final BigDecimal itemTotal;
+
+        PricedItem(Long furnitureId, Long skuId, int quantity, Furniture furniture,
+                   BigDecimal price, BigDecimal itemTotal) {
+            this.furnitureId = furnitureId;
+            this.skuId = skuId;
+            this.quantity = quantity;
+            this.furniture = furniture;
+            this.price = price;
+            this.itemTotal = itemTotal;
+        }
+    }
+
+    /**
+     * 一次算价的完整产物。
+     */
+    private static class PricedCart {
+        /** 商品总额 */
+        final BigDecimal goodsTotal;
+        /** 本单命中的商品分类ID集合，供分类券适用性校验 */
+        final Set<Long> itemTypeIds;
+        /** 各分类小计，供分类券门槛与抵扣上限使用 */
+        final Map<Long, BigDecimal> subTotalByType;
+        /** 逐条明细 */
+        final List<PricedItem> items;
+
+        PricedCart(BigDecimal goodsTotal, Set<Long> itemTypeIds,
+                   Map<Long, BigDecimal> subTotalByType, List<PricedItem> items) {
+            this.goodsTotal = goodsTotal;
+            this.itemTypeIds = itemTypeIds;
+            this.subTotalByType = subTotalByType;
+            this.items = items;
+        }
+    }
+
+    /**
+     * 购物车算价：校验商品/规格/库存并算出金额。
+     * <p>
+     * <b>纯读、无任何副作用</b> —— 不扣库存、不落库、不加锁。正因如此，「下单试算」
+     * 可以直接复用本方法，这也是试算金额与下单金额必然一致的根本原因：
+     * 它们本来就是同一段代码。
+     * </p>
+     * <p>
+     * 校验失败一律抛 {@link BusinessException}，用户可见文案与下单时保持一致。
+     * 库存只做「读取判断」，真正地并发兜底由下单流程随后执行的 CAS 扣减负责。
+     * </p>
+     *
+     * @param items 购物车明细（来自请求体，只含「买什么、买几件」，单价一律查库）
+     * @return 商品总额、分类小计、命中分类与逐条计价明细
+     */
+    private PricedCart priceCart(List<OrderItemDTO> items) {
+        if (items == null || items.isEmpty()) {
+            throw new BusinessException("购物车为空");
+        }
+        BigDecimal goodsTotal = BigDecimal.ZERO;
+        Set<Long> itemTypeIds = new HashSet<>();
+        // 按分类汇总商品小计，供分类券校验门槛与抵扣上限使用（分类券只对本分类金额生效）
+        Map<Long, BigDecimal> subTotalByType = new HashMap<>();
+        List<PricedItem> priced = new ArrayList<>();
 
         // 循环外批量预加载：原实现在循环内对每件商品查家具、查规格、再 COUNT 一次规格，
         // 20 件商品 ≈ 100+ 次 DB 往返且全部串行在一个事务里。这里压成 3 条查询。
@@ -197,7 +353,8 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         for (OrderItemDTO itemDto : items) {
             Long furnitureId = itemDto.getFurnitureId();
             Long skuId = itemDto.getSkuId();
-            int quantity = itemDto.getQuantity();
+            Integer quantityRaw = itemDto.getQuantity();
+            int quantity = quantityRaw == null ? 0 : quantityRaw;
             if (quantity <= 0) {
                 throw new BusinessException("商品数量必须大于0");
             }
@@ -221,15 +378,6 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
                 if (sku.getStock() < quantity) {
                     throw new BusinessException("商品 " + furniture.getFName() + " 该规格库存不足，当前库存: " + sku.getStock());
                 }
-                int rows = skuMapper.decrementStock(skuId, quantity);
-                if (rows == 0) {
-                    throw new BusinessException("商品 " + furniture.getFName() + " 库存发生变化，请重新下单");
-                }
-                // 同步扣减家具总库存，失败则回滚整个下单事务（防止 SKU 已扣而总库存未扣的台账不一致）
-                int furRows = furnitureMapper.decrementStock(furnitureId, quantity);
-                if (furRows == 0) {
-                    throw new BusinessException("商品 " + furniture.getFName() + " 库存发生变化，请重新下单");
-                }
                 itemPrice = sku.getPrice();
             } else {
                 if (furnitureIdsWithSku.contains(furnitureId)) {
@@ -238,66 +386,16 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
                 if (furniture.getStock() < quantity) {
                     throw new BusinessException("商品 " + furniture.getFName() + " 库存不足，当前库存: " + furniture.getStock());
                 }
-                int rows = furnitureMapper.decrementStock(furnitureId, quantity);
-                if (rows == 0) {
-                    throw new BusinessException("商品 " + furniture.getFName() + " 库存发生变化，请重新下单");
-                }
                 itemPrice = furniture.getPrice();
             }
-
-            // 记录库存变动涉及的商品，提交后再失效缓存：
-            // 不在事务内写缓存，事务回滚时缓存无法同步回滚，会留下脏数据
-            touchedFurnitureIds.add(furnitureId);
             BigDecimal itemTotal = itemPrice.multiply(new BigDecimal(quantity));
-            totalAmount = totalAmount.add(itemTotal);
+            goodsTotal = goodsTotal.add(itemTotal);
             if (furniture.getTypeId() != null) {
                 subTotalByType.merge(furniture.getTypeId(), itemTotal, BigDecimal::add);
             }
-            OrderItem orderItem = new OrderItem();
-            orderItem.setFurnitureId(furnitureId);
-            orderItem.setSkuId(skuId);
-            orderItem.setPrice(itemPrice);
-            orderItem.setQuantity(quantity);
-            orderItem.setItemTotalPrice(itemTotal);
-            orderItem.setFurnitureName(furniture.getFName());
-            orderItem.setFurnitureIcon(furniture.getFIcon());
-            if (skuId != null) {
-                orderItem.setSkuSpec(buildSkuSpecText(skuId));
-            }
-            orderItems.add(orderItem);
+            priced.add(new PricedItem(furnitureId, skuId, quantity, furniture, itemPrice, itemTotal));
         }
-        order.setTotalPrice(totalAmount);
-        LocalDateTime now = LocalDateTime.now();
-        // 优惠券抵扣（支持多张：可叠加的券可同时使用，不可叠加的券只能单独用）
-            List<Long> userCouponIds = collectCouponIds(dto);
-            if (!userCouponIds.isEmpty()) {
-                // 叠加张数上限取自后台配置，未配置时使用服务内置默认值
-                int maxStackCount = couponRuleConfigService.getMaxStackCount();
-                List<Coupon> usedCoupons = validateCoupons(userId, userCouponIds, totalAmount,
-                        itemTypeIds, subTotalByType, now, maxStackCount);
-                BigDecimal discount = calcCouponsDiscount(usedCoupons, totalAmount, subTotalByType);
-            order.setCouponId(usedCoupons.get(0).getId());
-            order.setCouponDiscount(discount);
-            order.setTotalPrice(totalAmount.subtract(discount).max(BigDecimal.ZERO));
-        }
-        save(order);
-        Long orderId = order.getId();
-        for (OrderItem item : orderItems) {
-            item.setOrderId(orderId);
-        }
-        boolean success = orderItemService.saveBatch(orderItems);
-        if (!success) {
-            throw new BusinessException("订单明细保存失败");
-        }
-        // 订单创建成功后，将已用优惠券置为已用并关联订单（一条 IN(...) 批量 UPDATE，替代逐条核销）
-        markCouponsUsed(userCouponIds, orderId, now);
-        // 库存已落库，提交后再失效缓存（由读路径自动重建）
-        evictFurnitureCacheAfterCommit(touchedFurnitureIds);
-        log.info("订单创建成功: orderId={}, userId={}, amount={}", orderId, userId, order.getTotalPrice());
-        // 通知管理员有新订单（金额为优惠后实付，避免与订单实付不符）
-        adminNotifyService.sendNotification(NotifySettingServiceImpl.TYPE_NEW_ORDER, "🛒 新订单通知",
-                "系统产生了新订单，请及时处理。\n订单号：" + orderId + "\n实付金额：¥" + order.getTotalPrice());
-        return Result.ok(orderId);
+        return new PricedCart(goodsTotal, itemTypeIds, subTotalByType, priced);
     }
 
     /**
@@ -378,8 +476,6 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
      * 下单成功后，将使用的优惠券置为已用并关联订单。
      * 必须校验影响行数：若并发下该券已被核销，此处会静默更新 0 行而不报错，
      * 导致同一张券被多笔订单同时使用。
-     */
-    /**
      * 批量核销本单用到的优惠券：一条 {@code IN(...)} UPDATE 完成，避免 N 张券 N 次往返。
      * <p>
      * 仍然带 {@code status = 0} 的 CAS 条件并校验影响行数：并发下若某张券已被核销，
@@ -413,7 +509,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
 
     /**
      * 批量校验多张优惠券，并施加叠加规则：
-     * 不可叠加券只能单独用一张；可叠加券总张数受后台配置的「最大叠加张数」限制。
+     * 不可叠加券只能单独用一张；可叠加券总数受后台配置的「最大叠加张数」限制。
      * <p>
      * 注意 1：不对同一券模板去重——同一张券领取 N 份即对应 user_coupon 中 N 条独立记录，
      * 本就应当可以分别使用；抵扣失控由「折扣券限 1 张」「最大叠加张数」「总抵扣上限比例」共同兜底。
@@ -465,7 +561,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
      * </p>
      */
     private BigDecimal calcCouponsDiscount(List<Coupon> coupons, BigDecimal goodsTotal,
-                                           Map<Long, BigDecimal> subTotalByType) {
+                                           Map<Long, BigDecimal> subTotalByType, BigDecimal ratio) {
         // 各分类剩余可抵扣额度
         Map<Long, BigDecimal> remainByType = subTotalByType == null
                 ? new HashMap<>() : new HashMap<>(subTotalByType);
@@ -484,17 +580,355 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
             remainTotal = remainTotal.subtract(discount).max(BigDecimal.ZERO);
         }
         total = total.max(BigDecimal.ZERO).min(goodsTotal);
-        // 总抵扣比例封顶：多张券叠加时，实付不低于「1 - 上限比例」
-        BigDecimal ratio = couponRuleConfigService.getMaxDiscountRatio();
+        // 总抵扣比例封顶：多张券叠加时，实付不低于「1 - 上限比例」。
+        // 比例由调用方传入：本方法会被「最优组合」搜索调用上百次，不能每次都去读配置。
         if (ratio != null && ratio.compareTo(BigDecimal.ZERO) > 0) {
             BigDecimal cap = goodsTotal.multiply(ratio).setScale(2, RoundingMode.HALF_UP);
             if (total.compareTo(cap) > 0) {
-                log.info("优惠券叠加抵扣超出上限比例 {}，已封顶: 原抵扣={}, 封顶后={}",
-                        ratio, total, cap);
+                // 搜索过程中封顶是常态，用 debug 避免刷屏
+                log.debug("优惠券叠加抵扣超出上限比例 {}，已封顶: 原抵扣={}, 封顶后={}", ratio, total, cap);
                 total = cap;
             }
         }
         return total.setScale(2, RoundingMode.HALF_UP);
+    }
+
+    // ==================== 下单试算 ====================
+
+    /**
+     * 一张券在某单下的评估结果。
+     * <p>
+     * 与 {@link #validateCoupon} 的关系：判定条件一一对应，区别只在于
+     * <b>这里返回原因字符串而不是抛异常</b>。试算要一次性评估用户的全部券，
+     * 一张不可用不该让整个请求失败。
+     * </p>
+     */
+    private static class CouponEvaluation {
+        /** 用户券记录 */
+        final UserCoupon userCoupon;
+        /** 券模板；模板缺失时为 null */
+        final Coupon coupon;
+        /** 不可用原因；null 或空串表示可用 */
+        final String reason;
+
+        CouponEvaluation(UserCoupon userCoupon, Coupon coupon, String reason) {
+            this.userCoupon = userCoupon;
+            this.coupon = coupon;
+            this.reason = reason;
+        }
+
+        boolean usable() {
+            return reason == null || reason.isEmpty();
+        }
+    }
+
+    /**
+     * 「最优组合」搜索的候选：一张具体的用户券。
+     * <p>
+     * 刻意不复用 {@link Coupon} 本身做身份 —— 同一张模板可能被同一用户领了多份
+     * （user_coupon 多条记录共用一条 coupon），按对象身份去重会算错。
+     * </p>
+     */
+    private static class CouponCandidate {
+        final Long userCouponId;
+        final Coupon coupon;
+
+        CouponCandidate(Long userCouponId, Coupon coupon) {
+            this.userCouponId = userCouponId;
+            this.coupon = coupon;
+        }
+    }
+
+    /** 回溯搜索的可变状态容器（Java 没有闭包捕获可变变量） */
+    private static class SearchState {
+        List<CouponCandidate> best;
+        BigDecimal bestVal;
+    }
+
+    /**
+     * 下单试算：算商品金额、评估每张券、算出当前所选抵扣、并给出最优组合。
+     * <p>
+     * 全程只读：不扣库存、不落库、不核销券。算价走的是 {@link #priceCart(List)}，
+     * 与下单同一段代码，所以试算结果与下单实收必然一致（前提是购物车与券没变）。
+     * </p>
+     * <p>
+     * 与后端的约定：本接口是前端展示金额的<b>唯一</b>来源，前端不再保留任何抵扣算法。
+     * </p>
+     */
+    @Override
+    public Result estimate(OrderEstimateDTO dto) {
+        UserDTO user = UserHolder.getUser();
+        if (user == null) {
+            return Result.fail("请先登录");
+        }
+        Long userId = user.getId();
+        if (dto == null || dto.getItemList() == null || dto.getItemList().isEmpty()) {
+            return Result.fail("购物车为空");
+        }
+
+        // 与下单共用同一段算价逻辑（纯读、无副作用）
+        PricedCart cart = priceCart(dto.getItemList());
+
+        LocalDateTime now = LocalDateTime.now();
+        int maxStackCount = couponRuleConfigService.getMaxStackCount();
+        BigDecimal maxRatio = couponRuleConfigService.getMaxDiscountRatio();
+
+        // 当前用户的全部券：已用/过期的也要评估，前端「不可用」分组需要展示它们
+        List<UserCoupon> userCoupons = userCouponMapper.selectList(
+                new LambdaQueryWrapper<UserCoupon>()
+                        .eq(UserCoupon::getUserId, userId)
+                        .orderByDesc(UserCoupon::getGotTime));
+        Map<Long, Coupon> templateMap = loadCouponTemplates(userCoupons);
+        List<CouponEvaluation> evaluations = userCoupons.stream()
+                .map(uc -> evaluateCoupon(uc, templateMap.get(uc.getCouponId()),
+                        cart.goodsTotal, cart.itemTypeIds, cart.subTotalByType, now))
+                .collect(Collectors.toList());
+
+        // 已勾选且确实可用的券（前端只会勾可用的，这里仍做一次过滤兜底）
+        Set<Long> selectedIds = dto.getUserCouponIds() == null ? Set.of()
+                : dto.getUserCouponIds().stream().filter(Objects::nonNull).collect(Collectors.toSet());
+        List<CouponCandidate> selected = evaluations.stream()
+                .filter(CouponEvaluation::usable)
+                .filter(e -> selectedIds.contains(e.userCoupon.getId()))
+                .map(e -> new CouponCandidate(e.userCoupon.getId(), e.coupon))
+                .collect(Collectors.toList());
+
+        BigDecimal totalDiscount = discountOfCandidates(selected, cart.goodsTotal,
+                cart.subTotalByType, maxRatio);
+
+        // 每张券的边际抵扣：抵扣(已选其它 + 本券) - 抵扣(已选其它)，
+        // 与前端卡片上「本单可抵 ¥X」的口径一致
+        List<CouponOptionVO> options = new ArrayList<>();
+        for (CouponEvaluation e : evaluations) {
+            BigDecimal marginal = BigDecimal.ZERO;
+            if (e.usable()) {
+                List<CouponCandidate> others = selected.stream()
+                        .filter(x -> !x.userCouponId.equals(e.userCoupon.getId()))
+                        .collect(Collectors.toList());
+                BigDecimal without = discountOfCandidates(others, cart.goodsTotal,
+                        cart.subTotalByType, maxRatio);
+                List<CouponCandidate> with = new ArrayList<>(others);
+                with.add(new CouponCandidate(e.userCoupon.getId(), e.coupon));
+                BigDecimal withIt = discountOfCandidates(with, cart.goodsTotal,
+                        cart.subTotalByType, maxRatio);
+                marginal = withIt.subtract(without).max(BigDecimal.ZERO);
+            }
+            options.add(new CouponOptionVO(
+                    e.userCoupon.getId(),
+                    e.usable(),
+                    e.reason == null ? "" : e.reason,
+                    marginal));
+        }
+
+        List<Long> bestIds = pickBestCouponIds(evaluations, cart.goodsTotal,
+                cart.subTotalByType, maxStackCount, maxRatio);
+        BigDecimal payable = cart.goodsTotal.subtract(totalDiscount).max(BigDecimal.ZERO);
+
+        return Result.ok(new CouponEstimateVO(cart.goodsTotal, totalDiscount, payable,
+                maxStackCount, options, bestIds));
+    }
+
+    /**
+     * 批量加载券模板（一次 IN 查询），替代逐张 user_coupon 回表查模板。
+     * 沿用 {@code CouponServiceImpl.getMyCoupons} 的「两次查询 + 内存 join」模式。
+     */
+    private Map<Long, Coupon> loadCouponTemplates(List<UserCoupon> userCoupons) {
+        if (userCoupons == null || userCoupons.isEmpty()) {
+            return Map.of();
+        }
+        List<Long> couponIds = userCoupons.stream()
+                .map(UserCoupon::getCouponId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .collect(Collectors.toList());
+        if (couponIds.isEmpty()) {
+            return Map.of();
+        }
+        return couponMapper.selectByIds(couponIds).stream()
+                .collect(Collectors.toMap(Coupon::getId, c -> c));
+    }
+
+    /**
+     * 评估一张券能否用于本单，返回原因而不是抛异常。
+     * <p>
+     * 判定顺序与前端 {@code couponReason} 对齐，保证前端「不可用」分组里
+     * 展示的原因文案与用户此前看到的一致。
+     * </p>
+     */
+    private CouponEvaluation evaluateCoupon(UserCoupon uc, Coupon c, BigDecimal goodsTotal,
+                                            Set<Long> itemTypeIds, Map<Long, BigDecimal> subTotalByType,
+                                            LocalDateTime now) {
+        // 1. 券本身的状态（已用 / 已过期，getMyCoupons 会把过期券纠正为 2）
+        if (uc.getStatus() != null && uc.getStatus() != 0) {
+            return new CouponEvaluation(uc, c, uc.getStatus() == 1 ? "已使用" : "已过期");
+        }
+        // 2. 模板缺失或已停用
+        if (c == null || c.getStatus() == null || c.getStatus() != 1) {
+            return new CouponEvaluation(uc, c, "优惠券已停用");
+        }
+        // 3. 有效期
+        if (uc.getExpireTime() != null && uc.getExpireTime().isBefore(now)) {
+            return new CouponEvaluation(uc, c, "已过期");
+        }
+        // 4. 分类券：本单必须含该分类商品
+        boolean scoped = c.getScope() != null && c.getScope() == 1 && c.getTypeId() != null;
+        if (scoped && (itemTypeIds == null || !itemTypeIds.contains(c.getTypeId()))) {
+            return new CouponEvaluation(uc, c, "本单无该分类商品");
+        }
+        // 5. 门槛（按「适用基数」判断：分类券看分类小计，全场券看整单）
+        BigDecimal applicableBase = resolveCouponBase(c, goodsTotal, subTotalByType);
+        BigDecimal threshold = c.getMinThreshold() == null ? BigDecimal.ZERO : c.getMinThreshold();
+        if (applicableBase.compareTo(threshold) < 0) {
+            BigDecimal gap = threshold.subtract(applicableBase)
+                    .setScale(0, RoundingMode.CEILING).setScale(2, RoundingMode.HALF_UP);
+            return new CouponEvaluation(uc, c, "差 ¥" + gap.toPlainString() + " 可用");
+        }
+        // 6. 关键字段缺失（数据异常兜底）
+        if (c.getType() == null || (c.getType() == 2 && c.getDiscount() == null)
+                || (c.getType() != 2 && c.getAmount() == null)) {
+            return new CouponEvaluation(uc, c, "优惠券配置异常，请联系管理员");
+        }
+        return new CouponEvaluation(uc, c, null);
+    }
+
+    /** 是否可叠加（stackable=1） */
+    private boolean isStackable(Coupon c) {
+        return c.getStackable() != null && c.getStackable() == 1;
+    }
+
+    /** 是否折扣券（type=2） */
+    private boolean isDiscountCoupon(Coupon c) {
+        return c.getType() != null && c.getType() == 2;
+    }
+
+    /** 单张券单独使用时的抵扣，仅用于搜索里的排序启发 */
+    private BigDecimal singleDiscount(Coupon c, BigDecimal goodsTotal,
+                                      Map<Long, BigDecimal> subTotalByType) {
+        return calcCouponDiscount(c, resolveCouponBase(c, goodsTotal, subTotalByType));
+    }
+
+    /** 把候选券映射成 Coupon 列表后走与下单完全相同的抵扣计算 */
+    private BigDecimal discountOfCandidates(List<CouponCandidate> candidates, BigDecimal goodsTotal,
+                                            Map<Long, BigDecimal> subTotalByType, BigDecimal maxRatio) {
+        if (candidates == null || candidates.isEmpty()) {
+            return BigDecimal.ZERO;
+        }
+        List<Coupon> list = candidates.stream().map(x -> x.coupon).collect(Collectors.toList());
+        return calcCouponsDiscount(list, goodsTotal, subTotalByType, maxRatio);
+    }
+
+    /**
+     * 求解「最优券组合」，返回选中的 userCouponId 列表。
+     * <p>
+     * 「不可叠加券与任何其它券互斥」这条约束决定了合法组合只有两种形态：
+     * ① 单独使用一张不可叠加券；② 使用若干张可叠加券（张数 ≤ maxStackCount，折扣券最多 1 张）。
+     * 两种形态各求最优再比较即可覆盖全部合法组合，无需穷举。
+     * </p>
+     * <p>
+     * 算法是「带排序启发的贪心 + 小规模排列择优」，不保证数学最优；
+     * 券种少、张数上限小，实际已足够。与前端原 {@code pickBestCoupons} 行为一致。
+     * </p>
+     */
+    private List<Long> pickBestCouponIds(List<CouponEvaluation> evaluations, BigDecimal goodsTotal,
+                                         Map<Long, BigDecimal> subTotalByType, int maxStackCount,
+                                         BigDecimal maxRatio) {
+        List<CouponCandidate> usable = evaluations.stream()
+                .filter(CouponEvaluation::usable)
+                .filter(e -> e.coupon != null)
+                .map(e -> new CouponCandidate(e.userCoupon.getId(), e.coupon))
+                .toList();
+        if (usable.isEmpty() || goodsTotal.compareTo(BigDecimal.ZERO) <= 0 || maxStackCount < 1) {
+            return new ArrayList<>();
+        }
+
+        List<CouponCandidate> best = new ArrayList<>();
+        BigDecimal bestVal = BigDecimal.ZERO;
+
+        // 形态①：单独使用一张不可叠加券
+        for (CouponCandidate c : usable) {
+            if (isStackable(c.coupon)) {
+                continue;
+            }
+            BigDecimal v = discountOfCandidates(List.of(c), goodsTotal, subTotalByType, maxRatio);
+            if (v.compareTo(bestVal) > 0) {
+                bestVal = v;
+                best = new ArrayList<>(List.of(c));
+            }
+        }
+
+        // 形态②：可叠加券组合。折扣券优先（折扣应作用于尽可能大的基数），同类按单张抵扣降序
+        List<CouponCandidate> ranked = usable.stream()
+                .filter(c -> isStackable(c.coupon)).sorted((a, b) -> {
+                    int da = isDiscountCoupon(a.coupon) ? 0 : 1;
+                    int db = isDiscountCoupon(b.coupon) ? 0 : 1;
+                    if (da != db) {
+                        return da - db;
+                    }
+                    // BigDecimal 不能直接相减，用 compareTo 表示降序
+                    return singleDiscount(b.coupon, goodsTotal, subTotalByType)
+                            .compareTo(singleDiscount(a.coupon, goodsTotal, subTotalByType));
+                }).toList();
+
+        List<CouponCandidate> picked = new ArrayList<>();
+        for (CouponCandidate c : ranked) {
+            if (picked.size() >= maxStackCount) {
+                break;
+            }
+            // 折扣券每单限 1 张
+            if (isDiscountCoupon(c.coupon)
+                    && picked.stream().anyMatch(x -> isDiscountCoupon(x.coupon))) {
+                continue;
+            }
+            List<CouponCandidate> next = new ArrayList<>(picked);
+            next.add(c);
+            if (discountOfCandidates(next, goodsTotal, subTotalByType, maxRatio)
+                    .compareTo(discountOfCandidates(picked, goodsTotal, subTotalByType, maxRatio)) > 0) {
+                picked = next;
+            }
+        }
+        picked = bestPermutation(picked, goodsTotal, subTotalByType, maxRatio);
+        if (discountOfCandidates(picked, goodsTotal, subTotalByType, maxRatio).compareTo(bestVal) > 0) {
+            best = picked;
+        }
+        return best.stream().map(x -> x.userCouponId).collect(Collectors.toList());
+    }
+
+    /**
+     * 组合内顺序会影响结果（折扣券的基数随其它券的抵扣递减），枚举排列取最优顺序。
+     * 最多 5 张（120 种排列），超过 5 张直接返回原顺序，避免阶乘爆炸。
+     */
+    private List<CouponCandidate> bestPermutation(List<CouponCandidate> list, BigDecimal goodsTotal,
+                                                  Map<Long, BigDecimal> subTotalByType,
+                                                  BigDecimal maxRatio) {
+        if (list == null || list.size() < 2 || list.size() > 5) {
+            return list;
+        }
+        SearchState state = new SearchState();
+        state.best = list;
+        state.bestVal = discountOfCandidates(list, goodsTotal, subTotalByType, maxRatio);
+        walkPermutations(list, new ArrayList<>(), state, goodsTotal, subTotalByType, maxRatio);
+        return state.best;
+    }
+
+    /** 排列回溯：每层都克隆列表，避免共享引用被后续层改坏 */
+    private void walkPermutations(List<CouponCandidate> rest, List<CouponCandidate> current,
+                                  SearchState state, BigDecimal goodsTotal,
+                                  Map<Long, BigDecimal> subTotalByType, BigDecimal maxRatio) {
+        if (rest.isEmpty()) {
+            BigDecimal v = discountOfCandidates(current, goodsTotal, subTotalByType, maxRatio);
+            if (v.compareTo(state.bestVal) > 0) {
+                state.bestVal = v;
+                state.best = new ArrayList<>(current);
+            }
+            return;
+        }
+        for (int i = 0; i < rest.size(); i++) {
+            List<CouponCandidate> nextRest = new ArrayList<>(rest);
+            CouponCandidate pickedOne = nextRest.remove(i);
+            List<CouponCandidate> nextCur = new ArrayList<>(current);
+            nextCur.add(pickedOne);
+            walkPermutations(nextRest, nextCur, state, goodsTotal, subTotalByType, maxRatio);
+        }
     }
 
     /**
@@ -1015,7 +1449,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
      * <p>
      * 为什么不在事务内写缓存：
      * 事务内的库存/价格变更尚未提交，一旦后续校验失败回滚，数据库恢复原值，
-     * 而 Redis 中已被写入的值不会回滚，会留下脏数据；且早期实现遗漏了物理 TTL，
+     * 而 Redis 中已写入的值不会回滚，会留下脏数据；且早期实现遗漏了物理 TTL，
      * 脏数据会永久驻留。这里改为仅删除，由读路径
      * （互斥锁 + 双检 + 逻辑过期 + 物理 TTL）在下一次访问时按数据库最新值重建。
      * </p>

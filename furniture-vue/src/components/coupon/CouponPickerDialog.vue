@@ -12,14 +12,14 @@
     <div class="cp-summary">
       <div class="cp-summary__left">
         <span class="cp-summary__label">商品金额</span>
-        <span class="cp-summary__amount">¥{{ formatPrice(props.totalAmount) }}</span>
+        <span class="cp-summary__amount">{{ goodsTotalText }}</span>
       </div>
       <div class="cp-summary__right">
         <span class="cp-summary__label">已选</span>
-        <span class="cp-summary__count"
-          >{{ draft.length }} / {{ maxStackCount }} 张</span
+        <span class="cp-summary__count">{{ selectedCountText }}</span>
+        <span v-if="discount > 0" class="cp-summary__save"
+          >-¥{{ formatPrice(discount) }}</span
         >
-        <span class="cp-summary__save">-¥{{ formatPrice(discount) }}</span>
       </div>
     </div>
 
@@ -30,7 +30,12 @@
 
     <!-- 券列表 -->
     <div class="cp-list">
-      <template v-if="activeTab === 'ok'">
+      <!-- 首次计算：还没有结果，先挡一层，免得券的可用性"先全可用、拿到结果再翻转" -->
+      <div v-if="!listReady" class="cp-empty">
+        <div class="cp-empty__text">正在计算优惠…</div>
+      </div>
+
+      <template v-else-if="activeTab === 'ok'">
         <div v-if="!available.length" class="cp-empty">
           <div class="cp-empty__icon">🎫</div>
           <div class="cp-empty__text">暂无可用优惠券</div>
@@ -73,7 +78,7 @@
               {{ blockReason(c) }}
             </div>
             <div v-else class="cp-card__save">
-              本单可抵 ¥{{ formatPrice(estimate(c)) }}
+              {{ amountText(c) }}
             </div>
           </div>
 
@@ -98,7 +103,7 @@
           <div class="cp-card__body">
             <div class="cp-card__name">{{ c.name }}</div>
             <div class="cp-card__meta">{{ c.scopeText || "全场通用" }}</div>
-            <div class="cp-card__reason">{{ c.__reason }}</div>
+            <div class="cp-card__reason">{{ couponReasonOf(c) }}</div>
           </div>
           <div class="cp-card__check is-lock">×</div>
         </div>
@@ -113,16 +118,12 @@
             已优惠 <b class="cp-footer__save">¥{{ formatPrice(discount) }}</b>
             ，实付 ¥{{ formatPrice(payable) }}
           </span>
-          <span v-else class="cp-footer__tip">
-            {{
-              maxStackCount > 1
-                ? `最多可叠加 ${maxStackCount} 张券（折扣券限 1 张）`
-                : "当前仅可使用 1 张券"
-            }}
-          </span>
+          <span v-else class="cp-footer__tip">{{ stackTip }}</span>
         </div>
         <div class="cp-footer__btns">
-          <el-button size="default" @click="useBest">最优组合</el-button>
+          <el-button size="default" :disabled="!loaded" @click="useBest"
+            >最优组合</el-button
+          >
           <el-button size="default" @click="clearAll">不使用</el-button>
           <el-button type="primary" size="default" @click="confirm">确定</el-button>
         </div>
@@ -133,39 +134,25 @@
 
 <script setup>
 import { computed, ref, watch } from "vue";
-import { logger } from "@/utils/logger.js";
-import {
-  calcTotalDiscount,
-  couponReason,
-  formatDay,
-  isDiscount,
-  pickBestCoupons,
-  DEFAULT_MAX_RATIO,
-  DEFAULT_MAX_STACK_COUNT,
-} from "@/utils/coupon.js";
+import { ElMessage } from "element-plus";
+import { formatDay, isDiscount } from "@/utils/coupon.js";
+import { useCouponEstimate } from "@/composables/useCouponEstimate.js";
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
   /** 我的券列表（getMyCoupons 原始返回） */
   coupons: { type: Array, default: () => [] },
-  /** 参与结算的商品总额 */
-  totalAmount: { type: Number, default: 0 },
   /**
-   * 各分类商品小计：{ [typeId]: 金额 }。
-   * 用于让分类券的「门槛校验 / 抵扣估算」与后端 resolveCouponBase 保持一致，
-   * 不传则分类券一律按 0 基数处理（与后端 null 兜底一致）。
+   * 参与结算的商品明细，格式 [{ furnitureId, skuId, quantity }]。
+   *
+   * 只传「买什么、买几件」——单价、总额、抵扣一律由后端试算。这样试算与下单
+   * 走的是同一套算价逻辑，前端也没有任何可与之脱钩的第二份实现。
+   * （原先的 totalAmount / subTotals / subTotalsUnknown 三个 prop 因此全部取消：
+   *   分类小计与「分类未知」的兜底都由后端从数据库直接算，前端不需要再猜。）
    */
-  subTotals: { type: Object, default: () => ({}) },
-  /**
-   * 是否存在「分类未知」的购物车项（历史 localStorage 数据没有 typeId）。
-   * 为 true 时分类券不做「本单无该分类商品」的硬判定，基数回退为整单金额，
-   * 避免旧数据把分类券全部误判为不可用。
-   */
-  subTotalsUnknown: { type: Boolean, default: false },
+  items: { type: Array, default: () => [] },
   /** 已选中的 userCouponId 数组（v-model） */
   selectedIds: { type: Array, default: () => [] },
-  /** 叠加规则：{ maxStackCount, maxDiscountRatio } */
-  rules: { type: Object, default: () => ({}) },
 });
 
 const emit = defineEmits(["update:modelValue", "update:selectedIds", "confirm"]);
@@ -179,14 +166,57 @@ const activeTab = ref("ok");
 /** 弹窗内的草稿选择，点确定后才同步给外部 */
 const draft = ref([]);
 
-const maxStackCount = computed(() => {
-  const n = Number(props.rules?.maxStackCount);
-  return Number.isInteger(n) && n >= 1 ? n : DEFAULT_MAX_STACK_COUNT;
+/**
+ * 金额全部来自后端试算，前端不再有任何抵扣算法。
+ * 用**草稿**选择去试算，这样弹窗里的「已优惠 / 实付 / 本单可抵」反映的是眼前这次勾选，
+ * 而不是外部已确认的那份。
+ */
+// 解构出来而不是保留 est.xxx：模板里访问普通对象的嵌套 ref 不会自动解包，
+// 解构到顶层后模板可直接用 loaded / discount / payable 等名字。
+const {
+  failed,
+  loaded,
+  goodsTotal,
+  discount,
+  payable,
+  maxStackCount,
+  bestUserCouponIds,
+  isUsable,
+  reasonOf,
+  estimateOf,
+  refreshNow,
+} = useCouponEstimate(() => props.items, () => draft.value);
+
+/**
+ * 降级态：试算失败且拿不到结果。
+ * 此时不猜金额，券一律按可用展示（isUsable 在缺少评估时返回 true），
+ * 让用户仍能手动选券，最终以结算为准。
+ */
+const degraded = computed(() => !loaded.value && failed.value);
+
+/** 券列表是否可以渲染：拿到了结果，或已确认失败（降级展示） */
+const listReady = computed(() => loaded.value || degraded.value);
+
+/** 顶部「已选」计数：张数未知时不显示分母，避免渲染出「1 / null 张」 */
+const selectedCountText = computed(() =>
+  maxStackCount.value == null
+    ? `${draft.value.length} 张`
+    : `${draft.value.length} / ${maxStackCount.value} 张`,
+);
+
+/** 底部提示 */
+const stackTip = computed(() => {
+  if (degraded.value) return "优惠金额暂时算不出来，以结算为准";
+  if (maxStackCount.value == null) return "优惠金额计算中…";
+  return maxStackCount.value > 1
+    ? `最多可叠加 ${maxStackCount.value} 张券（折扣券限 1 张）`
+    : "当前仅可使用 1 张券";
 });
-const maxRatio = computed(() => {
-  const r = Number(props.rules?.maxDiscountRatio);
-  return Number.isFinite(r) && r > 0 && r <= 1 ? r : DEFAULT_MAX_RATIO;
-});
+
+/** 商品金额：以后端试算为准（前端购物车里缓存的价格可能已过期） */
+const goodsTotalText = computed(() =>
+  loaded.value ? `¥${formatPrice(goodsTotal.value)}` : "计算中…",
+);
 
 watch(
   () => props.modelValue,
@@ -194,55 +224,42 @@ watch(
     if (open) {
       activeTab.value = "ok";
       draft.value = [...props.selectedIds];
+      // 打开即算一次，不让用户干等防抖
+      refreshNow();
     }
   },
 );
 
-/* ---------- 可用性判定 ---------- */
-const withReason = computed(() =>
-  props.coupons.map((c) => {
-    const item = { ...c };
-    item.__reason = couponReason(
-      c,
-      props.totalAmount,
-      props.subTotals,
-      props.subTotalsUnknown,
-    );
-    return item;
-  }),
+/* ---------- 可用性判定（全部由后端裁定） ---------- */
+/**
+ * 可用 / 不可用完全由后端试算裁定 —— 门槛、适用范围、有效期、配置异常都在那边判，
+ * 前端只负责分组展示。结果没回来时 est.isUsable 一律返回 true，
+ * 不会把一整列券误判成不可用。
+ */
+const available = computed(() =>
+  props.coupons.filter((c) => isUsable(c.userCouponId)),
+);
+const unavailable = computed(() =>
+  props.coupons.filter((c) => !isUsable(c.userCouponId)),
 );
 
-const available = computed(() => withReason.value.filter((c) => !c.__reason));
-const unavailable = computed(() => withReason.value.filter((c) => c.__reason));
+/** 不可用原因（后端给的），如「差 ¥50 可用」「本单无该分类商品」 */
+const couponReasonOf = (c) => reasonOf(c.userCouponId);
 
-/* ---------- 金额估算（与后端 calcCouponsDiscount 对齐） ---------- */
-const calcTotal = (list) =>
-  calcTotalDiscount(
-    list,
-    props.totalAmount,
-    props.subTotals,
-    maxRatio.value,
-    props.subTotalsUnknown,
-  );
-
+/** 已选券对象（只取可用的，与后端「只认可用券」的口径一致） */
 const selectedCoupons = computed(() =>
   draft.value
     .map((id) => available.value.find((c) => c.userCouponId === id))
     .filter(Boolean),
 );
 
-const discount = computed(() => calcTotal(selectedCoupons.value));
-const payable = computed(() =>
-  Math.round(Math.max(0, props.totalAmount - discount.value) * 100) / 100,
-);
+/* ---------- 金额（全部来自后端） ---------- */
 
-/** 单张券在当前已选组合基础上的预估抵扣（用于卡片展示） */
-const estimate = (c) => {
-  const others = selectedCoupons.value.filter((x) => x.userCouponId !== c.userCouponId);
-  const withIt = calcTotal([...others, c]);
-  const withoutIt = calcTotal(others);
-  return Math.round(Math.max(0, withIt - withoutIt) * 100) / 100;
-};
+/** 卡片上的「本单可抵」：结果没回来时不编数字 */
+const amountText = (c) =>
+  loaded.value
+    ? `本单可抵 ¥${formatPrice(estimateOf(c.userCouponId))}`
+    : "本单可抵金额待计算";
 
 /* ---------- 选择交互 ---------- */
 const isOn = (c) => draft.value.includes(c.userCouponId);
@@ -258,7 +275,9 @@ const canCheck = (c) => {
   const cur = selectedCoupons.value;
   if (!cur.length) return true;
   if (blockedByDiscount(c)) return false;
-  if (cur.length >= maxStackCount.value) return false;
+  // 规则未加载（maxStackCount 为 null）时不限制张数，交由后端在结算时裁定
+  if (maxStackCount.value != null && cur.length >= maxStackCount.value)
+    return false;
   return isStackable(c) && cur.every(isStackable);
 };
 
@@ -268,7 +287,7 @@ const blockReason = (c) => {
   const cur = selectedCoupons.value;
   if (!cur.length) return "";
   if (blockedByDiscount(c)) return "折扣券每单限 1 张";
-  if (cur.length >= maxStackCount.value)
+  if (maxStackCount.value != null && cur.length >= maxStackCount.value)
     return `最多叠加 ${maxStackCount.value} 张`;
   if (!isStackable(c)) return "该券不可与已选券同用";
   if (!cur.every(isStackable)) return "已选了不可叠加券";
@@ -294,20 +313,14 @@ const toggle = (c) => {
 
 /* ---------- 一键最优 ---------- */
 /**
- * 求解逻辑在 @/utils/coupon.js 的 pickBestCoupons，这里只负责把结果写回草稿态。
- * 抽出去是为了让算法可被单测，也让购物车页/抽屉将来能复用。
+ * 最优组合的搜索在后端（只有它知道券的真实可用性与叠加规则），
+ * 前端只负责把返回的 userCouponId 列表写回草稿态。
  */
 const useBest = () => {
-  const picked = pickBestCoupons({
-    coupons: props.coupons,
-    totalAmount: props.totalAmount,
-    subTotals: props.subTotals,
-    maxStackCount: maxStackCount.value,
-    maxRatio: maxRatio.value,
-    unknown: props.subTotalsUnknown,
-  });
-  draft.value = picked.map((c) => c.userCouponId);
-  if (!draft.value.length) logger.log("当前没有可提升优惠的券组合");
+  if (!loaded.value) return;
+  const picked = [...bestUserCouponIds.value];
+  draft.value = picked;
+  if (!picked.length) ElMessage.info("当前没有能进一步省钱的券组合");
 };
 
 const clearAll = () => {
