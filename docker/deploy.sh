@@ -28,8 +28,34 @@ echo "🔨 构建镜像..."
 # 不用 --no-cache：复用依赖下载层缓存，加快部署且减少网络波动导致的构建失败
 docker compose build
 
+# 若 mysql-data 卷为空（首次部署/换服务器），MySQL 会执行 initdb 建库。
+# initdb 失败不会阻塞容器启动，也不阻塞后端启动，问题要等运行时才暴露，所以必须显式校验。
+VOL_NAME="$(docker compose config --format json 2>/dev/null | grep -o '"name":"[^"]*mysql-data"' | head -1 | cut -d'"' -f4)"
+[ -z "$VOL_NAME" ] && VOL_NAME="$(basename "$PWD")_mysql-data"
+VOL_EXISTS="$(docker volume ls -q -f "name=^${VOL_NAME}$" 2>/dev/null || true)"
+
 echo "🚀 启动服务..."
 docker compose up -d
+
+if [ -z "$VOL_EXISTS" ]; then
+    echo ""
+    echo "🔄 检测到首次初始化数据库，等待 MySQL 导入建库脚本..."
+    for i in $(seq 1 60); do
+        if docker exec furniture-mysql mysql -uroot -p"${MYSQL_ROOT_PASSWORD:-root}" \
+             -e "SELECT 1 FROM \`furniture-system\`.\`order\` LIMIT 1;" >/dev/null 2>&1; then
+            echo "✅ 数据库初始化完成（order 表已就绪）"
+            break
+        fi
+        [ "$i" -eq 60 ] && {
+            echo ""
+            echo "❌ 数据库初始化失败或超时：order 表未建出！"
+            echo "   请查看 MySQL 初始化日志定位报错："
+            echo "     docker logs furniture-mysql"
+            exit 1
+        }
+        sleep 2
+    done
+fi
 
 echo ""
 echo "=========================================="

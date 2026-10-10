@@ -13,7 +13,10 @@ services:
       - "3307:3306"
     volumes:
       - mysql-data:/var/lib/mysql
-      - ./sql:/docker-entrypoint-initdb.d
+      # 只挂载全量建库脚本：initdb 目录按「文件名字典序」执行，
+      # 若整个 sql/ 挂进去，coupon-module.sql（含 DROP TABLE coupon）会排在主脚本之前，
+      # 导致主脚本执行中断、order 等表建不出来。增量脚本请建库后手工按序执行。
+      - ./sql/furniture-system.sql:/docker-entrypoint-initdb.d/01-furniture-system.sql:ro
     command: >
       --character-set-server=utf8mb4
       --collation-server=utf8mb4_unicode_ci
