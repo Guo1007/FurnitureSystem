@@ -44,12 +44,12 @@ public interface CommentAppendMapper extends BaseMapper<CommentAppend> {
     List<CommentAppendVO> selectByMainCommentIds(@Param("mainCommentIds") List<Long> mainCommentIds, @Param("userId") Long userId);
 
     /**
-     * 统计指定主评论下未删除的追加内容数量。
-     * 仅统计 deleted = 0 的记录，不考虑用户级别的删除和状态过滤。
-     *
-     * @param mainCommentId 主评论ID
-     * @return 该主评论下未删除的追加内容总数
+     * 取指定主评论下已用过的最大追评序号，没有追评时返回 0。
+     * <p>
+     * 刻意**不过滤 deleted**：唯一索引 uk_main_append_num 不含删除标记，被软删的记录仍占着序号。
+     * 若按未删除条数（COUNT）生成序号，管理员删掉任意一条后新一轮追评就会撞唯一键，
+     * 用户会一直看到「操作繁忙」且永远失败。
      */
-    @Select("SELECT COUNT(*) FROM comment_append WHERE main_comment_id = #{mainCommentId} AND deleted = 0")
-    int countByMainCommentId(@Param("mainCommentId") Long mainCommentId);
+    @Select("SELECT COALESCE(MAX(append_num), 0) FROM comment_append WHERE main_comment_id = #{mainCommentId}")
+    int maxAppendNumByMainCommentId(@Param("mainCommentId") Long mainCommentId);
 }

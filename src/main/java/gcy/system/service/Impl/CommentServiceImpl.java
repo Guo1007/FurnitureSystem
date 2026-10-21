@@ -214,7 +214,7 @@ public class CommentServiceImpl implements ICommentService {
     }
 
     /**
-     * 追评：校验主评价归属，按已有追评数生成序号并插入，同步主评价的追评标记与最新追评时间。
+     * 追评：校验主评价归属，按已用过的最大序号 +1 插入，同步主评价的追评标记与最新追评时间。
      */
     @Override
     @Transactional
@@ -226,9 +226,9 @@ public class CommentServiceImpl implements ICommentService {
         if (!mainComment.getUserId().equals(userId)) {
             throw new BusinessException("只能追评自己的评价");
         }
-        int appendCount = commentAppendMapper.countByMainCommentId(append.getMainCommentId());
+        int maxAppendNum = commentAppendMapper.maxAppendNumByMainCommentId(append.getMainCommentId());
         append.setUserId(userId);
-        append.setAppendNum(appendCount + 1);
+        append.setAppendNum(maxAppendNum + 1);
         append.setStatus(0);
         append.setAppendTime(LocalDateTime.now());
         try {
@@ -249,7 +249,7 @@ public class CommentServiceImpl implements ICommentService {
     }
 
     /**
-     * 软删除评价（user_deleted=1），仅发表者本人可删。
+     * 删除评价（逻辑删除 deleted=1；唯一约束由 uk_key 生成列释放），仅发表者本人可删。
      */
     @Override
     @Transactional
@@ -309,9 +309,10 @@ public class CommentServiceImpl implements ICommentService {
      */
     private void doDeleteReview(GoodsComment review) {
         Long reviewId = review.getId();
-        // 主评价必须物理删除：uk_order_user_goods(order_id, user_id, goods_id) 下软删仍占唯一键，
-        // 用户删后重新评价 insert 必撞索引；追评/回复可软删，但主评价已物理删除，
-        // 留下会成孤儿，故一并清理。
+        // 三张表都是逻辑删除：实体上有 @TableLogic，delete / deleteById 实际执行的是 UPDATE deleted=1。
+        // 「删了还能重新评价」不靠物理删除，而是靠 goods_comment.uk_key 生成列——删除后 uk_key 置 NULL，
+        // 唯一索引随之释放。改成物理删除会撞上 comment_append / review_comment 的 RESTRICT 外键，
+        // 也会把通知里的 review_id 置空，代价远大于收益。
         commentAppendMapper.delete(new LambdaQueryWrapper<CommentAppend>()
                 .eq(CommentAppend::getMainCommentId, reviewId));
         reviewCommentMapper.delete(new LambdaQueryWrapper<ReviewComment>()
