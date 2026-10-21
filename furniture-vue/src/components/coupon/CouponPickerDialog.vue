@@ -121,9 +121,6 @@
           <span v-else class="cp-footer__tip">{{ stackTip }}</span>
         </div>
         <div class="cp-footer__btns">
-          <el-button size="default" :disabled="!loaded" @click="useBest"
-            >最优组合</el-button
-          >
           <el-button size="default" @click="clearAll">不使用</el-button>
           <el-button type="primary" size="default" @click="confirm">确定</el-button>
         </div>
@@ -134,7 +131,6 @@
 
 <script setup>
 import { computed, ref, watch } from "vue";
-import { ElMessage } from "element-plus";
 import { formatDay, isDiscount } from "@/utils/coupon.js";
 import { useCouponEstimate } from "@/composables/useCouponEstimate.js";
 
@@ -180,7 +176,6 @@ const {
   discount,
   payable,
   maxStackCount,
-  bestUserCouponIds,
   isUsable,
   reasonOf,
   estimateOf,
@@ -313,18 +308,6 @@ const toggle = (c) => {
     // 不可叠加券：独占
     draft.value = [c.userCouponId];
   }
-};
-
-/* ---------- 一键最优 ---------- */
-/**
- * 最优组合的搜索在后端（只有它知道券的真实可用性与叠加规则），
- * 前端只负责把返回的 userCouponId 列表写回草稿态。
- */
-const useBest = () => {
-  if (!loaded.value) return;
-  const picked = [...bestUserCouponIds.value];
-  draft.value = picked;
-  if (!picked.length) ElMessage.info("当前没有能进一步省钱的券组合");
 };
 
 const clearAll = () => {

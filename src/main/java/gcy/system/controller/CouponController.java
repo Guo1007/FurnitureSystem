@@ -73,7 +73,7 @@ public class CouponController {
     }
 
     /**
-     * 叠加规则（选券弹窗用），供前端约束可勾选张数并计算最优组合；最终以后端下单校验为准。
+     * 叠加规则（选券弹窗用），供前端约束可勾选张数；最终以后端下单校验为准。
      *
      * @return maxStackCount（最大叠加张数）与 maxDiscountRatio（总抵扣上限比例，0~1）
      */

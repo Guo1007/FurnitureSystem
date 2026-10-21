@@ -3,7 +3,7 @@
  *
  * ⚠️ 这里已经没有、也不要再放任何抵扣算法。
  *
- * 抵扣与最优组合的计算已经整体搬到后端（`POST /order/estimate`，实现在
+ * 抵扣的计算已经整体搬到后端（`POST /order/estimate`，实现在
  * `OrderServiceImpl#estimate`），前端通过 `useCouponEstimate()` 取结果。
  * 这么做的原因是一个真实踩过的坑：算法原先在 JS 和 Java 里各写了一遍，
  * 两边必须逐字对齐、却没有任何东西保证这一点 —— 改了一边忘了另一边，

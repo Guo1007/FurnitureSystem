@@ -52,11 +52,4 @@ public class CouponEstimateVO {
      */
     @Schema(description = "每张券的可用性评估")
     private List<CouponOptionVO> couponOptions;
-
-    /**
-     * 当前这单的最优券组合（供「最优组合」按钮一键选择）。
-     * 没有能省钱的组合时为空数组。
-     */
-    @Schema(description = "最优券组合的 userCouponId 列表")
-    private List<Long> bestUserCouponIds;
 }

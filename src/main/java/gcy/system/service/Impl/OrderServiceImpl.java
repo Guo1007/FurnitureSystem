@@ -517,11 +517,11 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         }
         total = total.max(BigDecimal.ZERO).min(goodsTotal);
         // 总抵扣比例封顶：多张券叠加时，实付不低于「1 - 上限比例」。
-        // 比例由调用方传入：本方法会被「最优组合」搜索调用上百次，不能每次都去读配置。
+        // 比例由调用方传入，避免每次算价都去读配置。
         if (ratio != null && ratio.compareTo(BigDecimal.ZERO) > 0) {
             BigDecimal cap = goodsTotal.multiply(ratio).setScale(2, RoundingMode.HALF_UP);
             if (total.compareTo(cap) > 0) {
-                // 搜索过程中封顶是常态，用 debug 避免刷屏
+                // 封顶是正常业务结果，用 debug 避免刷屏
                 log.debug("优惠券叠加抵扣超出上限比例 {}，已封顶: 原抵扣={}, 封顶后={}", ratio, total, cap);
                 total = cap;
             }
@@ -556,7 +556,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     }
 
     /**
-     * 「最优组合」搜索的候选：一张具体的用户券。
+     * 试算用的券候选：一张具体的用户券。
      * <p>
      * 刻意不复用 {@link Coupon} 做身份：同一模板可被同一用户领多份（多条 user_coupon 共用一条 coupon），
      * 按对象身份去重会算错。
@@ -571,14 +571,8 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         }
     }
 
-    /** 回溯搜索的可变状态容器（Java 没有闭包捕获可变变量） */
-    private static class SearchState {
-        List<CouponCandidate> best;
-        BigDecimal bestVal;
-    }
-
     /**
-     * 下单试算：算商品金额、评估每张券、算出当前所选抵扣并给出最优组合。
+     * 下单试算：算商品金额、评估每张券、算出当前所选抵扣。
      * <p>
      * 全程只读，算价走 {@link #priceCart(List)}，与下单同一段代码，两边金额必然一致。
      * 本接口是前端展示金额的唯一来源，前端不再保留抵扣算法。
@@ -648,12 +642,10 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
                     marginal));
         }
 
-        List<Long> bestIds = pickBestCouponIds(evaluations, cart.goodsTotal,
-                cart.subTotalByType, maxStackCount, maxRatio);
         BigDecimal payable = cart.goodsTotal.subtract(totalDiscount).max(BigDecimal.ZERO);
 
         return Result.ok(new CouponEstimateVO(cart.goodsTotal, totalDiscount, payable,
-                maxStackCount, options, bestIds));
+                maxStackCount, options));
     }
 
     /**
@@ -715,22 +707,6 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         return new CouponEvaluation(uc, c, null);
     }
 
-    /** 是否可叠加（stackable=1） */
-    private boolean isStackable(Coupon c) {
-        return c.getStackable() != null && c.getStackable() == 1;
-    }
-
-    /** 是否折扣券（type=2） */
-    private boolean isDiscountCoupon(Coupon c) {
-        return c.getType() != null && c.getType() == 2;
-    }
-
-    /** 单张券单独使用时的抵扣，仅用于搜索里的排序启发 */
-    private BigDecimal singleDiscount(Coupon c, BigDecimal goodsTotal,
-                                      Map<Long, BigDecimal> subTotalByType) {
-        return calcCouponDiscount(c, resolveCouponBase(c, goodsTotal, subTotalByType));
-    }
-
     /** 把候选券映射成 Coupon 列表后走与下单完全相同的抵扣计算 */
     private BigDecimal discountOfCandidates(List<CouponCandidate> candidates, BigDecimal goodsTotal,
                                             Map<Long, BigDecimal> subTotalByType, BigDecimal maxRatio) {
@@ -739,115 +715,6 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         }
         List<Coupon> list = candidates.stream().map(x -> x.coupon).collect(Collectors.toList());
         return calcCouponsDiscount(list, goodsTotal, subTotalByType, maxRatio);
-    }
-
-    /**
-     * 求解「最优券组合」，返回选中的 userCouponId 列表。
-     * <p>
-     * 「不可叠加券与其它券互斥」决定了合法组合只有两种形态：单独用一张不可叠加券，或用若干张可叠加券
-     * （张数 ≤ maxStackCount，折扣券最多 1 张）；两种形态各求最优再比较即可覆盖全部，无需穷举。
-     * 算法是带排序启发的贪心 + 小规模排列择优，不保证数学最优，券少张数上限小时已足够。
-     */
-    private List<Long> pickBestCouponIds(List<CouponEvaluation> evaluations, BigDecimal goodsTotal,
-                                         Map<Long, BigDecimal> subTotalByType, int maxStackCount,
-                                         BigDecimal maxRatio) {
-        List<CouponCandidate> usable = evaluations.stream()
-                .filter(CouponEvaluation::usable)
-                .filter(e -> e.coupon != null)
-                .map(e -> new CouponCandidate(e.userCoupon.getId(), e.coupon))
-                .toList();
-        if (usable.isEmpty() || goodsTotal.compareTo(BigDecimal.ZERO) <= 0 || maxStackCount < 1) {
-            return new ArrayList<>();
-        }
-
-        List<CouponCandidate> best = new ArrayList<>();
-        BigDecimal bestVal = BigDecimal.ZERO;
-
-        // 形态①：单独使用一张不可叠加券
-        for (CouponCandidate c : usable) {
-            if (isStackable(c.coupon)) {
-                continue;
-            }
-            BigDecimal v = discountOfCandidates(List.of(c), goodsTotal, subTotalByType, maxRatio);
-            if (v.compareTo(bestVal) > 0) {
-                bestVal = v;
-                best = new ArrayList<>(List.of(c));
-            }
-        }
-
-        // 形态②：可叠加券组合。折扣券优先（折扣应作用于尽可能大的基数），同类按单张抵扣降序
-        List<CouponCandidate> ranked = usable.stream()
-                .filter(c -> isStackable(c.coupon)).sorted((a, b) -> {
-                    int da = isDiscountCoupon(a.coupon) ? 0 : 1;
-                    int db = isDiscountCoupon(b.coupon) ? 0 : 1;
-                    if (da != db) {
-                        return da - db;
-                    }
-                    // BigDecimal 不能直接相减，用 compareTo 表示降序
-                    return singleDiscount(b.coupon, goodsTotal, subTotalByType)
-                            .compareTo(singleDiscount(a.coupon, goodsTotal, subTotalByType));
-                }).toList();
-
-        List<CouponCandidate> picked = new ArrayList<>();
-        for (CouponCandidate c : ranked) {
-            if (picked.size() >= maxStackCount) {
-                break;
-            }
-            // 折扣券每单限 1 张
-            if (isDiscountCoupon(c.coupon)
-                    && picked.stream().anyMatch(x -> isDiscountCoupon(x.coupon))) {
-                continue;
-            }
-            List<CouponCandidate> next = new ArrayList<>(picked);
-            next.add(c);
-            if (discountOfCandidates(next, goodsTotal, subTotalByType, maxRatio)
-                    .compareTo(discountOfCandidates(picked, goodsTotal, subTotalByType, maxRatio)) > 0) {
-                picked = next;
-            }
-        }
-        picked = bestPermutation(picked, goodsTotal, subTotalByType, maxRatio);
-        if (discountOfCandidates(picked, goodsTotal, subTotalByType, maxRatio).compareTo(bestVal) > 0) {
-            best = picked;
-        }
-        return best.stream().map(x -> x.userCouponId).collect(Collectors.toList());
-    }
-
-    /**
-     * 组合内顺序会影响结果（折扣券的基数随其它券的抵扣递减），枚举排列取最优顺序。
-     * 最多 5 张（120 种排列），超过 5 张直接返回原顺序，避免阶乘爆炸。
-     */
-    private List<CouponCandidate> bestPermutation(List<CouponCandidate> list, BigDecimal goodsTotal,
-                                                  Map<Long, BigDecimal> subTotalByType,
-                                                  BigDecimal maxRatio) {
-        if (list == null || list.size() < 2 || list.size() > 5) {
-            return list;
-        }
-        SearchState state = new SearchState();
-        state.best = list;
-        state.bestVal = discountOfCandidates(list, goodsTotal, subTotalByType, maxRatio);
-        walkPermutations(list, new ArrayList<>(), state, goodsTotal, subTotalByType, maxRatio);
-        return state.best;
-    }
-
-    /** 排列回溯：每层都克隆列表，避免共享引用被后续层改坏 */
-    private void walkPermutations(List<CouponCandidate> rest, List<CouponCandidate> current,
-                                  SearchState state, BigDecimal goodsTotal,
-                                  Map<Long, BigDecimal> subTotalByType, BigDecimal maxRatio) {
-        if (rest.isEmpty()) {
-            BigDecimal v = discountOfCandidates(current, goodsTotal, subTotalByType, maxRatio);
-            if (v.compareTo(state.bestVal) > 0) {
-                state.bestVal = v;
-                state.best = new ArrayList<>(current);
-            }
-            return;
-        }
-        for (int i = 0; i < rest.size(); i++) {
-            List<CouponCandidate> nextRest = new ArrayList<>(rest);
-            CouponCandidate pickedOne = nextRest.remove(i);
-            List<CouponCandidate> nextCur = new ArrayList<>(current);
-            nextCur.add(pickedOne);
-            walkPermutations(nextRest, nextCur, state, goodsTotal, subTotalByType, maxRatio);
-        }
     }
 
     /**

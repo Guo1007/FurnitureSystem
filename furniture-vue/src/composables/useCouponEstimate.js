@@ -142,9 +142,6 @@ export function useCouponEstimate(getItems, getCouponIds, options = {}) {
     return Number(o?.estimate) || 0;
   };
 
-  /** 最优组合推荐；未加载时为空数组 */
-  const bestUserCouponIds = computed(() => estimate.value?.bestUserCouponIds || []);
-
   /** 是否已经有有效结果（用于区分「还没算出来」和「算出来是 0」） */
   const loaded = computed(() => estimate.value != null);
 
@@ -157,7 +154,6 @@ export function useCouponEstimate(getItems, getCouponIds, options = {}) {
     payable,
     goodsTotal,
     maxStackCount,
-    bestUserCouponIds,
     isUsable,
     reasonOf,
     estimateOf,
