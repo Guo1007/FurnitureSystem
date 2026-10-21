@@ -8,6 +8,7 @@ import dev.langchain4j.data.document.splitter.DocumentSplitters;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.memory.chat.ChatMemoryProvider;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
+import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.rag.content.retriever.ContentRetriever;
 import dev.langchain4j.rag.content.retriever.EmbeddingStoreContentRetriever;
 import dev.langchain4j.store.embedding.EmbeddingStore;
@@ -15,6 +16,7 @@ import dev.langchain4j.store.embedding.EmbeddingStoreIngestor;
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.core.Cursor;
@@ -106,7 +108,14 @@ public class AiConfig {
      * @return 向量嵌入存储实例
      */
     @Bean
-    public EmbeddingStore<TextSegment> embeddingStore() {
+    public EmbeddingStore<TextSegment> embeddingStore(ObjectProvider<EmbeddingModel> embeddingModelProvider) {
+        EmbeddingModel embeddingModel = embeddingModelProvider.getIfAvailable();
+        if (embeddingModel == null) {
+            // 宁可明确报错并跳过 RAG，也不要退回 SPI 的 BGE 模型造成维度不一致的静默失效
+            log.error("未找到 EmbeddingModel bean，跳过知识库摄入，RAG 不会生效（AI 对话仍可用）。"
+                    + "请检查 langchain4j.open-ai.embedding-model 配置与 EMBEDDING_KEY");
+            return redisEmbeddingStore;
+        }
         Boolean alreadyIngested = stringRedisTemplate.hasKey(EMBEDDING_INGESTED_KEY);
         if (alreadyIngested) {
             log.info("知识库向量已存在，跳过 Embedding 摄入");
@@ -127,6 +136,8 @@ public class AiConfig {
         // maxOverlapSizeInChars：相邻两块之间，重复保留多少字符。
         DocumentSplitter splitter = DocumentSplitters.recursive(500, 100);
         EmbeddingStoreIngestor ingestor = EmbeddingStoreIngestor.builder()
+                // 显式使用 Spring 管理的模型（与建索引时的维度来源一致）
+                .embeddingModel(embeddingModel)
                 .embeddingStore(redisEmbeddingStore)
                 .documentSplitter(splitter)
                 .build();
@@ -167,8 +178,17 @@ public class AiConfig {
      * @return 内容检索器实例
      */
     @Bean
-    public ContentRetriever contentRetriever(EmbeddingStore<TextSegment> embeddingStore) {
+    public ContentRetriever contentRetriever(EmbeddingStore<TextSegment> embeddingStore,
+                                             ObjectProvider<EmbeddingModel> embeddingModelProvider) {
+        EmbeddingModel embeddingModel = embeddingModelProvider.getIfAvailable();
+        if (embeddingModel == null) {
+            // 检索端若退回 SPI 的 BGE 模型，会用 384 维向量去查 1024 维索引，永远查不到
+            log.error("未找到 EmbeddingModel bean，RAG 检索将始终返回空结果（AI 对话仍可用）");
+            return query -> List.of();
+        }
         return EmbeddingStoreContentRetriever.builder()
+                // 必须与摄入端、以及建索引时的维度来源保持一致
+                .embeddingModel(embeddingModel)
                 .embeddingStore(embeddingStore)
                 .minScore(0.5)
                 .maxResults(3)
