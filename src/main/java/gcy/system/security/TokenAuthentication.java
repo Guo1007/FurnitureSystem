@@ -5,6 +5,7 @@ import lombok.Getter;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
+import java.io.Serial;
 import java.util.Collections;
 
 /**
@@ -23,6 +24,7 @@ public class TokenAuthentication extends AbstractAuthenticationToken {
     /**
      * 序列化版本号
      */
+    @Serial
     private static final long serialVersionUID = 1L;
 
     /**
