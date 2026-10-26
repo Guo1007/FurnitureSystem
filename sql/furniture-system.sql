@@ -11,7 +11,7 @@
  Target Server Version : 80043 (8.0.43)
  File Encoding         : 65001
 
- Date: 10/10/2026 17:05:30
+ Date: 26/10/2026 11:04:22
 */
 
 SET NAMES utf8mb4;
@@ -37,6 +37,28 @@ CREATE TABLE `admin_notify_setting`  (
 INSERT INTO `admin_notify_setting` VALUES (1, 'new_order', 0, NULL, '2026-08-12 15:13:04');
 INSERT INTO `admin_notify_setting` VALUES (2, 'refund', 0, NULL, '2026-08-12 15:13:04');
 INSERT INTO `admin_notify_setting` VALUES (3, 'stock_alert', 1, '1', '2026-08-12 15:13:04');
+
+-- ----------------------------
+-- Table structure for cart_item
+-- ----------------------------
+DROP TABLE IF EXISTS `cart_item`;
+CREATE TABLE `cart_item`  (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '购物车项ID（自增主键）',
+  `user_id` bigint NOT NULL COMMENT '所属用户ID',
+  `furniture_id` bigint NOT NULL COMMENT '家具ID',
+  `sku_id` bigint NOT NULL DEFAULT 0 COMMENT 'SKU ID；无规格商品存 0，不可用 NULL（见文件头说明）',
+  `quantity` int NOT NULL DEFAULT 1 COMMENT '购买数量',
+  `checked` tinyint NOT NULL DEFAULT 1 COMMENT '结算勾选状态(0未勾选1勾选)',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '加入购物车时间',
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '最后更新时间',
+  PRIMARY KEY (`id`) USING BTREE,
+  UNIQUE INDEX `uk_user_furniture_sku`(`user_id` ASC, `furniture_id` ASC, `sku_id` ASC) USING BTREE,
+  INDEX `idx_user`(`user_id` ASC) USING BTREE
+) ENGINE = InnoDB AUTO_INCREMENT = 13 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '购物车项' ROW_FORMAT = DYNAMIC;
+
+-- ----------------------------
+-- Records of cart_item
+-- ----------------------------
 
 -- ----------------------------
 -- Table structure for comment_append
@@ -196,7 +218,7 @@ CREATE TABLE `furniture`  (
 -- Records of furniture
 -- ----------------------------
 INSERT INTO `furniture` VALUES (1, '实木餐桌', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/383347bc93214032b2676b9f43cc14bb.jpg', 4, 210.00, '顾家', 31, '进口橡木，环保漆面，可容纳6-8人', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/383347bc93214032b2676b9f43cc14bb.jpg,https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/0269e9dfedb641689fec32592a3d31ca.jpg,https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/8198d5a50020494b892a68899822e5ab.jpg', '', 0, '2026-07-12 01:22:08', '2026-09-09 11:08:00', 1, 0);
-INSERT INTO `furniture` VALUES (2, '真皮沙发', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/daf271d8f3614528b5b98f39b2ec5011.jpg', 1, 500.00, '顾家', 40, '头层牛皮，实木框架，三人位', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/daf271d8f3614528b5b98f39b2ec5011.jpg,https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/846db54cabac49ee84ed28ba8a5aa4cf.jpg,https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/03159c0cd754400b903776dafcc294f7.jpg,https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/9afe94395b8849f4bd1ba87168c58979.jpg', NULL, 0, '2026-07-08 01:22:08', '2026-09-09 11:08:00', 1, 1);
+INSERT INTO `furniture` VALUES (2, '真皮沙发', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/daf271d8f3614528b5b98f39b2ec5011.jpg', 1, 500.00, '顾家', 40, '头层牛皮，实木框架，三人位', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/daf271d8f3614528b5b98f39b2ec5011.jpg,https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/846db54cabac49ee84ed28ba8a5aa4cf.jpg,https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/03159c0cd754400b903776dafcc294f7.jpg,https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/9afe94395b8849f4bd1ba87168c58979.jpg', NULL, 0, '2026-07-08 01:22:08', '2026-10-23 16:43:30', 1, 1);
 INSERT INTO `furniture` VALUES (3, '席梦思床垫', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/16cc8e9ba72446dfac657af794de4637.jpg', 2, 100.00, '顾家', 20, '独立弹簧，乳胶填充，1.8米', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/16cc8e9ba72446dfac657af794de4637.jpg', NULL, 0, '2026-07-12 01:22:08', '2026-09-09 11:08:00', 0, 1);
 INSERT INTO `furniture` VALUES (4, '书桌', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/f2d5ca4c463c4805acdf23150a449d94.jpg', 3, 90.00, '顾家', 60, '简约现代，带抽屉，1.2米宽', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/f2d5ca4c463c4805acdf23150a449d94.jpg,https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/ccb0465d12e84939ade54a55b90fc600.jpg,https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/79aac2f51e5d47828386196665dd67ff.jpg', NULL, 0, '2026-07-12 01:22:08', '2026-09-09 11:08:00', 0, 0);
 INSERT INTO `furniture` VALUES (5, '衣柜', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/d00bf36b1cb94b2e92d7f12337b2776c.jpg', 2, 500.00, '顾家', 32, '推拉门设计，大容量收纳，白色', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/d00bf36b1cb94b2e92d7f12337b2776c.jpg,https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/025c4bb2703e4eeea66bbfd68ff04986.jpg', NULL, 0, '2026-07-12 01:22:08', '2026-09-09 11:08:00', 0, 0);
@@ -206,7 +228,7 @@ INSERT INTO `furniture` VALUES (8, '床头柜', 'https://gmc-1007.oss-cn-beijing
 INSERT INTO `furniture` VALUES (9, '书架', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/92541c4cd4794d3c9b8be6ad98d29ca7.jpg', 3, 200.00, '顾家', 15, '五层开放式，钢木结合，省空间', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/92541c4cd4794d3c9b8be6ad98d29ca7.jpg,https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/2ba50a327b9b4042abb559bc72d56748.jpg', NULL, 0, '2026-07-02 01:22:08', '2026-09-09 11:08:00', 0, 1);
 INSERT INTO `furniture` VALUES (10, '鞋柜', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/2e0b2765b8074bfeb58a6658bf5c9a11.jpg', 1, 150.00, '顾家', 30, '大容量，透气设计，带换鞋凳', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/2e0b2765b8074bfeb58a6658bf5c9a11.jpg,https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/7b17ddd00653404cb94266f77a1075ee.jpg', NULL, 0, '2026-07-05 01:22:08', '2026-09-09 11:08:00', 0, 0);
 INSERT INTO `furniture` VALUES (117, '棉麻沙发', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/846db54cabac49ee84ed28ba8a5aa4cf.jpg', 1, 1557.14, '顾家', 94, '实木框架，高弹海绵', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/846db54cabac49ee84ed28ba8a5aa4cf.jpg,https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/daf271d8f3614528b5b98f39b2ec5011.jpg,https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/03159c0cd754400b903776dafcc294f7.jpg,https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/9afe94395b8849f4bd1ba87168c58979.jpg', NULL, 0, '2026-07-23 05:57:00', '2026-09-09 11:08:00', 21, 0);
-INSERT INTO `furniture` VALUES (118, '真皮沙发', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/daf271d8f3614528b5b98f39b2ec5011.jpg', 1, 4342.91, '源氏木语', 53, '防水防污面料', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/daf271d8f3614528b5b98f39b2ec5011.jpg,https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/846db54cabac49ee84ed28ba8a5aa4cf.jpg,https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/03159c0cd754400b903776dafcc294f7.jpg,https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/9afe94395b8849f4bd1ba87168c58979.jpg', NULL, 0, '2026-07-16 03:17:00', '2026-09-09 11:08:00', 2, 0);
+INSERT INTO `furniture` VALUES (118, '真皮沙发', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/daf271d8f3614528b5b98f39b2ec5011.jpg', 1, 4342.91, '源氏木语', 53, '防水防污面料', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/daf271d8f3614528b5b98f39b2ec5011.jpg,https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/846db54cabac49ee84ed28ba8a5aa4cf.jpg,https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/03159c0cd754400b903776dafcc294f7.jpg,https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/9afe94395b8849f4bd1ba87168c58979.jpg', NULL, 0, '2026-07-16 03:17:00', '2026-10-23 16:43:30', 2, 0);
 INSERT INTO `furniture` VALUES (119, '轻奢绒布沙发', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/03159c0cd754400b903776dafcc294f7.jpg', 1, 5408.84, '全友', 48, '实木框架，高弹海绵', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/03159c0cd754400b903776dafcc294f7.jpg,https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/846db54cabac49ee84ed28ba8a5aa4cf.jpg,https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/daf271d8f3614528b5b98f39b2ec5011.jpg,https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/9afe94395b8849f4bd1ba87168c58979.jpg', NULL, 0, '2026-07-12 23:38:00', '2026-09-09 11:08:00', 6, 1);
 INSERT INTO `furniture` VALUES (120, '工业风沙发', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/daf271d8f3614528b5b98f39b2ec5011.jpg', 1, 7474.08, '源氏木语', 46, '防水防污面料', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/daf271d8f3614528b5b98f39b2ec5011.jpg,https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/846db54cabac49ee84ed28ba8a5aa4cf.jpg,https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/03159c0cd754400b903776dafcc294f7.jpg,https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/9afe94395b8849f4bd1ba87168c58979.jpg', NULL, 0, '2026-07-23 19:02:00', '2026-09-09 11:08:00', 22, 0);
 INSERT INTO `furniture` VALUES (121, '折叠沙发床沙发', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/846db54cabac49ee84ed28ba8a5aa4cf.jpg', 1, 4635.04, '林氏', 20, '头层牛皮', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/846db54cabac49ee84ed28ba8a5aa4cf.jpg,https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/daf271d8f3614528b5b98f39b2ec5011.jpg,https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/03159c0cd754400b903776dafcc294f7.jpg,https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/9afe94395b8849f4bd1ba87168c58979.jpg', NULL, 0, '2026-07-12 21:42:00', '2026-09-09 11:08:00', 4, 0);
@@ -395,7 +417,7 @@ INSERT INTO `furniture` VALUES (303, '壁挂式花架', 'https://gmc-1007.oss-cn
 INSERT INTO `furniture` VALUES (304, '铁艺花架', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/acd694b063b34358b60f29f1629ea8a9.jpg', 1, 420.24, '双叶', 64, '适合阳台客厅', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/acd694b063b34358b60f29f1629ea8a9.jpg,https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/e0a67141bb6f45519137785157c3a64b.jpg', NULL, 0, '2026-07-18 18:50:00', '2026-09-09 11:08:01', 0, 0);
 INSERT INTO `furniture` VALUES (305, '铁艺花架', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/acd694b063b34358b60f29f1629ea8a9.jpg', 1, 494.10, '曲美', 5, '适合阳台客厅', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/acd694b063b34358b60f29f1629ea8a9.jpg,https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/e0a67141bb6f45519137785157c3a64b.jpg', NULL, 0, '2026-08-01 06:21:00', '2026-09-09 11:08:01', 13, 1);
 INSERT INTO `furniture` VALUES (306, '简约花架', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/e0a67141bb6f45519137785157c3a64b.jpg', 1, 531.70, '宜家', 75, '实木材质', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/e0a67141bb6f45519137785157c3a64b.jpg,https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/acd694b063b34358b60f29f1629ea8a9.jpg', NULL, 0, '2026-07-12 18:30:00', '2026-09-09 11:08:01', 0, 0);
-INSERT INTO `furniture` VALUES (307, '多层花架', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/e0a67141bb6f45519137785157c3a64b.jpg', 1, 362.06, '林氏', 61, '铁艺复古', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/e0a67141bb6f45519137785157c3a64b.jpg,https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/acd694b063b34358b60f29f1629ea8a9.jpg', NULL, 0, '2026-07-16 19:28:00', '2026-09-09 11:08:01', 18, 1);
+INSERT INTO `furniture` VALUES (307, '多层花架', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/e0a67141bb6f45519137785157c3a64b.jpg', 1, 362.06, '林氏', 61, '铁艺复古', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/e0a67141bb6f45519137785157c3a64b.jpg,https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/acd694b063b34358b60f29f1629ea8a9.jpg', NULL, 0, '2026-07-16 19:28:00', '2026-10-23 14:25:26', 18, 1);
 INSERT INTO `furniture` VALUES (308, '实木花架', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/e0a67141bb6f45519137785157c3a64b.jpg', 1, 349.31, '曲美', 94, '实木材质', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/e0a67141bb6f45519137785157c3a64b.jpg,https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/acd694b063b34358b60f29f1629ea8a9.jpg', NULL, 0, '2026-07-17 20:35:00', '2026-09-09 11:08:01', 1, 0);
 INSERT INTO `furniture` VALUES (309, '梯式花架', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/e0a67141bb6f45519137785157c3a64b.jpg', 1, 418.67, '全友', 94, '实木材质', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/e0a67141bb6f45519137785157c3a64b.jpg,https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/acd694b063b34358b60f29f1629ea8a9.jpg', NULL, 0, '2026-07-16 03:27:00', '2026-09-09 11:08:01', 6, 0);
 INSERT INTO `furniture` VALUES (310, '复古花架', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/acd694b063b34358b60f29f1629ea8a9.jpg', 1, 409.74, '芝华仕', 25, '适合阳台客厅', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/acd694b063b34358b60f29f1629ea8a9.jpg,https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/e0a67141bb6f45519137785157c3a64b.jpg', NULL, 0, '2026-07-04 22:42:00', '2026-09-09 11:08:01', 11, 0);
@@ -450,7 +472,7 @@ INSERT INTO `furniture` VALUES (358, '布艺换鞋凳', 'https://gmc-1007.oss-cn
 INSERT INTO `furniture` VALUES (359, '实木换鞋凳', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/805e5ab9a29c4cf1aa5f6d1cb19f491a.jpg', 1, 493.82, '林氏', 52, '皮质坐垫', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/805e5ab9a29c4cf1aa5f6d1cb19f491a.jpg,https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/4ac9c00f8e7f444292a03aa16820c173.jpg', NULL, 0, '2026-07-30 00:22:00', '2026-09-09 11:08:01', 4, 0);
 INSERT INTO `furniture` VALUES (360, '北欧换鞋凳', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/805e5ab9a29c4cf1aa5f6d1cb19f491a.jpg', 1, 510.02, '宜家', 2, '简约设计', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/805e5ab9a29c4cf1aa5f6d1cb19f491a.jpg,https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/4ac9c00f8e7f444292a03aa16820c173.jpg', NULL, 0, '2026-07-09 19:04:00', '2026-09-09 11:08:01', 17, 0);
 INSERT INTO `furniture` VALUES (361, '折叠换鞋凳', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/805e5ab9a29c4cf1aa5f6d1cb19f491a.jpg', 1, 767.97, '林氏', 90, '带储物功能', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/805e5ab9a29c4cf1aa5f6d1cb19f491a.jpg,https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/4ac9c00f8e7f444292a03aa16820c173.jpg', NULL, 0, '2026-07-15 04:10:00', '2026-09-09 11:08:01', 8, 1);
-INSERT INTO `furniture` VALUES (362, '长条换鞋凳', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/805e5ab9a29c4cf1aa5f6d1cb19f491a.jpg', 1, 119.18, '曲美', 50, '皮质坐垫', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/805e5ab9a29c4cf1aa5f6d1cb19f491a.jpg,https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/4ac9c00f8e7f444292a03aa16820c173.jpg', NULL, 0, '2026-07-05 18:23:00', '2026-09-09 11:08:01', 4, 1);
+INSERT INTO `furniture` VALUES (362, '长条换鞋凳', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/805e5ab9a29c4cf1aa5f6d1cb19f491a.jpg', 1, 119.18, '曲美', 50, '皮质坐垫', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/805e5ab9a29c4cf1aa5f6d1cb19f491a.jpg,https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/4ac9c00f8e7f444292a03aa16820c173.jpg', NULL, 0, '2026-07-05 18:23:00', '2026-10-23 14:25:26', 4, 1);
 INSERT INTO `furniture` VALUES (363, '方形换鞋凳', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/805e5ab9a29c4cf1aa5f6d1cb19f491a.jpg', 1, 227.64, '顾家', 10, '皮质坐垫', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/805e5ab9a29c4cf1aa5f6d1cb19f491a.jpg,https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/4ac9c00f8e7f444292a03aa16820c173.jpg', NULL, 0, '2026-07-28 19:19:00', '2026-09-09 11:08:01', 0, 0);
 INSERT INTO `furniture` VALUES (364, '折叠换鞋凳', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/805e5ab9a29c4cf1aa5f6d1cb19f491a.jpg', 1, 610.82, '全友', 57, '带储物功能', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/805e5ab9a29c4cf1aa5f6d1cb19f491a.jpg,https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/4ac9c00f8e7f444292a03aa16820c173.jpg', NULL, 0, '2026-07-10 01:29:00', '2026-09-09 11:08:01', 1, 0);
 INSERT INTO `furniture` VALUES (365, '带储物换鞋凳', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/805e5ab9a29c4cf1aa5f6d1cb19f491a.jpg', 1, 624.20, '曲美', 96, '实木材质', 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/805e5ab9a29c4cf1aa5f6d1cb19f491a.jpg,https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/4ac9c00f8e7f444292a03aa16820c173.jpg', NULL, 0, '2026-07-18 18:53:00', '2026-09-09 11:08:01', 3, 0);
@@ -2880,8 +2902,9 @@ CREATE TABLE `goods_comment`  (
   `create_time` datetime NULL DEFAULT CURRENT_TIMESTAMP COMMENT '评价时间',
   `deleted` tinyint(1) NOT NULL DEFAULT 0 COMMENT '逻辑删除(0未删/1已删)',
   `user_deleted` tinyint(1) NOT NULL DEFAULT 0 COMMENT '用户删除(0未删/1已删)',
+  `uk_key` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci GENERATED ALWAYS AS (if(((`deleted` = 0) and (`user_deleted` = 0)),concat(`order_id`,_utf8mb4'-',`user_id`,_utf8mb4'-',`goods_id`),NULL)) STORED COMMENT '唯一约束键：仅未删除时参与唯一约束，逻辑删除后置 NULL 以释放索引' NULL,
   PRIMARY KEY (`id`) USING BTREE,
-  UNIQUE INDEX `uk_order_user_goods`(`order_id` ASC, `user_id` ASC, `goods_id` ASC) USING BTREE,
+  UNIQUE INDEX `uk_order_user_goods_v2`(`uk_key` ASC) USING BTREE,
   INDEX `idx_goods_id`(`goods_id` ASC) USING BTREE,
   INDEX `idx_user_id`(`user_id` ASC) USING BTREE,
   INDEX `idx_order_id`(`order_id` ASC) USING BTREE,
@@ -2896,13 +2919,13 @@ CREATE TABLE `goods_comment`  (
 -- ----------------------------
 -- Records of goods_comment
 -- ----------------------------
-INSERT INTO `goods_comment` VALUES (1, 2056279154531528705, NULL, 6, 1, 5, '非常好，值得推荐！', NULL, NULL, 0, 1, NULL, NULL, 0, NULL, '2026-05-19 01:55:34', 0, 0);
-INSERT INTO `goods_comment` VALUES (2, 2059155009276502018, NULL, 6, 2, 3, '一般般', NULL, NULL, 0, 1, NULL, NULL, 1, '2026-06-22 22:51:20', '2026-05-26 22:10:53', 0, 0);
-INSERT INTO `goods_comment` VALUES (3, 2068906960379793409, NULL, 1, 1, 5, '可以的', NULL, NULL, 0, 1, NULL, NULL, 0, NULL, '2026-06-22 20:01:57', 0, 1);
-INSERT INTO `goods_comment` VALUES (4, 2068931536669130754, NULL, 6, 1, 5, '可以', NULL, NULL, 0, 1, NULL, NULL, 0, NULL, '2026-06-22 21:38:39', 0, 0);
-INSERT INTO `goods_comment` VALUES (5, 2068932766556504066, NULL, 6, 1, 5, '1', NULL, NULL, 0, 1, NULL, NULL, 0, NULL, '2026-06-22 21:43:41', 0, 1);
-INSERT INTO `goods_comment` VALUES (10, 2068937957070610434, NULL, 6, 1, 5, '不错', '[\"https://gmc-1007.oss-cn-beijing.aliyuncs.com/comment/image/2026/06/22/c5d7b3b599934ce6ba0b862c34939c2b.jpg\"]', '', 0, 1, NULL, NULL, 1, '2026-06-22 23:14:09', '2026-06-22 22:17:35', 1, 0);
-INSERT INTO `goods_comment` VALUES (11, 2068957884301307905, NULL, 6, 2, 5, '可以', '', '', 0, 1, NULL, NULL, 0, NULL, '2026-06-22 23:23:26', 0, 0);
+INSERT INTO `goods_comment` VALUES (1, 2056279154531528705, NULL, 6, 1, 5, '非常好，值得推荐！', NULL, NULL, 0, 1, NULL, NULL, 0, NULL, '2026-05-19 01:55:34', 0, 0, DEFAULT);
+INSERT INTO `goods_comment` VALUES (2, 2059155009276502018, NULL, 6, 2, 3, '一般般', NULL, NULL, 0, 1, NULL, NULL, 1, '2026-06-22 22:51:20', '2026-05-26 22:10:53', 0, 0, DEFAULT);
+INSERT INTO `goods_comment` VALUES (3, 2068906960379793409, NULL, 1, 1, 5, '可以的', NULL, NULL, 0, 1, NULL, NULL, 0, NULL, '2026-06-22 20:01:57', 0, 1, DEFAULT);
+INSERT INTO `goods_comment` VALUES (4, 2068931536669130754, NULL, 6, 1, 5, '可以', NULL, NULL, 0, 1, NULL, NULL, 0, NULL, '2026-06-22 21:38:39', 0, 0, DEFAULT);
+INSERT INTO `goods_comment` VALUES (5, 2068932766556504066, NULL, 6, 1, 5, '1', NULL, NULL, 0, 1, NULL, NULL, 0, NULL, '2026-06-22 21:43:41', 0, 1, DEFAULT);
+INSERT INTO `goods_comment` VALUES (10, 2068937957070610434, NULL, 6, 1, 5, '不错', '[\"https://gmc-1007.oss-cn-beijing.aliyuncs.com/comment/image/2026/06/22/c5d7b3b599934ce6ba0b862c34939c2b.jpg\"]', '', 0, 1, NULL, NULL, 1, '2026-06-22 23:14:09', '2026-06-22 22:17:35', 1, 0, DEFAULT);
+INSERT INTO `goods_comment` VALUES (11, 2068957884301307905, NULL, 6, 2, 5, '可以', '', '', 0, 1, NULL, NULL, 0, NULL, '2026-06-22 23:23:26', 0, 0, DEFAULT);
 
 -- ----------------------------
 -- Table structure for icon_review_log
@@ -3016,7 +3039,7 @@ CREATE TABLE `operation_log`  (
   INDEX `idx_user_id`(`user_id` ASC) USING BTREE,
   INDEX `idx_create_time`(`create_time` ASC) USING BTREE,
   INDEX `idx_operation`(`operation` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 208 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '操作日志表' ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB AUTO_INCREMENT = 233 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '操作日志表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of operation_log
@@ -3228,6 +3251,31 @@ INSERT INTO `operation_log` VALUES (204, 1, 'Glimcy', '获取当前用户信息'
 INSERT INTO `operation_log` VALUES (205, 1, 'Glimcy', '新增优惠券', 'dto=AdminCouponFormDTO(id=null, name=惊喜券, type=1, minThreshold=500, amount=50, discount=0.8, capAmount=null, scope=0, typeId=null, totalCount=null, perUserLimit=1, claimStart=null, claimEnd=null, validType=2, validStart=null, validEnd=null, validDays=7, targetType=0, targetDays=30, status=1, stackable=0, issueType=2)', 46, '成功', '新增成功', '127.0.0.1', '2026-10-09 17:40:42');
 INSERT INTO `operation_log` VALUES (206, 1, 'Glimcy', '定向发放优惠券', 'dto=CouponGrantDTO(couponId=6, quantity=1, scene=general, sendNotification=true, sendEmail=true, remark=感谢您一直以来的支持！, userIds=[1, 2])', 53, '成功', '已向 2 位用户各发放 1 张', '127.0.0.1', '2026-10-09 17:41:18');
 INSERT INTO `operation_log` VALUES (207, 1, 'Glimcy', '获取当前用户信息', '无', 1, '成功', '', '127.0.0.1', '2026-10-09 17:42:41');
+INSERT INTO `operation_log` VALUES (208, 1, 'Glimcy', '用户登录', 'loginFormDTO=LoginFormDTO(account=3102777566@qq.com, code=***, passWord=***', 177, '成功', '', '127.0.0.1', '2026-10-23 14:19:54');
+INSERT INTO `operation_log` VALUES (209, 1, 'Glimcy', '获取当前用户信息', '无', 0, '成功', '', '127.0.0.1', '2026-10-23 14:19:54');
+INSERT INTO `operation_log` VALUES (210, 1, 'Glimcy', '创建订单', 'dto=CartFormDTO(consignee=郭名城, phone=13444444444, address=UK, remark=, itemList=[OrderItemDTO(furnitureId=307, skuId=null, quantity=1), OrderItemDTO(furnitureId=362, skuId=null, quantity=1)], userCouponId=null, userCouponIds=null)', 73, '成功', '', '127.0.0.1', '2026-10-23 14:25:23');
+INSERT INTO `operation_log` VALUES (211, 1, 'Glimcy', '取消订单', 'orderId=2113517116865634306', 23, '成功', '', '127.0.0.1', '2026-10-23 14:25:27');
+INSERT INTO `operation_log` VALUES (212, 1, 'Glimcy', '删除订单', 'orderId=2113517116865634306', 10, '成功', '', '127.0.0.1', '2026-10-23 14:25:29');
+INSERT INTO `operation_log` VALUES (213, 1, 'Glimcy', '获取当前用户信息', '无', 0, '成功', '', '127.0.0.1', '2026-10-23 14:26:05');
+INSERT INTO `operation_log` VALUES (214, 1, 'Glimcy', '创建订单', 'dto=CartFormDTO(consignee=郭名城, phone=13444444444, address=UK, remark=, itemList=[OrderItemDTO(furnitureId=526, skuId=null, quantity=1), OrderItemDTO(furnitureId=536, skuId=null, quantity=1)], userCouponId=null, userCouponIds=[7, 6, 4, 5, 3, 1])', 92, '失败', '最多叠加使用 3 张优惠券', '127.0.0.1', '2026-10-23 15:11:33');
+INSERT INTO `operation_log` VALUES (215, 1, 'Glimcy', '用户登录', 'loginFormDTO=LoginFormDTO(account=13483005180, code=***, passWord=***', 142, '成功', '', '127.0.0.1', '2026-10-23 15:14:58');
+INSERT INTO `operation_log` VALUES (216, 1, 'Glimcy', '获取当前用户信息', '无', 0, '成功', '', '127.0.0.1', '2026-10-23 15:14:58');
+INSERT INTO `operation_log` VALUES (217, 1, 'Glimcy', '用户登录', 'loginFormDTO=LoginFormDTO(account=3102777566@qq.com, code=***, passWord=***', 99, '成功', '', '127.0.0.1', '2026-10-23 15:15:15');
+INSERT INTO `operation_log` VALUES (218, 1, 'Glimcy', '获取当前用户信息', '无', 0, '成功', '', '127.0.0.1', '2026-10-23 15:15:15');
+INSERT INTO `operation_log` VALUES (219, 1, 'Glimcy', '用户登录', 'loginFormDTO=LoginFormDTO(account=13483005180, code=***, passWord=***', 119, '成功', '', '127.0.0.1', '2026-10-23 16:00:48');
+INSERT INTO `operation_log` VALUES (220, 1, 'Glimcy', '获取当前用户信息', '无', 1, '成功', '', '127.0.0.1', '2026-10-23 16:00:48');
+INSERT INTO `operation_log` VALUES (221, 1, 'Glimcy', '用户登录', 'loginFormDTO=LoginFormDTO(account=3102777566@qq.com, code=***, passWord=***', 92, '成功', '', '127.0.0.1', '2026-10-23 16:01:14');
+INSERT INTO `operation_log` VALUES (222, 1, 'Glimcy', '获取当前用户信息', '无', 0, '成功', '', '127.0.0.1', '2026-10-23 16:01:14');
+INSERT INTO `operation_log` VALUES (223, 1, 'Glimcy', '用户登录', 'loginFormDTO=LoginFormDTO(account=3102777566@qq.com, code=***, passWord=***', 130, '成功', '', '127.0.0.1', '2026-10-23 16:19:46');
+INSERT INTO `operation_log` VALUES (224, 1, 'Glimcy', '获取当前用户信息', '无', 0, '成功', '', '127.0.0.1', '2026-10-23 16:19:47');
+INSERT INTO `operation_log` VALUES (225, 1, 'Glimcy', '用户登录', 'loginFormDTO=LoginFormDTO(account=3102777566@qq.com, code=***, passWord=***', 90, '成功', '', '127.0.0.1', '2026-10-23 16:24:28');
+INSERT INTO `operation_log` VALUES (226, 1, 'Glimcy', '获取当前用户信息', '无', 1, '成功', '', '127.0.0.1', '2026-10-23 16:24:28');
+INSERT INTO `operation_log` VALUES (227, 1, 'Glimcy', '保存规格和SKU', 'dto=FurnitureSpecDTO(furnitureId=2, specGroups=[FurnitureSpecDTO.SpecGroupDTO(id=30, groupName=颜色, sort=0, values=[FurnitureSpecDTO.SpecValueDTO(id=59, valueName=黑色, valueImage=, sort=0), FurnitureSpecDTO.SpecValueDTO(id=60, valueName=咖色, valueImage=, sort=1)]), FurnitureSpecDTO.SpecGroupDTO(id=31, groupName=人数, sort=1, values=[FurnitureSpecDTO.SpecValueDTO(id=61, valueName=两人位, valueImage=, sort=0), FurnitureSpecDTO.SpecValueDTO(id=62, valueName=三人位, valueImage=, sort=1)])], skuList=[FurnitureSpecDTO.SkuDTO(id=61, price=500, stock=10, skuImage=, status=1, specValueIds=[59, 61], specs=[FurnitureSpecDTO.SpecPair(groupName=颜色, valueName=黑色), FurnitureSpecDTO.SpecPair(groupName=人数, valueName=两人位)]), FurnitureSpecDTO.SkuDTO(id=62, price=800, stock=10, skuImage=, status=0, specValueIds=[59, 62], specs=[FurnitureSpecDTO.SpecPair(groupName=颜色, valueName=黑色), FurnitureSpecDTO.SpecPair(groupName=人数, valueName=三人位)]), FurnitureSpecDTO.SkuDTO(id=63, price=600, stock=10, skuImage=, status=1, specV', 57, '成功', '', '127.0.0.1', '2026-10-23 16:40:51');
+INSERT INTO `operation_log` VALUES (228, 1, 'Glimcy', '保存规格和SKU', 'dto=FurnitureSpecDTO(furnitureId=2, specGroups=[FurnitureSpecDTO.SpecGroupDTO(id=69, groupName=颜色, sort=0, values=[FurnitureSpecDTO.SpecValueDTO(id=157, valueName=黑色, valueImage=, sort=0), FurnitureSpecDTO.SpecValueDTO(id=158, valueName=咖色, valueImage=, sort=1)]), FurnitureSpecDTO.SpecGroupDTO(id=70, groupName=人数, sort=1, values=[FurnitureSpecDTO.SpecValueDTO(id=159, valueName=两人位, valueImage=, sort=0), FurnitureSpecDTO.SpecValueDTO(id=160, valueName=三人位, valueImage=, sort=1)])], skuList=[FurnitureSpecDTO.SkuDTO(id=135, price=500, stock=0, skuImage=, status=1, specValueIds=[157, 159], specs=[FurnitureSpecDTO.SpecPair(groupName=颜色, valueName=黑色), FurnitureSpecDTO.SpecPair(groupName=人数, valueName=两人位)]), FurnitureSpecDTO.SkuDTO(id=136, price=800, stock=10, skuImage=, status=1, specValueIds=[157, 160], specs=[FurnitureSpecDTO.SpecPair(groupName=颜色, valueName=黑色), FurnitureSpecDTO.SpecPair(groupName=人数, valueName=三人位)]), FurnitureSpecDTO.SkuDTO(id=137, price=600, stock=10, skuImage=, statu', 24, '成功', '', '127.0.0.1', '2026-10-23 16:41:50');
+INSERT INTO `operation_log` VALUES (229, 1, 'Glimcy', '保存规格和SKU', 'dto=FurnitureSpecDTO(furnitureId=2, specGroups=[FurnitureSpecDTO.SpecGroupDTO(id=71, groupName=颜色, sort=0, values=[FurnitureSpecDTO.SpecValueDTO(id=161, valueName=黑色, valueImage=, sort=0), FurnitureSpecDTO.SpecValueDTO(id=162, valueName=咖色, valueImage=, sort=1)]), FurnitureSpecDTO.SpecGroupDTO(id=72, groupName=人数, sort=1, values=[FurnitureSpecDTO.SpecValueDTO(id=163, valueName=两人位, valueImage=, sort=0), FurnitureSpecDTO.SpecValueDTO(id=164, valueName=三人位, valueImage=, sort=1)])], skuList=[FurnitureSpecDTO.SkuDTO(id=139, price=500, stock=10, skuImage=, status=1, specValueIds=[161, 163], specs=[FurnitureSpecDTO.SpecPair(groupName=颜色, valueName=黑色), FurnitureSpecDTO.SpecPair(groupName=人数, valueName=两人位)]), FurnitureSpecDTO.SkuDTO(id=140, price=800, stock=10, skuImage=, status=1, specValueIds=[161, 164], specs=[FurnitureSpecDTO.SpecPair(groupName=颜色, valueName=黑色), FurnitureSpecDTO.SpecPair(groupName=人数, valueName=三人位)]), FurnitureSpecDTO.SkuDTO(id=141, price=600, stock=10, skuImage=, stat', 35, '成功', '', '127.0.0.1', '2026-10-23 16:42:14');
+INSERT INTO `operation_log` VALUES (230, 1, 'Glimcy', '创建订单', 'dto=CartFormDTO(consignee=郭名城, phone=13444444444, address=UK, remark=, itemList=[OrderItemDTO(furnitureId=2, skuId=143, quantity=1), OrderItemDTO(furnitureId=118, skuId=null, quantity=1)], userCouponId=null, userCouponIds=[6, 4, 5])', 43, '成功', '', '127.0.0.1', '2026-10-23 16:43:27');
+INSERT INTO `operation_log` VALUES (231, 1, 'Glimcy', '取消订单', 'orderId=2113551862421200898', 32, '成功', '', '127.0.0.1', '2026-10-23 16:43:31');
+INSERT INTO `operation_log` VALUES (232, 1, 'Glimcy', '删除订单', 'orderId=2113551862421200898', 8, '成功', '', '127.0.0.1', '2026-10-23 16:43:32');
 
 -- ----------------------------
 -- Table structure for order
@@ -3264,7 +3312,7 @@ CREATE TABLE `order`  (
   INDEX `idx_user_del_ctime`(`user_id` ASC, `deleted` ASC, `user_deleted` ASC, `create_time` DESC) USING BTREE,
   INDEX `idx_del_ctime`(`deleted` ASC, `create_time` DESC) USING BTREE,
   CONSTRAINT `order_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `user` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT
-) ENGINE = InnoDB AUTO_INCREMENT = 2108403499622297603 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '订单表' ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB AUTO_INCREMENT = 2113551862421200899 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '订单表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of order
@@ -3307,6 +3355,8 @@ INSERT INTO `order` VALUES (2105286707090612225, 1, 2287.65, NULL, 0.00, 4, '郭
 INSERT INTO `order` VALUES (2105286808320139266, 1, 2287.65, NULL, 0.00, 4, '郭名城', '13444444444', 'UK', '', '2026-09-30 21:21:04', NULL, NULL, NULL, '2026-09-30 21:25:58', 0, 0, NULL, NULL, NULL, NULL, NULL, NULL);
 INSERT INTO `order` VALUES (2105295365665030146, 1, 2676.47, NULL, 0.00, 4, '郭名城', '13444444444', 'UK', '', '2026-09-30 21:55:04', NULL, NULL, NULL, '2026-09-30 21:55:10', 0, 0, NULL, NULL, NULL, NULL, NULL, NULL);
 INSERT INTO `order` VALUES (2108403499622297602, 1, 2173.27, 4, 114.38, 4, '郭名城', '13444444444', 'UK', '', '2026-10-09 11:45:41', NULL, NULL, NULL, '2026-10-09 11:46:06', 0, 1, NULL, NULL, NULL, NULL, NULL, NULL);
+INSERT INTO `order` VALUES (2113517116865634306, 1, 481.24, NULL, 0.00, 4, '郭名城', '13444444444', 'UK', '', '2026-10-23 14:25:23', NULL, NULL, NULL, '2026-10-23 14:25:28', 0, 1, NULL, NULL, NULL, NULL, NULL, NULL);
+INSERT INTO `order` VALUES (2113551862421200898, 1, 4812.91, 2, 30.00, 4, '郭名城', '13444444444', 'UK', '', '2026-10-23 16:43:27', NULL, NULL, NULL, '2026-10-23 16:43:31', 0, 1, NULL, NULL, NULL, NULL, NULL, NULL);
 
 -- ----------------------------
 -- Table structure for order_item
@@ -3333,7 +3383,7 @@ CREATE TABLE `order_item`  (
   CONSTRAINT `fk_order_item_sku` FOREIGN KEY (`sku_id`) REFERENCES `sku` (`id`) ON DELETE SET NULL ON UPDATE RESTRICT,
   CONSTRAINT `order_item_ibfk_1` FOREIGN KEY (`order_id`) REFERENCES `order` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT,
   CONSTRAINT `order_item_ibfk_2` FOREIGN KEY (`furniture_id`) REFERENCES `furniture` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT
-) ENGINE = InnoDB AUTO_INCREMENT = 2108403499622297604 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '订单明细表' ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB AUTO_INCREMENT = 2113551862429589507 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '订单明细表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of order_item
@@ -3363,7 +3413,7 @@ INSERT INTO `order_item` VALUES (2074021187003002882, 2074021187003002881, 6, NU
 INSERT INTO `order_item` VALUES (2074027699771478018, 2074027699771478017, 1, 31, 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/06/14/f242a16936f445d28a6a377cae588b7c.jpg', '实木餐桌', 210.00, 1, '大小:0.8×0.8,颜色:黑色', 210.00, 0, '2026-07-12 01:22:09', '2026-07-12 01:22:09');
 INSERT INTO `order_item` VALUES (2074027699771478019, 2074027699771478017, 1, 29, 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/06/14/f242a16936f445d28a6a377cae588b7c.jpg', '实木餐桌', 300.00, 1, '大小:1.5×1.5,颜色:黑色', 300.00, 0, '2026-07-12 01:22:09', '2026-07-12 01:22:09');
 INSERT INTO `order_item` VALUES (2076560543313403905, 2076560543258877953, 9, 127, 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/05/19/cdaec05fc761442c919e2ea20460eb5c.jpg', '书架', 200.00, 1, '颜色:黑色', 200.00, 0, '2026-07-13 22:53:08', '2026-07-13 22:53:08');
-INSERT INTO `order_item` VALUES (2086819019129995266, 2086819018983194626, 2, 62, 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/05/19/927db786745d4e0cbbfdec0db54a993e.jpg', '真皮沙发', 800.00, 1, '颜色:黑色,人数:三人位', 800.00, 0, '2026-08-10 22:16:40', '2026-08-10 22:16:40');
+INSERT INTO `order_item` VALUES (2086819019129995266, 2086819018983194626, 2, NULL, 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/05/19/927db786745d4e0cbbfdec0db54a993e.jpg', '真皮沙发', 800.00, 1, '颜色:黑色,人数:三人位', 800.00, 0, '2026-08-10 22:16:40', '2026-08-10 22:16:40');
 INSERT INTO `order_item` VALUES (2086819430708658179, 2086819430708658178, 3, 72, 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/05/19/bc7ca24b2a414907b4fa663436178e51.jpg', '席梦思床垫', 100.00, 1, '质地:硬,尺寸（米）:1.5 × 1.8', 100.00, 0, '2026-08-10 22:18:18', '2026-08-10 22:18:18');
 INSERT INTO `order_item` VALUES (2101588117025406979, 2101588117025406978, 974, NULL, 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/46cc793ad71c4d62acb0d09459b3aa4b.jpg', '白色文件柜', 1366.78, 1, NULL, 1366.78, 0, '2026-09-20 16:23:47', '2026-09-20 16:23:47');
 INSERT INTO `order_item` VALUES (2101591351068631043, 2101591351068631042, 974, NULL, 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/46cc793ad71c4d62acb0d09459b3aa4b.jpg', '白色文件柜', 1366.78, 1, NULL, 1366.78, 0, '2026-09-20 16:36:38', '2026-09-20 16:36:38');
@@ -3377,6 +3427,10 @@ INSERT INTO `order_item` VALUES (2105286707103195138, 2105286707090612225, 526, 
 INSERT INTO `order_item` VALUES (2105286808387248129, 2105286808320139266, 526, NULL, 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/16cc8e9ba72446dfac657af794de4637.jpg', '冰丝床垫', 2287.65, 1, NULL, 2287.65, 0, '2026-09-30 21:21:04', '2026-09-30 21:21:04');
 INSERT INTO `order_item` VALUES (2105295365690195970, 2105295365665030146, 536, NULL, 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/16cc8e9ba72446dfac657af794de4637.jpg', '水洗棉床垫', 2676.47, 1, NULL, 2676.47, 0, '2026-09-30 21:55:04', '2026-09-30 21:55:04');
 INSERT INTO `order_item` VALUES (2108403499622297603, 2108403499622297602, 526, NULL, 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/16cc8e9ba72446dfac657af794de4637.jpg', '冰丝床垫', 2287.65, 1, NULL, 2287.65, 0, '2026-10-09 11:45:41', '2026-10-09 11:45:41');
+INSERT INTO `order_item` VALUES (2113517116878217217, 2113517116865634306, 307, NULL, 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/e0a67141bb6f45519137785157c3a64b.jpg', '多层花架', 362.06, 1, NULL, 362.06, 0, '2026-10-23 14:25:22', '2026-10-23 14:25:22');
+INSERT INTO `order_item` VALUES (2113517116878217218, 2113517116865634306, 362, NULL, 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/805e5ab9a29c4cf1aa5f6d1cb19f491a.jpg', '长条换鞋凳', 119.18, 1, NULL, 119.18, 0, '2026-10-23 14:25:22', '2026-10-23 14:25:22');
+INSERT INTO `order_item` VALUES (2113551862429589505, 2113551862421200898, 2, 143, 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/daf271d8f3614528b5b98f39b2ec5011.jpg', '真皮沙发', 500.00, 1, '颜色:黑色,人数:两人位', 500.00, 0, '2026-10-23 16:43:26', '2026-10-23 16:43:26');
+INSERT INTO `order_item` VALUES (2113551862429589506, 2113551862421200898, 118, NULL, 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/09/09/daf271d8f3614528b5b98f39b2ec5011.jpg', '真皮沙发', 4342.91, 1, NULL, 4342.91, 0, '2026-10-23 16:43:26', '2026-10-23 16:43:26');
 
 -- ----------------------------
 -- Table structure for payment
@@ -3535,7 +3589,7 @@ CREATE TABLE `sku`  (
   INDEX `idx_furniture_id`(`furniture_id` ASC) USING BTREE,
   CONSTRAINT `fk_sku_furniture` FOREIGN KEY (`furniture_id`) REFERENCES `furniture` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT,
   CONSTRAINT `sku_chk_stock` CHECK (`stock` >= 0)
-) ENGINE = InnoDB AUTO_INCREMENT = 135 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = 'SKU库存表' ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB AUTO_INCREMENT = 147 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = 'SKU库存表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of sku
@@ -3544,10 +3598,6 @@ INSERT INTO `sku` VALUES (29, 1, 300.00, 10, 'https://gmc-1007.oss-cn-beijing.al
 INSERT INTO `sku` VALUES (30, 1, 280.00, 0, '', 1, '2026-07-03 18:28:16', '2026-07-12 01:22:09');
 INSERT INTO `sku` VALUES (31, 1, 210.00, 10, '', 1, '2026-07-03 18:28:16', '2026-07-12 01:22:09');
 INSERT INTO `sku` VALUES (32, 1, 240.00, 10, '', 1, '2026-07-03 18:28:16', '2026-07-12 01:22:09');
-INSERT INTO `sku` VALUES (61, 2, 500.00, 10, '', 1, '2026-07-09 22:51:48', '2026-07-12 01:22:09');
-INSERT INTO `sku` VALUES (62, 2, 800.00, 10, '', 1, '2026-07-09 22:51:48', '2026-08-10 22:16:46');
-INSERT INTO `sku` VALUES (63, 2, 600.00, 10, '', 1, '2026-07-09 22:51:48', '2026-07-12 01:22:09');
-INSERT INTO `sku` VALUES (64, 2, 900.00, 10, '', 1, '2026-07-09 22:51:48', '2026-07-12 01:22:09');
 INSERT INTO `sku` VALUES (69, 3, 300.00, 5, '', 1, '2026-07-09 22:52:00', '2026-07-12 01:22:09');
 INSERT INTO `sku` VALUES (70, 3, 200.00, 5, '', 1, '2026-07-09 22:52:00', '2026-07-12 01:22:09');
 INSERT INTO `sku` VALUES (71, 3, 200.00, 5, '', 1, '2026-07-09 22:52:00', '2026-07-12 01:22:09');
@@ -3584,6 +3634,10 @@ INSERT INTO `sku` VALUES (128, 9, 200.00, 5, '', 1, '2026-07-10 19:31:08', '2026
 INSERT INTO `sku` VALUES (132, 10, 150.00, 10, 'https://gmc-1007.oss-cn-beijing.aliyuncs.com/furniture/2026/08/12/b7d405490ce947b696aa7ed567d0730f.png', 1, '2026-08-12 14:55:14', '2026-08-12 14:55:14');
 INSERT INTO `sku` VALUES (133, 10, 150.00, 10, '', 1, '2026-08-12 14:55:14', '2026-08-12 14:55:14');
 INSERT INTO `sku` VALUES (134, 10, 150.00, 10, '', 1, '2026-08-12 14:55:14', '2026-08-12 14:55:14');
+INSERT INTO `sku` VALUES (143, 2, 500.00, 10, '', 1, '2026-10-23 16:42:14', '2026-10-23 16:43:30');
+INSERT INTO `sku` VALUES (144, 2, 800.00, 10, '', 1, '2026-10-23 16:42:14', '2026-10-23 16:42:14');
+INSERT INTO `sku` VALUES (145, 2, 600.00, 10, '', 1, '2026-10-23 16:42:14', '2026-10-23 16:42:14');
+INSERT INTO `sku` VALUES (146, 2, 900.00, 10, '', 1, '2026-10-23 16:42:14', '2026-10-23 16:42:14');
 
 -- ----------------------------
 -- Table structure for sku_spec
@@ -3602,7 +3656,7 @@ CREATE TABLE `sku_spec`  (
   CONSTRAINT `fk_sku_spec_group` FOREIGN KEY (`spec_group_id`) REFERENCES `spec_group` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT,
   CONSTRAINT `fk_sku_spec_sku` FOREIGN KEY (`sku_id`) REFERENCES `sku` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT,
   CONSTRAINT `fk_sku_spec_value` FOREIGN KEY (`spec_value_id`) REFERENCES `spec_value` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT
-) ENGINE = InnoDB AUTO_INCREMENT = 186 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = 'SKU与规格值关联表' ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB AUTO_INCREMENT = 210 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = 'SKU与规格值关联表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of sku_spec
@@ -3615,14 +3669,6 @@ INSERT INTO `sku_spec` VALUES (21, 31, 9, 18, '2026-07-12 01:22:09');
 INSERT INTO `sku_spec` VALUES (22, 31, 10, 19, '2026-07-12 01:22:09');
 INSERT INTO `sku_spec` VALUES (23, 32, 9, 18, '2026-07-12 01:22:09');
 INSERT INTO `sku_spec` VALUES (24, 32, 10, 20, '2026-07-12 01:22:09');
-INSERT INTO `sku_spec` VALUES (49, 61, 30, 59, '2026-07-12 01:22:09');
-INSERT INTO `sku_spec` VALUES (50, 61, 31, 61, '2026-07-12 01:22:09');
-INSERT INTO `sku_spec` VALUES (51, 62, 30, 59, '2026-07-12 01:22:09');
-INSERT INTO `sku_spec` VALUES (52, 62, 31, 62, '2026-07-12 01:22:09');
-INSERT INTO `sku_spec` VALUES (53, 63, 30, 60, '2026-07-12 01:22:09');
-INSERT INTO `sku_spec` VALUES (54, 63, 31, 61, '2026-07-12 01:22:09');
-INSERT INTO `sku_spec` VALUES (55, 64, 30, 60, '2026-07-12 01:22:09');
-INSERT INTO `sku_spec` VALUES (56, 64, 31, 62, '2026-07-12 01:22:09');
 INSERT INTO `sku_spec` VALUES (65, 69, 34, 67, '2026-07-12 01:22:09');
 INSERT INTO `sku_spec` VALUES (66, 69, 35, 69, '2026-07-12 01:22:09');
 INSERT INTO `sku_spec` VALUES (67, 70, 34, 67, '2026-07-12 01:22:09');
@@ -3691,6 +3737,14 @@ INSERT INTO `sku_spec` VALUES (179, 128, 66, 150, '2026-07-12 01:22:09');
 INSERT INTO `sku_spec` VALUES (183, 132, 68, 154, '2026-08-12 14:55:14');
 INSERT INTO `sku_spec` VALUES (184, 133, 68, 155, '2026-08-12 14:55:14');
 INSERT INTO `sku_spec` VALUES (185, 134, 68, 156, '2026-08-12 14:55:14');
+INSERT INTO `sku_spec` VALUES (202, 143, 73, 165, '2026-10-23 16:42:14');
+INSERT INTO `sku_spec` VALUES (203, 143, 74, 167, '2026-10-23 16:42:14');
+INSERT INTO `sku_spec` VALUES (204, 144, 73, 165, '2026-10-23 16:42:14');
+INSERT INTO `sku_spec` VALUES (205, 144, 74, 168, '2026-10-23 16:42:14');
+INSERT INTO `sku_spec` VALUES (206, 145, 73, 166, '2026-10-23 16:42:14');
+INSERT INTO `sku_spec` VALUES (207, 145, 74, 167, '2026-10-23 16:42:14');
+INSERT INTO `sku_spec` VALUES (208, 146, 73, 166, '2026-10-23 16:42:14');
+INSERT INTO `sku_spec` VALUES (209, 146, 74, 168, '2026-10-23 16:42:14');
 
 -- ----------------------------
 -- Table structure for spec_group
@@ -3707,15 +3761,13 @@ CREATE TABLE `spec_group`  (
   UNIQUE INDEX `uk_furniture_group`(`furniture_id` ASC, `group_name` ASC) USING BTREE,
   INDEX `idx_furniture_id`(`furniture_id` ASC) USING BTREE,
   CONSTRAINT `fk_spec_group_furniture` FOREIGN KEY (`furniture_id`) REFERENCES `furniture` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT
-) ENGINE = InnoDB AUTO_INCREMENT = 69 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '规格组表' ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB AUTO_INCREMENT = 75 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '规格组表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of spec_group
 -- ----------------------------
 INSERT INTO `spec_group` VALUES (9, 1, '大小', 1, '2026-07-03 18:28:16', '2026-07-12 01:22:09');
 INSERT INTO `spec_group` VALUES (10, 1, '颜色', 2, '2026-07-03 18:28:16', '2026-07-12 01:22:09');
-INSERT INTO `spec_group` VALUES (30, 2, '颜色', 0, '2026-07-09 22:51:48', '2026-07-12 01:22:09');
-INSERT INTO `spec_group` VALUES (31, 2, '人数', 1, '2026-07-09 22:51:48', '2026-07-12 01:22:09');
 INSERT INTO `spec_group` VALUES (34, 3, '质地', 0, '2026-07-09 22:52:00', '2026-07-12 01:22:09');
 INSERT INTO `spec_group` VALUES (35, 3, '尺寸（米）', 1, '2026-07-09 22:52:00', '2026-07-12 01:22:09');
 INSERT INTO `spec_group` VALUES (48, 4, '颜色', 0, '2026-07-09 23:18:40', '2026-07-12 01:22:09');
@@ -3730,6 +3782,8 @@ INSERT INTO `spec_group` VALUES (64, 8, '颜色', 0, '2026-07-10 19:30:03', '202
 INSERT INTO `spec_group` VALUES (65, 8, '质地', 1, '2026-07-10 19:30:03', '2026-07-12 01:22:09');
 INSERT INTO `spec_group` VALUES (66, 9, '颜色', 0, '2026-07-10 19:31:08', '2026-07-12 01:22:09');
 INSERT INTO `spec_group` VALUES (68, 10, '颜色', 0, '2026-08-12 14:55:14', '2026-08-12 14:55:14');
+INSERT INTO `spec_group` VALUES (73, 2, '颜色', 0, '2026-10-23 16:42:14', '2026-10-23 16:42:14');
+INSERT INTO `spec_group` VALUES (74, 2, '人数', 1, '2026-10-23 16:42:14', '2026-10-23 16:42:14');
 
 -- ----------------------------
 -- Table structure for spec_value
@@ -3747,7 +3801,7 @@ CREATE TABLE `spec_value`  (
   UNIQUE INDEX `uk_group_value`(`spec_group_id` ASC, `value_name` ASC) USING BTREE,
   INDEX `idx_spec_group_id`(`spec_group_id` ASC) USING BTREE,
   CONSTRAINT `fk_spec_value_group` FOREIGN KEY (`spec_group_id`) REFERENCES `spec_group` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT
-) ENGINE = InnoDB AUTO_INCREMENT = 157 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '规格值表' ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB AUTO_INCREMENT = 169 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '规格值表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of spec_value
@@ -3756,10 +3810,6 @@ INSERT INTO `spec_value` VALUES (17, 9, '1.5×1.5', '', 0, '2026-07-12 01:22:09'
 INSERT INTO `spec_value` VALUES (18, 9, '0.8×0.8', '', 1, '2026-07-12 01:22:09', '2026-07-12 01:22:09');
 INSERT INTO `spec_value` VALUES (19, 10, '黑色', '', 0, '2026-07-12 01:22:09', '2026-07-12 01:22:09');
 INSERT INTO `spec_value` VALUES (20, 10, '白色', '', 1, '2026-07-12 01:22:09', '2026-07-12 01:22:09');
-INSERT INTO `spec_value` VALUES (59, 30, '黑色', '', 0, '2026-07-12 01:22:09', '2026-07-12 01:22:09');
-INSERT INTO `spec_value` VALUES (60, 30, '咖色', '', 1, '2026-07-12 01:22:09', '2026-07-12 01:22:09');
-INSERT INTO `spec_value` VALUES (61, 31, '两人位', '', 0, '2026-07-12 01:22:09', '2026-07-12 01:22:09');
-INSERT INTO `spec_value` VALUES (62, 31, '三人位', '', 1, '2026-07-12 01:22:09', '2026-07-12 01:22:09');
 INSERT INTO `spec_value` VALUES (67, 34, '软', '', 0, '2026-07-12 01:22:09', '2026-07-12 01:22:09');
 INSERT INTO `spec_value` VALUES (68, 34, '硬', '', 1, '2026-07-12 01:22:09', '2026-07-12 01:22:09');
 INSERT INTO `spec_value` VALUES (69, 35, '1.8 × 2.0', '', 0, '2026-07-12 01:22:09', '2026-07-12 01:22:09');
@@ -3795,6 +3845,10 @@ INSERT INTO `spec_value` VALUES (150, 66, '黄色', '', 2, '2026-07-12 01:22:09'
 INSERT INTO `spec_value` VALUES (154, 68, '黄色', '', 0, '2026-08-12 14:55:14', '2026-08-12 14:55:14');
 INSERT INTO `spec_value` VALUES (155, 68, '白色', '', 1, '2026-08-12 14:55:14', '2026-08-12 14:55:14');
 INSERT INTO `spec_value` VALUES (156, 68, '黑色', '', 2, '2026-08-12 14:55:14', '2026-08-12 14:55:14');
+INSERT INTO `spec_value` VALUES (165, 73, '黑色', '', 0, '2026-10-23 16:42:14', '2026-10-23 16:42:14');
+INSERT INTO `spec_value` VALUES (166, 73, '咖色', '', 1, '2026-10-23 16:42:14', '2026-10-23 16:42:14');
+INSERT INTO `spec_value` VALUES (167, 74, '两人位', '', 0, '2026-10-23 16:42:14', '2026-10-23 16:42:14');
+INSERT INTO `spec_value` VALUES (168, 74, '三人位', '', 1, '2026-10-23 16:42:14', '2026-10-23 16:42:14');
 
 -- ----------------------------
 -- Table structure for user
@@ -3881,8 +3935,8 @@ INSERT INTO `user_coupon` VALUES (4, 1, 2, 0, '2026-10-30 16:12:34', '2026-09-30
 INSERT INTO `user_coupon` VALUES (5, 1, 2, 0, '2026-10-30 16:12:34', '2026-09-30 16:12:34', NULL, NULL, 0);
 INSERT INTO `user_coupon` VALUES (6, 1, 2, 0, '2026-10-30 16:12:35', '2026-09-30 16:12:35', NULL, NULL, 0);
 INSERT INTO `user_coupon` VALUES (7, 1, 2, 0, '2026-10-30 16:12:36', '2026-09-30 16:12:36', NULL, NULL, 0);
-INSERT INTO `user_coupon` VALUES (8, 1, 4, 0, '2026-10-16 11:44:43', '2026-10-09 11:44:43', NULL, NULL, 0);
-INSERT INTO `user_coupon` VALUES (12, 1, 6, 0, '2026-10-16 17:41:18', '2026-10-09 17:41:18', NULL, NULL, 1);
+INSERT INTO `user_coupon` VALUES (8, 1, 4, 2, '2026-10-16 11:44:43', '2026-10-09 11:44:43', NULL, NULL, 0);
+INSERT INTO `user_coupon` VALUES (12, 1, 6, 2, '2026-10-16 17:41:18', '2026-10-09 17:41:18', NULL, NULL, 1);
 INSERT INTO `user_coupon` VALUES (13, 2, 6, 0, '2026-10-16 17:41:18', '2026-10-09 17:41:18', NULL, NULL, 1);
 
 -- ----------------------------
