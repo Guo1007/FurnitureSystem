@@ -465,16 +465,16 @@ const quickAdd = async (item) => {
             specText: skus[0].specText || '',
           }
         : null;
-      cartStore.addItem(item, 1, skuInfo);
+      await cartStore.addItem(item, 1, skuInfo);
     }
   } catch {
-    cartStore.addItem(item, 1);
+    await cartStore.addItem(item, 1);
   }
 };
 
-const onSpecConfirm = (skuInfo) => {
+const onSpecConfirm = async (skuInfo) => {
   if (specTarget.value) {
-    cartStore.addItem(specTarget.value, 1, skuInfo);
+    await cartStore.addItem(specTarget.value, 1, skuInfo);
     specTarget.value = null;
   }
   specDialogVisible.value = false;

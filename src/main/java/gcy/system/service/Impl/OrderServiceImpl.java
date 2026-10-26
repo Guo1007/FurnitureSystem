@@ -583,7 +583,12 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         if (user == null) {
             return Result.fail("请先登录");
         }
-        Long userId = user.getId();
+        return estimateForUser(user.getId(), dto);
+    }
+
+    /** 供无 ThreadLocal 上下文的调用方（AI 工具）使用，算价逻辑与 {@link #estimate} 完全一致。 */
+    @Override
+    public Result estimateForUser(Long userId, OrderEstimateDTO dto) {
         if (dto == null || dto.getItemList() == null || dto.getItemList().isEmpty()) {
             return Result.fail("购物车为空");
         }

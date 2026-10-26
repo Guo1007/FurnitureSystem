@@ -1,21 +1,36 @@
 package gcy.ai.tools;
 
+import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import dev.langchain4j.agent.tool.Tool;
-import gcy.system.entity.dto.UserDTO;
+import dev.langchain4j.agent.tool.ToolMemoryId;
+import gcy.system.entity.dto.OrderEstimateDTO;
+import gcy.system.entity.dto.OrderItemDTO;
+import gcy.system.entity.dto.Result;
 import gcy.system.entity.pojo.*;
+import gcy.system.entity.vo.CouponEstimateVO;
+import gcy.system.entity.vo.CouponOptionVO;
+import gcy.system.entity.vo.TopFurnitureVO;
+import gcy.system.entity.vo.UserCouponVO;
 import gcy.system.mapper.*;
-import gcy.system.utils.UserHolder;
+import gcy.system.service.ICouponService;
+import gcy.system.service.IOrderService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
+
+import static gcy.system.utils.RedisConstants.AI_CHAT_MEMORY_KEY;
 
 /**
  * AI家具查询工具类。
@@ -45,6 +60,14 @@ public class FurnitureTools {
     private final SpecValueMapper specValueMapper;
 
     private final FavoriteMapper favoriteMapper;
+
+    private final IOrderService orderService;
+
+    private final ICouponService couponService;
+
+    private final OrderItemMapper orderItemMapper;
+
+    private final CartItemMapper cartItemMapper;
 
     /**
      * 单次工具调用返回的商品条数上限。
@@ -125,7 +148,7 @@ public class FurnitureTools {
      * @param furnitureName 商品名称
      * @return 包含所有SKU的规格、价格、库存信息文本
      */
-    @Tool("查询指定商品的所有SKU规格及每个SKU的库存、价格信息。需要传入商品名称")
+    @Tool("查询指定商品的所有SKU规格及每个SKU的库存、价格信息。返回中 [SKU:id] 是规格编号，用户指定具体规格时据此确认")
     public String querySkuInfo(String furnitureName) {
         log.debug("调用querySkuInfo, furnitureName={}", furnitureName);
         // 空关键词会把整库商品当候选，下面「找到多个匹配」的分支会拼出极长文本
@@ -162,8 +185,8 @@ public class FurnitureTools {
         StringBuilder sb = new StringBuilder("【").append(furniture.getFName()).append(" 规格库存信息】\n");
         if (skuSpecs.isEmpty()) {
             for (Sku sku : skus) {
-                sb.append(String.format("价格: ¥%s | 库存: %d件\n",
-                        sku.getPrice(), sku.getStock()));
+                sb.append(String.format("[SKU:%d] 价格: ¥%s | 库存: %d件\n",
+                        sku.getId(), sku.getPrice(), sku.getStock()));
             }
             return sb.toString();
         }
@@ -176,8 +199,8 @@ public class FurnitureTools {
         Map<Long, String> valueNames = specValueMapper.selectByIds(valueIds).stream()
                 .collect(Collectors.toMap(SpecValue::getId, SpecValue::getValueName));
         for (Sku sku : skus) {
-            sb.append(String.format("价格: ¥%s | 库存: %d件",
-                    sku.getPrice(), sku.getStock()));
+            sb.append(String.format("[SKU:%d] 价格: ¥%s | 库存: %d件",
+                    sku.getId(), sku.getPrice(), sku.getStock()));
             List<SkuSpec> specs = specMap.get(sku.getId());
             if (specs != null && !specs.isEmpty()) {
                 sb.append(" | 规格: ");
@@ -191,57 +214,6 @@ public class FurnitureTools {
             }
             sb.append("\n");
         }
-        return sb.toString();
-    }
-
-    /**
-     * 查询所有商品的库存概况。
-     *
-     * @return 包含每个商品名称、库存量和SKU数量的库存概况文本
-     */
-    @Tool("查询所有商品的总库存概况，包含每个商品的名称、总库存量和SKU数量")
-    public String queryStockSummary() {
-        log.debug("调用queryStockSummary");
-        List<Furniture> furnitureList = furnitureMapper.selectList(
-                new LambdaQueryWrapper<Furniture>()
-                        .select(Furniture::getId, Furniture::getFName, Furniture::getStock)
-        );
-        if (furnitureList.isEmpty()) {
-            return "暂无商品数据";
-        }
-        // 一次 GROUP BY 取回所有商品的 SKU 数量，替代原先「每个商品一条 COUNT(*)」的 N+1
-        // （商品表 1000 条时原实现要跑 1001 条串行 SQL，且全在 AI 对话线程上）
-        // 注意：这里刻意**不加** status 过滤，与原 selectCount 的语义保持一致
-        //（SkuMapper.sumStockByFurnitureId 只统计 status=1，两者口径不同，别混用）
-        Map<Long, Long> skuCountByFurniture = new HashMap<>();
-        try {
-            List<Long> furnitureIds = furnitureList.stream()
-                    .map(Furniture::getId)
-                    .collect(Collectors.toList());
-            QueryWrapper<Sku> qw = new QueryWrapper<Sku>()
-                    .select("furniture_id", "COUNT(*) AS cnt")
-                    .in("furniture_id", furnitureIds)
-                    .groupBy("furniture_id");
-            for (Map<String, Object> row : skuMapper.selectMaps(qw)) {
-                Object fid = row.get("furniture_id");
-                Object cnt = row.get("cnt");
-                if (fid instanceof Number && cnt instanceof Number) {
-                    skuCountByFurniture.put(((Number) fid).longValue(), ((Number) cnt).longValue());
-                }
-            }
-        } catch (Exception e) {
-            // 统计失败只影响 SKU 个数展示，库存总数仍要正常返回
-            log.warn("批量统计SKU数量失败，SKU个数将显示为0: {}", e.getMessage());
-        }
-        StringBuilder sb = new StringBuilder("【库存概况】\n");
-        int totalStock = 0;
-        for (Furniture f : furnitureList) {
-            int skuCount = skuCountByFurniture.getOrDefault(f.getId(), 0L).intValue();
-            sb.append(String.format("- %s: 库存%d件%s\n",
-                    f.getFName(), f.getStock(), skuCount > 0 ? " (" + skuCount + "个SKU)" : ""));
-            totalStock += f.getStock();
-        }
-        sb.append("\n总库存: ").append(totalStock).append("件");
         return sb.toString();
     }
 
@@ -277,10 +249,12 @@ public class FurnitureTools {
         if (type == null) {
             return "暂时无法获取「" + scene + "」场景的分类信息，请联系管理员。";
         }
+        // 不加 LIMIT 时，分类下商品一多就会把整批文本塞进模型上下文，污染后续每一轮对话
         List<Furniture> furnitureList = furnitureMapper.selectList(
                 new LambdaQueryWrapper<Furniture>()
                         .select(Furniture::getId, Furniture::getFName, Furniture::getPrice, Furniture::getStock)
                         .eq(Furniture::getTypeId, type.getId())
+                        .last("LIMIT " + TOOL_RESULT_LIMIT)
         );
         if (furnitureList.isEmpty()) {
             return "「" + scene + "」场景下暂时没有在售商品，请稍后再来看看～";
@@ -421,22 +395,23 @@ public class FurnitureTools {
     /**
      * 查询当前登录用户的收藏商品列表。
      * <p>
-     * 通过 UserHolder 获取当前登录用户，然后查询其所有收藏的家具商品。
+     * 通过会话标识解析当前登录用户，然后查询其所有收藏的家具商品。
      * 若用户未登录则返回提示信息，引导用户登录后使用收藏功能。
      * </p>
      *
      * @return 用户收藏的商品列表文本，包含商品名称、价格、库存信息
      */
     @Tool("查询当前用户已收藏的商品列表，用于了解用户偏好并提供个性化推荐")
-    public String queryUserFavorites() {
-        log.debug("调用queryUserFavorites");
-        UserDTO user = UserHolder.getUser();
-        if (user == null) {
+    public String queryUserFavorites(@ToolMemoryId String memoryId) {
+        log.debug("调用queryUserFavorites, memoryId={}", memoryId);
+        // 工具运行在流式响应线程上，UserHolder（ThreadLocal）取不到登录用户，只能从会话标识解析
+        Long userId = resolveUserId(memoryId);
+        if (userId == null) {
             return "您当前未登录，登录后可以查看收藏商品哦～";
         }
         List<Favorite> favorites = favoriteMapper.selectList(
                 new LambdaQueryWrapper<Favorite>()
-                        .eq(Favorite::getUserId, user.getId()));
+                        .eq(Favorite::getUserId, userId));
         if (favorites.isEmpty()) {
             return "您还没有收藏任何商品，在商品详情页点击收藏按钮即可添加～";
         }
@@ -449,9 +424,7 @@ public class FurnitureTools {
         Map<Long, Furniture> furnitureMap = furnitureIds.isEmpty() ? Map.of()
                 : furnitureMapper.selectByIds(furnitureIds).stream()
                         .collect(Collectors.toMap(Furniture::getId, f -> f));
-        StringBuilder sb = new StringBuilder("【");
-        sb.append(user.getUserName() != null ? user.getUserName() : "您");
-        sb.append("的收藏商品】\n");
+        StringBuilder sb = new StringBuilder("【我的收藏商品】\n");
         for (Favorite fav : favorites) {
             Furniture f = furnitureMap.get(fav.getFurnitureId());
             if (f != null) {
@@ -460,5 +433,461 @@ public class FurnitureTools {
             }
         }
         return sb.toString();
+    }
+
+    // ==================== 会话上下文与套装规划 ====================
+
+    /**
+     * 读取用户购物车，转成下单与试算用的明细结构。
+     * <p>
+     * 直接查 cart_item 表：购物车已在服务端持久化，不再依赖前端随消息上传的快照，
+     * 因此 AI 看到的就是用户页面上同一份数据。
+     */
+    private List<OrderItemDTO> loadCartByUser(Long userId) {
+        if (userId == null) {
+            return List.of();
+        }
+        List<CartItem> rows = cartItemMapper.selectList(new LambdaQueryWrapper<CartItem>()
+                .eq(CartItem::getUserId, userId)
+                .orderByAsc(CartItem::getId));
+        return rows.stream().map(row -> {
+            OrderItemDTO dto = new OrderItemDTO();
+            dto.setFurnitureId(row.getFurnitureId());
+            // 服务端用 0 表示无规格，对外传 null，与下单接口的口径保持一致
+            dto.setSkuId(row.getSkuId() != null && row.getSkuId() > 0 ? row.getSkuId() : null);
+            dto.setQuantity(row.getQuantity() == null ? 1 : row.getQuantity());
+            return dto;
+        }).collect(Collectors.toList());
+    }
+
+    /**
+     * 从会话记忆ID解析用户ID。
+     * <p>
+     * memoryId 形如 {@code ai:chat:{userId}:{conversationId}}，由服务端生成、模型改不了，
+     * 因此可作可信身份来源。绝不能让模型自己传 userId——那是可以被提示注入伪造的。
+     */
+    private Long resolveUserId(String memoryId) {
+        if (memoryId == null || !memoryId.startsWith(AI_CHAT_MEMORY_KEY)) {
+            return null;
+        }
+        String rest = memoryId.substring(AI_CHAT_MEMORY_KEY.length());
+        int sep = rest.indexOf(':');
+        if (sep <= 0) {
+            return null;
+        }
+        try {
+            return Long.parseLong(rest.substring(0, sep));
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    /**
+     * 按购物车条目批量取商品，避免逐条查库。
+     * <p>
+     * 价格一律取数据库值：localStorage 里的价格可能是旧快照，不能用来算钱。
+     */
+    private Map<Long, Furniture> loadFurnitureMap(List<OrderItemDTO> items) {
+        return loadFurnitureByIds(items.stream()
+                .map(OrderItemDTO::getFurnitureId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .collect(Collectors.toList()));
+    }
+
+    /**
+     * 按商品ID批量取商品，供榜单等没有购物车条目的场景使用。
+     */
+    private Map<Long, Furniture> loadFurnitureByIds(List<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return Map.of();
+        }
+        return furnitureMapper.selectByIds(ids).stream()
+                .collect(Collectors.toMap(Furniture::getId, f -> f));
+    }
+
+    /**
+     * 查询当前会话购物车里的商品清单。
+     *
+     * @param memoryId 会话记忆ID，由框架注入
+     * @return 购物车清单文本
+     */
+    @Tool("查询用户当前购物车里的商品清单。需要按购物车做整单计算（试算、算券）时先调用它")
+    public String queryCart(@ToolMemoryId String memoryId) {
+        log.debug("调用queryCart, memoryId={}", memoryId);
+        Long userId = resolveUserId(memoryId);
+        if (userId == null) {
+            return "请先登录后再查询购物车。";
+        }
+        List<OrderItemDTO> items = loadCartByUser(userId);
+        if (items.isEmpty()) {
+            return "购物车是空的。请提示用户先把商品加入购物车。";
+        }
+        Map<Long, Furniture> furnitureMap = loadFurnitureMap(items);
+        StringBuilder sb = new StringBuilder("【购物车】\n");
+        BigDecimal total = BigDecimal.ZERO;
+        for (OrderItemDTO item : items) {
+            Furniture f = furnitureMap.get(item.getFurnitureId());
+            if (f == null) {
+                continue;
+            }
+            int qty = item.getQuantity() == null ? 1 : item.getQuantity();
+            BigDecimal price = f.getPrice() == null ? BigDecimal.ZERO : f.getPrice();
+            total = total.add(price.multiply(BigDecimal.valueOf(qty)));
+            sb.append(String.format("- %s [商品:%d] | ¥%s × %d | 库存%d件\n",
+                    f.getFName(), f.getId(), price, qty, f.getStock()));
+        }
+        sb.append(String.format("合计 ¥%s（%d 条明细）", total, items.size()));
+        return sb.toString();
+    }
+
+    /**
+     * 按场景与预算规划套装。
+     * <p>
+     * 组合与算价全部在后端完成，模型只负责传场景和预算——让大模型做加法必然算错。
+     * 按优先级顺序累加（贪心），不做任何搜索：用户要的是协调的一套家具，不是把预算花光的数学最优解。
+     * <p>
+     * 
+     *
+     * @param scene  场景关键词
+     * @param budget 预算（元），可为空
+     * @return 套装清单与套装标记
+     */
+    @Tool("""
+            按场景和预算规划一套家具。仅当用户表达整屋或成套购买意图时调用。
+            scene 只能取 客厅、卧室、书房、餐厅 之一；budget 为人民币整数元，用户没说就传 null。
+            avoidIds 传用户明确不想再要的商品ID（逗号分隔，如 1417,1420），没有就不传。
+            返回套装清单、商品总价与预算余额，末尾附套装标记。
+            严禁自行编造商品，也严禁改动返回中的任何金额。
+            """)
+    public String planFurnitureSet(String scene, Integer budget, String avoidIds) {
+        log.debug("调用planFurnitureSet, scene={}, budget={}, avoidIds={}", scene, budget, avoidIds);
+        String typeName = matchSceneToType(scene == null ? "" : scene.trim());
+        if (typeName == null) {
+            return "目前只支持按「客厅」「卧室」「书房」「餐厅」四个场景搭配，请先确认用户想布置哪个场景。";
+        }
+        // 模型可能把「八千」解析成 8 或 800000，钳制到可解释区间，避免生成荒唐方案
+        int cap = budget == null ? 8000 : Math.max(500, Math.min(budget, 100000));
+
+        FurnitureType type = furnitureTypeMapper.selectList(
+                        new LambdaQueryWrapper<FurnitureType>().eq(FurnitureType::getName, typeName))
+                .stream().findFirst().orElse(null);
+        if (type == null) {
+            return "暂时取不到「" + scene + "」的分类信息，请稍后再试。";
+        }
+        List<Furniture> candidates = furnitureMapper.selectList(
+                new LambdaQueryWrapper<Furniture>()
+                        .select(Furniture::getId, Furniture::getFName, Furniture::getPrice,
+                                Furniture::getStock, Furniture::getIsRecommended, Furniture::getSaleCount)
+                        .eq(Furniture::getTypeId, type.getId())
+                        .gt(Furniture::getStock, 0)
+                        .orderByDesc(Furniture::getIsRecommended)
+                        .orderByDesc(Furniture::getSaleCount)
+                        .orderByAsc(Furniture::getPrice)
+                        .last("LIMIT 30")
+        );
+        if (candidates.isEmpty()) {
+            return "「" + typeName + "」下暂时没有在售商品，建议推荐其他系列。";
+        }
+
+        Set<Long> avoid = parseAvoidIds(avoidIds);
+        List<Furniture> picked = new ArrayList<>();
+        BigDecimal sum = BigDecimal.ZERO;
+        BigDecimal capValue = BigDecimal.valueOf(cap);
+        // 达到预算 85% 就收手，避免为凑满预算硬塞用户不一定需要的小件
+        BigDecimal stopLine = capValue.multiply(new BigDecimal("0.85"));
+        for (Furniture f : candidates) {
+            if (avoid.contains(f.getId())) {
+                continue;
+            }
+            BigDecimal price = f.getPrice() == null ? BigDecimal.ZERO : f.getPrice();
+            if (price.compareTo(BigDecimal.ZERO) <= 0) {
+                continue;
+            }
+            if (sum.add(price).compareTo(capValue) > 0) {
+                continue;
+            }
+            picked.add(f);
+            sum = sum.add(price);
+            if (sum.compareTo(stopLine) >= 0) {
+                break;
+            }
+        }
+        if (picked.isEmpty()) {
+            if (!avoid.isEmpty()) {
+                return String.format("排除你指定的商品后，「%s」在 ¥%d 预算内凑不出方案。要不要放宽排除范围，或提高预算？",
+                        typeName, cap);
+            }
+            BigDecimal min = candidates.stream().map(Furniture::getPrice)
+                    .filter(Objects::nonNull).min(BigDecimal::compareTo).orElse(BigDecimal.ZERO);
+            return String.format("预算 ¥%d 不够，「%s」最低单件 ¥%s。建议提高预算或换其他系列。",
+                    cap, typeName, min);
+        }
+
+        StringBuilder sb = new StringBuilder();
+        sb.append(String.format("【%s套装规划】预算 ¥%d，选中 %d 件：\n", scene, cap, picked.size()));
+        for (Furniture f : picked) {
+            sb.append(String.format("- %s [商品:%d] ¥%s（库存%d件）\n",
+                    f.getFName(), f.getId(), f.getPrice(), f.getStock()));
+        }
+        sb.append(String.format("商品总价 ¥%s，预算剩余 ¥%s\n", sum, capValue.subtract(sum)));
+
+        // 套装标记由后端生成、模型原样转述，金额不经过模型计算
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("scene", scene);
+        payload.put("budget", cap);
+        payload.put("total", sum);
+        List<Map<String, Object>> itemNodes = new ArrayList<>();
+        for (Furniture f : picked) {
+            Map<String, Object> node = new HashMap<>();
+            node.put("id", f.getId());
+            node.put("qty", 1);
+            itemNodes.add(node);
+        }
+        payload.put("items", itemNodes);
+        sb.append("[套装]").append(JSONUtil.toJsonStr(payload)).append("[/套装]");
+        return sb.toString();
+    }
+
+    /**
+     * 查询当前用户在本单可用的优惠券及抵扣额。
+     * <p>
+     * 可用性判断复用 {@code estimate} 的券评估，不在此重写任何算价逻辑，
+     * 保证 AI 说的「能省多少」与下单实收永远同源。
+     *
+     * @param memoryId 会话记忆ID，由框架注入
+     * @return 可用券与不可用券说明
+     */
+    @Tool("""
+            查询当前用户在本单（购物车）可用的优惠券：每张券能抵多少、为何不可用。
+            仅当用户问「我有什么券能用」「用券能省多少」时调用，需要先有购物车数据。
+            """)
+    public String queryMyCoupons(@ToolMemoryId String memoryId) {
+        log.debug("调用queryMyCoupons, memoryId={}", memoryId);
+        Long userId = resolveUserId(memoryId);
+        if (userId == null) {
+            return "请先登录后再查询优惠券。";
+        }
+        List<OrderItemDTO> cart = loadCartByUser(userId);
+        if (cart.isEmpty()) {
+            return "购物车是空的，无法评估券。请先提示用户把商品加入购物车。";
+        }
+        Result est = orderService.estimateForUser(userId, new OrderEstimateDTO(cart, null));
+        Object estData = est.getData();
+        if (!Boolean.TRUE.equals(est.getSuccess()) || !(estData instanceof CouponEstimateVO)) {
+            return "试算失败：" + (est.getMsg() == null ? "请稍后再试" : est.getMsg());
+        }
+        CouponEstimateVO vo = (CouponEstimateVO) estData;
+
+        Map<Long, UserCouponVO> couponMap = new HashMap<>();
+        Result mine = couponService.getMyCoupons(userId, null);
+        Object mineData = mine.getData();
+        if (mineData instanceof List) {
+            for (Object o : (List<?>) mineData) {
+                if (o instanceof UserCouponVO) {
+                    UserCouponVO uc = (UserCouponVO) o;
+                    couponMap.put(uc.getUserCouponId(), uc);
+                }
+            }
+        }
+
+        List<String> usableLines = new ArrayList<>();
+        List<String> unusableLines = new ArrayList<>();
+        List<CouponOptionVO> usableOptions = new ArrayList<>();
+        if (vo.getCouponOptions() != null) {
+            for (CouponOptionVO opt : vo.getCouponOptions()) {
+                UserCouponVO uc = couponMap.get(opt.getUserCouponId());
+                String name = uc == null ? ("券#" + opt.getUserCouponId()) : uc.getName();
+                String amount = (uc == null || uc.getAmountText() == null) ? "" : "｜" + uc.getAmountText();
+                if (Boolean.TRUE.equals(opt.getUsable())) {
+                    usableLines.add(String.format("· %s%s｜本单可抵 ¥%s", name, amount, opt.getEstimate()));
+                    // 边际抵扣为 0 的（加进去也不多省）不进建议：勾了只会白占叠加张数
+                    if (opt.getEstimate() != null && opt.getEstimate().compareTo(BigDecimal.ZERO) > 0) {
+                        usableOptions.add(opt);
+                    }
+                } else {
+                    String reason = (opt.getReason() == null || opt.getReason().isEmpty())
+                            ? "本单不可用" : opt.getReason();
+                    unusableLines.add(String.format("· %s%s｜%s", name, amount, reason));
+                }
+            }
+        }
+
+        // 建议集合：按单张可抵金额降序，取前 maxStackCount 张，折扣券最多 1 张。
+        // 刻意不做组合搜索——单张排序取前 N 讲得清；组合择优（已移除的 pickBestCoupons）讲不清。
+        // 也不把各张抵扣相加对外宣称「合计省 X」：券有封顶比例，边际值相加不等于实际抵扣。
+        usableOptions.sort((a, b) -> b.getEstimate().compareTo(a.getEstimate()));
+        int stackCap = vo.getMaxStackCount() == null ? 1 : vo.getMaxStackCount();
+        List<Long> suggestIds = new ArrayList<>();
+        int discountCount = 0;
+        for (CouponOptionVO opt : usableOptions) {
+            if (suggestIds.size() >= stackCap) {
+                break;
+            }
+            UserCouponVO uc = couponMap.get(opt.getUserCouponId());
+            if (uc != null && Integer.valueOf(2).equals(uc.getType())) {
+                if (discountCount >= 1) {
+                    continue;
+                }
+                discountCount++;
+            }
+            suggestIds.add(opt.getUserCouponId());
+        }
+
+        StringBuilder sb = new StringBuilder();
+        sb.append(String.format("【本单商品 ¥%s，可用券 %d 张】\n", vo.getGoodsTotal(), usableLines.size()));
+        if (usableLines.isEmpty()) {
+            sb.append("暂无可用券。\n");
+        } else {
+            usableLines.forEach(line -> sb.append(line).append('\n'));
+        }
+        if (!unusableLines.isEmpty()) {
+            sb.append("不可用：\n");
+            unusableLines.forEach(line -> sb.append(line).append('\n'));
+        }
+        if (vo.getMaxStackCount() != null) {
+            sb.append(String.format("规则提示：最多叠加 %d 张，折扣券每单限用 1 张。\n", vo.getMaxStackCount()));
+        }
+        // 用券建议由前端按钮触发预勾选，用户仍可在选券弹窗里取消，AI 不直接改单
+        if (!suggestIds.isEmpty()) {
+            sb.append(String.format("建议先叠这 %d 张（按单张可抵从高到低，未做组合择优，结算页可自行调整）。\n",
+                    suggestIds.size()));
+            sb.append("[用券]")
+                    .append(suggestIds.stream().map(String::valueOf).collect(Collectors.joining(",")))
+                    .append("[/用券]");
+        }
+        return sb.toString();
+    }
+
+    // ==================== 榜单 ====================
+
+    /**
+     * 查询家具榜单：销量 / 新品 / 推荐位。
+     * <p>
+     * 三者合并为一个工具而非拆成三个：模型可选的工具越少，选错工具的概率越低。
+     *
+     * @param type  榜单类型，sales/new/recommended
+     * @param limit 返回条数，为空取 5，上限 10
+     * @return 榜单文本
+     */
+    @Tool("""
+            查询家具榜单。type 只能是 sales（销量榜）、new（新品）、recommended（推荐位）三者之一。
+            用户问「哪款卖得好」「有什么新品」「有什么推荐」时调用。limit 为条数，默认 5，最多 10。
+            """)
+    public String queryFurnitureRanking(String type, Integer limit) {
+        log.debug("调用queryFurnitureRanking, type={}, limit={}", type, limit);
+        int n = limit == null ? 5 : Math.max(1, Math.min(limit, 10));
+        String kind = type == null ? "sales" : type.trim().toLowerCase();
+        switch (kind) {
+            case "sales":
+                return topSellingText(n);
+            case "new":
+                return newArrivalText(n);
+            case "recommended":
+                return recommendedText(n);
+            default:
+                return "榜单类型只支持 sales（销量榜）、new（新品）、recommended（推荐位）。";
+        }
+    }
+
+    /**
+     * 销量榜。只统计已支付及之后状态的订单，成交数据不足时如实说明，不编造销量。
+     */
+    private String topSellingText(int limit) {
+        List<TopFurnitureVO> list = orderItemMapper.selectTopSelling(limit);
+        if (list.isEmpty()) {
+            return "暂时没有足够的成交数据生成销量榜，可以看看推荐位，或按分类浏览。";
+        }
+        List<Long> ids = list.stream().map(TopFurnitureVO::getFurnitureId)
+                .filter(Objects::nonNull).distinct().collect(Collectors.toList());
+        Map<Long, Furniture> map = loadFurnitureByIds(ids);
+        StringBuilder sb = new StringBuilder("【销量榜】\n");
+        int rank = 1;
+        for (TopFurnitureVO item : list) {
+            Furniture f = map.get(item.getFurnitureId());
+            sb.append(String.format("%d. %s [商品:%d]", rank++, item.getFurnitureName(), item.getFurnitureId()));
+            if (f != null && f.getPrice() != null) {
+                sb.append(" ¥").append(f.getPrice());
+            }
+            sb.append(" 已售 ").append(item.getTotalSold()).append(" 件\n");
+        }
+        return sb.toString();
+    }
+
+    /**
+     * 新品。优先取近 30 天上架的；老库里商品多为同批导入，窗口内查不到时退回纯按上架时间倒序，并说明口径。
+     */
+    private String newArrivalText(int limit) {
+        List<Furniture> list = selectByCreateTimeDesc(limit, true);
+        boolean withinWindow = !list.isEmpty();
+        if (!withinWindow) {
+            list = selectByCreateTimeDesc(limit, false);
+        }
+        if (list.isEmpty()) {
+            return "当前没有可展示的新品。";
+        }
+        StringBuilder sb = new StringBuilder(withinWindow ? "【近 30 天上架新品】\n" : "【最新上架】\n");
+        appendFurnitureLines(sb, list);
+        return sb.toString();
+    }
+
+    private List<Furniture> selectByCreateTimeDesc(int limit, boolean within30Days) {
+        LambdaQueryWrapper<Furniture> wrapper = new LambdaQueryWrapper<Furniture>()
+                .select(Furniture::getId, Furniture::getFName, Furniture::getPrice,
+                        Furniture::getStock, Furniture::getCreateTime);
+        if (within30Days) {
+            wrapper.ge(Furniture::getCreateTime, LocalDateTime.now().minusDays(30));
+        }
+        wrapper.orderByDesc(Furniture::getCreateTime).last("LIMIT " + limit);
+        return furnitureMapper.selectList(wrapper);
+    }
+
+    private String recommendedText(int limit) {
+        List<Furniture> list = furnitureMapper.selectList(
+                new LambdaQueryWrapper<Furniture>()
+                        .select(Furniture::getId, Furniture::getFName, Furniture::getPrice,
+                                Furniture::getStock, Furniture::getSaleCount)
+                        .eq(Furniture::getIsRecommended, 1)
+                        .gt(Furniture::getStock, 0)
+                        .orderByDesc(Furniture::getSaleCount)
+                        .last("LIMIT " + limit)
+        );
+        if (list.isEmpty()) {
+            return "当前没有设置推荐位商品。";
+        }
+        StringBuilder sb = new StringBuilder("【推荐位】\n");
+        appendFurnitureLines(sb, list);
+        return sb.toString();
+    }
+
+    private void appendFurnitureLines(StringBuilder sb, List<Furniture> list) {
+        for (Furniture f : list) {
+            sb.append(String.format("- %s [商品:%d] ¥%s（库存%d件）\n",
+                    f.getFName(), f.getId(), f.getPrice(), f.getStock()));
+        }
+    }
+
+    /**
+     * 解析「不想再要的商品ID」。
+     * <p>
+     * 模型可能传 {@code 1417,1420}、{@code [1417,1420]} 甚至带引号，这里统一清洗后再解析。
+     * 解析失败的片段直接跳过——宁可少排除，也不要因为格式问题让整次规划失败。
+     */
+    private Set<Long> parseAvoidIds(String avoidIds) {
+        if (avoidIds == null || avoidIds.isBlank()) {
+            return Set.of();
+        }
+        Set<Long> ids = new HashSet<>();
+        for (String token : avoidIds.replaceAll("[\\[\\]{}\"']", "").split("[,\\s]+")) {
+            if (token.isBlank()) {
+                continue;
+            }
+            try {
+                ids.add(Long.parseLong(token.trim()));
+            } catch (NumberFormatException ignored) {
+                // 解析不了的片段跳过，不打断规划
+            }
+        }
+        return ids;
     }
 }

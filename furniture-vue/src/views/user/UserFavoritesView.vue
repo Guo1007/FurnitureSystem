@@ -69,7 +69,7 @@ import { onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
 import { getFavorites, toggleFavorite } from "@/api/favorite.js";
-import { imgUrl } from "@/utils/img.js";
+import { imgUrl, handleImgError } from "@/utils/img.js";
 import { formatPrice } from "@/utils/format.js";
 import { logger } from "@/utils/logger.js";
 import { useBackNavigation } from '@/composables/useBackNavigation.js';
@@ -128,10 +128,6 @@ const goDetail = (item) =>
   router.push({ name: "FurnitureDetail", params: { id: item.id } });
 const goHome = () => router.push("/");
 const { goBack } = useBackNavigation();
-
-const handleImgError = (e) => {
-  e.target.src = "/images/default-furniture.png";
-};
 
 onMounted(() => loadList());
 </script>

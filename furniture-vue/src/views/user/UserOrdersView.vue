@@ -779,7 +779,7 @@ import {
   User,
 } from "@element-plus/icons-vue";
 import { ElMessage, ElMessageBox } from "element-plus";
-import { imgUrl } from "@/utils/img.js";
+import { imgUrl, handleImgError } from "@/utils/img.js";
 import { formatPrice, formatTimeFull } from "@/utils/format.js";
 import { logger } from "@/utils/logger.js";
 import {
@@ -1422,10 +1422,6 @@ const { goBack } = useBackNavigation();
 
 const goHome = () => {
   router.push("/");
-};
-
-const handleImgError = (e) => {
-  e.target.src = "/images/default-furniture.png";
 };
 
 onMounted(() => {

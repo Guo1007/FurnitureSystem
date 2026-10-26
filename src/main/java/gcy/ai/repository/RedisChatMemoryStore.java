@@ -26,7 +26,11 @@ import java.util.List;
 public class RedisChatMemoryStore implements ChatMemoryStore {
 
     /**
-     * 聊天记忆数据有效期，7天
+     * 聊天记忆数据有效期，7天。
+     * <p>
+     * 必须 ≥ 前端会话保留期（{@code AiChatPage.vue} 的 {@code CHAT_MAX_DAYS}，当前 3 天）：
+     * 只要用户还能在前端看到某个会话，模型就应当有对应上下文，反过来才是 bug。
+     * 留几天余量即可，不必与前端完全相等。
      */
     private static final Duration MEMORY_TTL = Duration.ofDays(7);
 

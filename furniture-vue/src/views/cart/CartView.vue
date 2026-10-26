@@ -24,8 +24,15 @@
         <span class="coupon-banner-btn">去领券</span>
       </router-link>
 
+      <!-- 首次加载：数据还没回来时别急着显示「购物车是空的」 -->
+      <div v-if="cartStore.isEmpty && cartStore.loading" class="cart-empty-state">
+        <span class="empty-icon">⏳</span>
+        <h2>正在加载购物车…</h2>
+        <p>请稍候</p>
+      </div>
+
       <!-- Empty -->
-      <div v-if="cartStore.isEmpty" class="cart-empty-state">
+      <div v-else-if="cartStore.isEmpty" class="cart-empty-state">
         <span class="empty-icon">🛒</span>
         <h2>购物车是空的</h2>
         <p>去挑选一些心仪的家具吧</p>
@@ -210,7 +217,7 @@ import { getFurnitureByTypeId } from "@/api/furniture.js";
 import { getMyCoupons } from "@/api/coupon.js";
 import CouponPickerDialog from "@/components/coupon/CouponPickerDialog.vue";
 import { createOrder } from "@/api/order.js";
-import { imgUrl } from "@/utils/img.js";
+import { imgUrl, handleImgError } from "@/utils/img.js";
 import { formatPrice } from "@/utils/format.js";
 import { useCouponEstimate } from "@/composables/useCouponEstimate.js";
 import { ElMessage } from "element-plus";
@@ -336,8 +343,8 @@ const goCheckout = async () => {
     };
     const res = await createOrder(orderData);
     if (res.success || res.code === 200) {
-      // 下单成功后移除已结算商品
-      cartStore.checkout([...selectedIds.value]);
+      // 下单成功后移除已结算商品（同步清理服务端，失败不影响已提交的订单）
+      await cartStore.checkout([...selectedIds.value]);
       ElMessage.success("订单创建成功");
       router.push("/user/orders");
     } else {
@@ -351,11 +358,9 @@ const goCheckout = async () => {
   }
 };
 
-const handleImgError = (e) => {
-  e.target.src = "/images/default-furniture.png";
-};
-
 onMounted(async () => {
+  // 购物车数据来自服务端，先等拉取完成再初始化勾选，否则会把「全选」算成空
+  await cartStore.fetchCart();
   selectedIds.value = cartStore.items.map((i) => i.cartItemId);
 
   // 已登录才加载默认地址（游客浏览购物车不触发需登录接口）

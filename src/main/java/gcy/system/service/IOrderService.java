@@ -30,6 +30,16 @@ public interface IOrderService extends IService<Order> {
     Result estimate(OrderEstimateDTO dto);
 
     /**
+     * 下单试算（指定用户），供 AI 工具等无 ThreadLocal 上下文的调用方使用。
+     * <p>
+     * 算价逻辑与 {@link #estimate} 完全一致，唯一区别是 userId 来源：本方法显式传入。
+     * 流式/异步线程里 UserHolder 取不到用户，此时必须走本方法。
+     *
+     * @param userId 用户ID，须由调用方从可信来源（服务端会话标识）解析，不得取自模型参数
+     */
+    Result estimateForUser(Long userId, OrderEstimateDTO dto);
+
+    /**
      * 分页查询指定用户的订单列表。
      *
      * @param status 订单状态筛选，支持逗号分隔多状态（如 "6,7,8"）；为空时不筛选

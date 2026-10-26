@@ -70,7 +70,7 @@
             <div class="bot-avatar">智</div>
             <div class="header-text">
               <h2>{{ activeTitle || '小智 AI 助手' }}</h2>
-              <p>随时为您解答家具选购疑问</p>
+              <p>搭配整套家具 · 算清优惠 · 一键加购</p>
             </div>
           </div>
           <div class="header-actions">
@@ -89,7 +89,7 @@
           <div v-if="messages.length === 0" class="welcome-block">
             <div class="welcome-emoji">🛋️</div>
             <h3>你好，我是小智</h3>
-            <p>家具商城的智能客服助手，试试问我：</p>
+            <p>说说预算和场景，我来帮你搭：</p>
             <div class="quick-chips">
               <button
                 v-for="q in quickQuestions"
@@ -111,7 +111,7 @@
               <span v-else>👤</span>
             </div>
             <div class="msg-body">
-              <div class="msg-bubble" v-html="fmt(msg.content, cacheVersion)"></div>
+              <div class="msg-bubble" v-html="fmt(msg.content, cacheVersion)" @click="onBubbleClick"></div>
               <span class="msg-time" v-if="msg.time">{{ fmtTime(msg.time) }}</span>
               <span v-if="msg.role === 'assistant' && i === messages.length - 1 && loading" class="typing-dots">
                 <i></i><i></i><i></i>
@@ -165,10 +165,16 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { ElMessage, ElMessageBox } from "element-plus";
 import { imgUrl } from "@/utils/img.js";
 import { useBackNavigation } from "@/composables/useBackNavigation.js";
+import { useRouter } from "vue-router";
 import { useUserStore } from "@/stores/user";
+import { useCartStore } from "@/stores/cart";
 
 const { goBack } = useBackNavigation();
+// 套装卡里的商品要能点进详情；用 push 而不是 <a href>，否则整页刷新会把对话记录冲掉
+const router = useRouter();
 
+// 会话在浏览器保留的天数（只影响前端展示范围）。改小之前先确认 Redis 记忆 TTL 仍 ≥ 它，
+// 否则会出现「用户看得到历史、模型却没上下文」——见 RedisChatMemoryStore.MEMORY_TTL
 const CHAT_MAX_DAYS = 3;
 const CHAT_MAX_AGE = CHAT_MAX_DAYS * 24 * 60 * 60 * 1000;
 
@@ -180,6 +186,8 @@ const drawerOpen = ref(false);
 
 // 会话数据按登录用户隔离存储，避免退出登录后其他账号看到历史记录
 const userStore = useUserStore();
+// 装配套餐由 AI 出方案、用户点按钮才真正入购物车，这里只读 store 的加购能力
+const cartStore = useCartStore();
 const chatScope = () =>
   userStore.userInfo?.id ? `u${userStore.userInfo.id}` : "guest";
 // 新版：多会话列表结构 [{id, title, createdAt, updatedAt, messages}]
@@ -287,6 +295,18 @@ const extractProductIds = (content) => {
   while ((match = regex.exec(content)) !== null) {
     ids.push(parseInt(match[1]));
   }
+  // 套装方案里的商品不以 [商品:ID] 出现，需单独提取，否则方案卡只有编号没有名称与价格
+  const setRegex = /\[套装\]([\s\S]*?)\[\/套装\]/g;
+  while ((match = setRegex.exec(content)) !== null) {
+    try {
+      const data = JSON.parse(match[1]);
+      (data.items || []).forEach((it) => {
+        if (it && it.id) ids.push(Number(it.id));
+      });
+    } catch {
+      // 流式输出尚未收完，等 cacheVersion 变化后重试
+    }
+  }
   return [...new Set(ids)];
 };
 
@@ -338,10 +358,10 @@ onBeforeUnmount(() => {
 });
 
 const quickQuestions = ref([
-  "有什么推荐的沙发？",
-  "家具配送要多久？",
-  "如何申请退换货？",
-  "实木家具怎么保养？",
+  "预算 8000，配一套客厅",
+  "最近哪款卖得最好",
+  "有什么新品上架",
+  "我这单能用什么优惠券",
 ]);
 
 const newChat = () => {
@@ -406,7 +426,27 @@ const deleteSession = async (s) => {
     skipPersist = true;
     messages.value = [];
   }
+  // 本地删完再清服务端记忆：后端失败不回退本地删除，否则用户会以为没删掉
+  clearRemoteMemory(s.id);
   ElMessage.success("已删除");
+};
+
+/**
+ * 通知后端清掉该会话的 Redis 记忆与购物车快照。
+ * 失败不影响本地删除——残留最多 7 天后自然过期，不值得为它打断用户。
+ */
+const clearRemoteMemory = async (conversationId) => {
+  // legacy- 是迁移前的旧会话，后端没有对应记忆
+  if (!conversationId || conversationId.startsWith("legacy-")) return;
+  try {
+    const res = await fetch(`/api/ai/chat/${encodeURIComponent(conversationId)}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${localStorage.getItem("token") || ""}` },
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  } catch (e) {
+    console.warn("清理服务端会话记忆失败:", e && e.message);
+  }
 };
 
 const scrollToBottom = () => {
@@ -433,9 +473,58 @@ const escapeHtml = (str) => {
   return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 };
 
+function renderSetCard(jsonText) {
+  let data;
+  try {
+    data = JSON.parse(jsonText);
+  } catch {
+    return "";
+  }
+  if (!data || !Array.isArray(data.items) || data.items.length === 0) return "";
+  const rows = data.items
+    .map((it) => {
+      const p = productCache.value[it.id];
+      const name = p ? p.fName : `商品 #${it.id}`;
+      const price = p && p.price != null ? `¥${p.price}` : "¥--";
+      return `<li class="set-item" data-detail-id="${it.id}" title="查看商品详情"><span class="set-item-name">${escapeHtml(name)}</span><span class="set-item-price">${escapeHtml(price)} × ${it.qty || 1}</span><span class="set-item-go">详情</span></li>`;
+    })
+    .join("");
+  // scene 由模型生成，直接拼进属性可能破坏 HTML，先编码再放进 data-set
+  const payload = encodeURIComponent(JSON.stringify(data));
+  const budgetText = data.budget != null ? `预算 ¥${data.budget}` : "";
+  return `<div class="set-card">
+    <div class="set-head">
+      <span class="set-title">${escapeHtml(data.scene || "")}套装方案</span>
+      <span class="set-budget">${escapeHtml(budgetText)}</span>
+    </div>
+    <ul class="set-list">${rows}</ul>
+    <div class="set-foot">
+      <span class="set-total">合计 ¥${escapeHtml(String(data.total != null ? data.total : ""))}</span>
+      <button type="button" class="set-add-btn" data-set="${payload}">全部加入购物车</button>
+    </div>
+  </div>`;
+}
+
 const fmt = (content, _ver) => {
   if (!content) return "";
-  const escaped = content
+  // 标记必须在 HTML 转义前取出：JSON 里的引号一旦变成 &quot; 就无法解析了
+  const setCards = [];
+  const couponHints = [];
+  const raw = content
+    .replace(/\[套装\]([\s\S]*?)\[\/套装\]/g, (_m, json) => {
+      setCards.push(renderSetCard(json));
+      return `__SET${setCards.length - 1}__`;
+    })
+    // 流式输出尚未收完时整段隐藏，避免用户看到裸 JSON
+    .replace(/\[套装\][\s\S]*$/, "")
+    .replace(/\[用券\]\s*([\d,\s]*)\s*\[\/用券\]/g, (_m, ids) => {
+      // 保留券 ID：渲染成按钮后点一下才真正写入抽屉的预选，不点等于没采纳
+      couponHints.push(String(ids || "").replace(/\s/g, ""));
+      return `__COUPON${couponHints.length - 1}__`;
+    })
+    .replace(/\[用券\][\s\S]*$/, "");
+
+  const escaped = raw
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
@@ -467,7 +556,73 @@ const fmt = (content, _ver) => {
       </a>`;
     }
   );
+  // 回填占位符：卡片 HTML 在转义前就已生成，不能等到转义后再拼
+  formatted = formatted.replace(/__SET(\d+)__/g, (_m, i) => setCards[Number(i)] || "");
+  formatted = formatted.replace(/__COUPON(\d+)__/g, (_m, i) => {
+    const ids = couponHints[Number(i)] || "";
+    const count = ids ? ids.split(",").filter(Boolean).length : 0;
+    if (count === 0) {
+      return `<div class="coupon-hint">本单暂无可用券</div>`;
+    }
+    return `<button type="button" class="coupon-hint coupon-hint-btn" data-coupon-ids="${escapeHtml(ids)}">为你选好 ${count} 张可用券 · 去结算套用</button>`;
+  });
   return formatted;
+};
+
+const addSetToCart = async (data) => {
+  if (!data || !Array.isArray(data.items)) return;
+  let added = 0;
+  let skipped = 0;
+  // 串行加购：并发写同一 SKU 会撞唯一索引，服务端虽能兜底，串行更直观也更好定位问题
+  for (const it of data.items) {
+    const p = productCache.value[it.id];
+    if (!p) {
+      skipped++;
+      continue;
+    }
+    if (await cartStore.addItem(p, it.qty || 1, null, true)) added++;
+    else skipped++;
+  }
+  if (added > 0) {
+    ElMessage.success(`已将 ${added} 件商品加入购物车`);
+    cartStore.openCart();
+  }
+  if (skipped > 0) {
+    ElMessage.warning(`${skipped} 件商品暂时无法加入（库存不足或信息未加载）`);
+  }
+};
+
+/** v-html 里的按钮绑不了 Vue 事件，用容器上的事件委托处理 */
+const onBubbleClick = (e) => {
+  // 套装清单里的单个商品：点一下进详情页（返回时对话还在）
+  const detail = e.target.closest("[data-detail-id]");
+  if (detail) {
+    e.preventDefault();
+    router.push(`/furniture/detail/${detail.dataset.detailId}`);
+    return;
+  }
+  // AI 建议的券：点了才写进抽屉预选，不点就等于不采纳
+  const couponBtn = e.target.closest("[data-coupon-ids]");
+  if (couponBtn) {
+    e.preventDefault();
+    const ids = (couponBtn.dataset.couponIds || "")
+      .split(",")
+      .map((s) => Number(s))
+      .filter((n) => Number.isFinite(n) && n > 0);
+    if (ids.length) {
+      cartStore.setSuggestedCoupons(ids);
+      cartStore.openCart();
+    }
+    return;
+  }
+  const btn = e.target.closest(".set-add-btn");
+  if (!btn) return;
+  e.preventDefault();
+  try {
+    addSetToCart(JSON.parse(decodeURIComponent(btn.dataset.set || "")));
+  } catch {
+    ElMessage.warning("套装信息解析失败，请刷新后重试");
+  }
 };
 
 /** 输入框自动增高（最多约 5 行） */

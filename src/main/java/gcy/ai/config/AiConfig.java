@@ -84,7 +84,7 @@ public class AiConfig {
     /**
      * 创建聊天记忆提供者。
      * <p>
-     * 使用Redis存储聊天记忆，每个会话保留最近20条消息的上下文窗口。
+     * 使用Redis存储聊天记忆，每个会话保留最近40条消息的上下文窗口。
      * </p>
      *
      * @return 聊天记忆提供者实例
@@ -94,7 +94,10 @@ public class AiConfig {
         return memoryId -> MessageWindowChatMemory.builder()
                 .id(memoryId)
                 .chatMemoryStore(redisChatMemoryStore)
-                .maxMessages(20)
+                // 从 20 提到 40：一次套装规划就要吃掉 4~6 条（用户消息 + 工具调用 + 含长 JSON 的回复），
+                // 20 条只够 3~5 轮，多轮修正（换掉某件、再便宜点）很容易把窗口顶满导致模型「失忆」。
+                // 代价是每轮多发送历史 token，flash 模型足够便宜，可接受
+                .maxMessages(40)
                 .build();
     }
 

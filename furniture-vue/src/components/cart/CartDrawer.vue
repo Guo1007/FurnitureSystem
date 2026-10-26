@@ -38,8 +38,14 @@
           <span class="coupon-banner-btn">去领券</span>
         </router-link>
 
+        <!-- 首次加载：数据还没回来时别急着显示「购物车是空的」 -->
+        <div v-if="cartStore.isEmpty && cartStore.loading" class="cart-empty">
+          <div class="empty-icon">⏳</div>
+          <p>正在加载购物车…</p>
+        </div>
+
         <!-- 空状态 -->
-        <div v-if="cartStore.isEmpty" class="cart-empty">
+        <div v-else-if="cartStore.isEmpty" class="cart-empty">
           <div class="empty-icon">🛒</div>
           <p>购物车是空的</p>
           <el-button type="primary" @click="goShopping">去逛逛</el-button>
@@ -273,12 +279,37 @@ const mineCoupons = ref([]);
 const selectedCouponIds = ref([]);
 const showCouponDialog = ref(false);
 
+/**
+ * 应用 AI 给出的用券建议。
+ * <p>
+ * 三条约束：只在用户还没手动选券时生效（不覆盖用户的选择）、
+ * 只采纳券包里确实存在且未使用的、消费一次即清（避免每次打开抽屉都硬塞）。
+ * <p>
+ * 张数与「折扣券限 1 张」由服务端 `queryMyCoupons` 按真实 maxStackCount 截断后给出，
+ * 这里不再二次截断——同一个约束在两处各做一次，只会让口径分叉。
+ */
+const applySuggestedCoupons = () => {
+  const suggested = cartStore.suggestedCouponIds || [];
+  if (!suggested.length) return;
+  // 先消费掉再判断能否应用：用户已经手动选过券时，这条建议就作废，不该留着下次再冒出来
+  cartStore.clearSuggestedCoupons();
+  if (selectedCouponIds.value.length > 0) return;
+  const usable = new Set(
+    mineCoupons.value.filter((c) => c.status === 0).map((c) => c.userCouponId),
+  );
+  const picked = suggested.filter((id) => usable.has(id));
+  if (picked.length) {
+    selectedCouponIds.value = picked;
+  }
+};
+
 const loadCoupons = async () => {
   const res = await getMyCoupons();
   mineCoupons.value = res.success || res.code === 200 ? res.data || [] : [];
   // 券列表刷新后剔除已失效的选中项
   const valid = new Set(mineCoupons.value.map((c) => c.userCouponId));
   selectedCouponIds.value = selectedCouponIds.value.filter((id) => valid.has(id));
+  applySuggestedCoupons();
 };
 
 /**
@@ -514,6 +545,8 @@ watch(
       showAddressPicker.value = false;
       showAddressForm.value = false;
       if (localStorage.getItem("token")) {
+        // 每次打开刷新一次：价格与库存是实时取库的，别拿旧数据显示结算金额
+        cartStore.fetchCart();
         loadAddresses();
         loadCoupons();
       }
@@ -555,8 +588,10 @@ const checkout = async () => {
 
     const res = await createOrder(orderData);
     if (res.success || res.code === 200) {
-      cartStore.checkout(cartStore.checkoutIds);
+      // 先取出勾选集合再清空，避免 checkout 内部读到已被重置的空数组
+      const settledIds = [...cartStore.checkoutIds];
       cartStore.checkoutIds = [];
+      await cartStore.checkout(settledIds);
       cartStore.closeCart();
       ElMessage.success("订单创建成功");
       router.push("/user/orders");

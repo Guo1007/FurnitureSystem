@@ -1,5 +1,6 @@
 package gcy.system.entity.dto.admin;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -25,10 +26,18 @@ public class AdminFurnitureFormDTO {
     @Schema(description = "家具ID，编辑时传入，新增时可为空")
     private Long id;
 
+    /**
+     * 家具名称。
+     * <p>
+     * 必须声明 JSON 名：否则 Jackson 把 getFName() 压成 "fname"，
+     * 前端表单提交的 "fName" 绑不上，会被 @NotBlank 拦成「家具名称不能为空」。
+     */
+    @JsonProperty("fName")
     @Schema(description = "家具名称")
     @NotBlank(message = "家具名称不能为空")
     private String fName;
 
+    @JsonProperty("fIcon")
     @Schema(description = "封面图片地址")
     @NotBlank(message = "封面图片不能为空")
     private String fIcon;

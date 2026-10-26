@@ -101,7 +101,7 @@
                   imgUrl(item.furnitureIcon, '/images/default-furniture.png')
                 "
                 class="rank-img"
-                @error="handleRankImgError"
+                @error="handleImgError"
               />
               <div class="rank-info">
                 <span class="rank-name">{{ item.furnitureName }}</span>
@@ -266,7 +266,7 @@ import {
   getOrderTrend,
   getTopFurniture,
 } from "@/api/admin/dashboard.js";
-import { imgUrl } from "@/utils/img.js";
+import { imgUrl, handleImgError } from "@/utils/img.js";
 
 const statsLoading = ref(false);
 const stats = ref({
@@ -340,10 +340,6 @@ const filteredLowStock = computed(() => {
 const stockPercent = (stock) => {
   const p = Math.max(0, Math.min(100, (stock / 10) * 100));
   return p;
-};
-
-const handleRankImgError = (e) => {
-  e.target.src = "/images/default-furniture.png";
 };
 
 const handleLowStockImgError = (e) => {

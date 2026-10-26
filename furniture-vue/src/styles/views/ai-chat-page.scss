@@ -436,3 +436,120 @@
   color: #a86e3a;
   white-space: nowrap;
 }
+
+/* ===== AI 套装方案卡（由 v-html 注入） ====== */
+.set-card {
+  margin: 8px 0 4px;
+  padding: 12px 14px;
+  background: #fdfbf8;
+  border: 1px solid #e4dbcf;
+  border-radius: 12px;
+  max-width: 420px;
+}
+.set-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.set-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #3d3226;
+}
+.set-budget {
+  font-size: 12px;
+  color: #8a7a68;
+  white-space: nowrap;
+}
+.set-list {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+  border-top: 1px dashed #ece2d4;
+}
+.set-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 -6px;
+  padding: 6px;
+  border-bottom: 1px dashed #ece2d4;
+  border-radius: 6px;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: background .15s ease;
+}
+.set-item:hover { background: #f7f1e8; }
+.set-item:hover .set-item-go { color: #a86e3a; }
+.set-item-name {
+  flex: 1;
+  min-width: 0;
+  color: #4a382a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.set-item-price {
+  color: #8a7a68;
+  white-space: nowrap;
+}
+.set-item-go {
+  flex-shrink: 0;
+  font-size: 11.5px;
+  color: #beb0a0;
+  white-space: nowrap;
+  transition: color .15s ease;
+}
+.set-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.set-total {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #a86e3a;
+}
+.set-add-btn {
+  border: none;
+  border-radius: 16px;
+  padding: 7px 14px;
+  background: #c8a882;
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background .15s ease;
+}
+.set-add-btn:hover { background: #b08f66; }
+.set-add-btn:active { transform: translateY(1px); }
+.coupon-hint {
+  margin: 6px 0;
+  padding: 7px 10px;
+  background: #f7f2ea;
+  border-left: 3px solid #c8a882;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #7a6a58;
+}
+
+/* AI 用券建议做成按钮：点了才真正套用到结算，不点等于没采纳 */
+.coupon-hint-btn {
+  display: inline-flex;
+  align-items: center;
+  border: none;
+  border-left: 3px solid #c8a882;
+  padding: 8px 12px;
+  font-family: inherit;
+  font-size: 12px;
+  color: #8a6a3a;
+  cursor: pointer;
+  text-align: left;
+  transition: background .15s ease, color .15s ease;
+}
+.coupon-hint-btn:hover { background: #f2e8d8; color: #6d5228; }
+.coupon-hint-btn:active { transform: translateY(1px); }

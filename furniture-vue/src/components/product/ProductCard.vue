@@ -112,16 +112,16 @@ const quickAdd = async () => {
             specText: skus[0].specText || '',
           }
         : null;
-      cartStore.addItem(props.product, 1, skuInfo);
+      await cartStore.addItem(props.product, 1, skuInfo);
     }
   } catch {
     // API 失败时 fallback 到原逻辑
-    cartStore.addItem(props.product, 1);
+    await cartStore.addItem(props.product, 1);
   }
 };
 
-const onSpecConfirm = (skuInfo) => {
-  cartStore.addItem(props.product, 1, skuInfo);
+const onSpecConfirm = async (skuInfo) => {
+  await cartStore.addItem(props.product, 1, skuInfo);
   specDialogVisible.value = false;
 };
 

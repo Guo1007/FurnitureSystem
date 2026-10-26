@@ -8,6 +8,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import gcy.ai.aiservice.FurnitureAiService;
+import gcy.system.entity.dto.Result;
 import gcy.system.entity.dto.UserDTO;
 import gcy.system.entity.pojo.Favorite;
 import gcy.system.entity.pojo.Furniture;
@@ -22,6 +23,8 @@ import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -129,6 +132,28 @@ public class AiChatController {
                             });
                 });
         return Flux.concat(metaEvent, chatStream);
+    }
+
+    /**
+     * 删除指定会话的记忆。
+     * <p>
+     * 会话记录本身存在前端 localStorage，这里清理的是 Redis 里的模型上下文。
+     * memoryId 必须用当前登录用户的 userId 现拼：若直接接受前端传来的完整 key，
+     * 用户就能构造别人的 key 删掉别人的会话。
+     *
+     * @param conversationId 会话ID
+     * @return 删除结果
+     */
+    @Operation(summary = "删除AI会话记忆")
+    @DeleteMapping("/chat/{conversationId}")
+    public Result deleteConversation(
+            @Parameter(description = "会话ID") @PathVariable String conversationId) {
+        UserDTO user = UserHolder.getUser();
+        Long userId = (user != null) ? user.getId() : 0L;
+        String memoryId = AI_CHAT_MEMORY_KEY + userId + ":" + conversationId;
+        chatMemoryStore.deleteMessages(memoryId);
+        log.info("已清理会话记忆: userId={}, conversationId={}", userId, conversationId);
+        return Result.okMsg("已删除");
     }
 
     /**
