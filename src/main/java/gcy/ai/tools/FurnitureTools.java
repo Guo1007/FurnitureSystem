@@ -545,9 +545,9 @@ public class FurnitureTools {
      * 按场景与预算规划套装。
      * <p>
      * 组合与算价全部在后端完成，模型只负责传场景和预算——让大模型做加法必然算错。
-     * 按优先级顺序累加（贪心），不做任何搜索：用户要的是协调的一套家具，不是把预算花光的数学最优解。
-     * <p>
-     * 
+     * 选品由 {@link FurnitureSetPlanner} 完成：先保证该场景的核心家具各一件，
+     * 再用剩余预算补配件；核心件放不进预算时如实说明缺少哪类，而不是拿配件凑数。
+     * </p>
      *
      * @param scene  场景关键词
      * @param budget 预算（元），可为空
@@ -558,6 +558,7 @@ public class FurnitureTools {
             scene 只能取 客厅、卧室、书房、餐厅 之一。
             budget 为人民币整数元；用户没有提到预算时，不要包含 budget 字段（不要传 null、None 或空值）。
             avoidIds 传用户明确不想再要的商品ID（逗号分隔，如 1417,1420），没有就不传。
+            会优先保证床、沙发、书桌、餐桌等核心家具，再补配件；预算不足时会说明缺哪类核心件。
             返回套装清单、商品总价与预算余额，末尾附套装标记。
             严禁自行编造商品，也严禁改动返回中的任何金额。
             """)
@@ -576,68 +577,58 @@ public class FurnitureTools {
         if (type == null) {
             return "暂时取不到「" + scene + "」的分类信息，请稍后再试。";
         }
+        // 不能再用 LIMIT 30：按推荐位/销量排序时，便宜的核心家具往往排在 30 条之外，
+        // 最终只剩配件被选中。该场景在售商品数量有限，全量取回后交给选品器按核心品类优先挑。
         List<Furniture> candidates = furnitureMapper.selectList(
                 new LambdaQueryWrapper<Furniture>()
                         .select(Furniture::getId, Furniture::getFName, Furniture::getPrice,
                                 Furniture::getStock, Furniture::getIsRecommended, Furniture::getSaleCount)
                         .eq(Furniture::getTypeId, type.getId())
                         .gt(Furniture::getStock, 0)
-                        .orderByDesc(Furniture::getIsRecommended)
-                        .orderByDesc(Furniture::getSaleCount)
-                        .orderByAsc(Furniture::getPrice)
-                        .last("LIMIT 30")
+                        .orderByAsc(Furniture::getId)
         );
         if (candidates.isEmpty()) {
             return "「" + typeName + "」下暂时没有在售商品，建议推荐其他系列。";
         }
 
         Set<Long> avoid = parseAvoidIds(avoidIds);
-        List<Furniture> picked = new ArrayList<>();
-        BigDecimal sum = BigDecimal.ZERO;
-        BigDecimal capValue = BigDecimal.valueOf(cap);
-        // 达到预算 85% 就收手，避免为凑满预算硬塞用户不一定需要的小件
-        BigDecimal stopLine = capValue.multiply(new BigDecimal("0.85"));
-        for (Furniture f : candidates) {
-            if (avoid.contains(f.getId())) {
-                continue;
-            }
-            BigDecimal price = f.getPrice() == null ? BigDecimal.ZERO : f.getPrice();
-            if (price.compareTo(BigDecimal.ZERO) <= 0) {
-                continue;
-            }
-            if (sum.add(price).compareTo(capValue) > 0) {
-                continue;
-            }
-            picked.add(f);
-            sum = sum.add(price);
-            if (sum.compareTo(stopLine) >= 0) {
-                break;
-            }
-        }
+        FurnitureSetPlanner.Plan plan = FurnitureSetPlanner.plan(typeName, candidates, cap, avoid);
+        List<Furniture> picked = plan.picked();
         if (picked.isEmpty()) {
+            if (plan.coreMinimum().signum() > 0) {
+                return String.format("预算 ¥%d 连核心家具都配不齐（核心件最低合计约 ¥%s）。建议提高预算，或先告诉我最想先买哪一件。",
+                        cap, plan.coreMinimum());
+            }
             if (!avoid.isEmpty()) {
                 return String.format("排除你指定的商品后，「%s」在 ¥%d 预算内凑不出方案。要不要放宽排除范围，或提高预算？",
                         typeName, cap);
             }
-            BigDecimal min = candidates.stream().map(Furniture::getPrice)
-                    .filter(Objects::nonNull).min(BigDecimal::compareTo).orElse(BigDecimal.ZERO);
-            return String.format("预算 ¥%d 不够，「%s」最低单件 ¥%s。建议提高预算或换其他系列。",
-                    cap, typeName, min);
+            return String.format("预算 ¥%d 不够，「%s」暂时没有可搭配的核心家具。建议提高预算或换其他系列。",
+                    cap, typeName);
         }
 
+        BigDecimal total = plan.total();
+        BigDecimal capValue = BigDecimal.valueOf(cap);
         StringBuilder sb = new StringBuilder();
         sb.append(String.format("【%s套装规划】预算 ¥%d，选中 %d 件：\n", scene, cap, picked.size()));
         for (Furniture f : picked) {
             sb.append(String.format("- %s [商品:%d] ¥%s（库存%d件）\n",
                     f.getFName(), f.getId(), f.getPrice(), f.getStock()));
         }
-        sb.append(String.format("商品总价 ¥%s，预算剩余 ¥%s\n", sum, capValue.subtract(sum)));
+        sb.append(String.format("商品总价 ¥%s，预算剩余 ¥%s\n", total, capValue.subtract(total)));
+        if (!plan.missingCore().isEmpty()) {
+            sb.append("预算内没能配齐：");
+            sb.append(plan.missingCore().stream()
+                    .map(m -> String.format("%s（最低 ¥%s）", m.name(), m.minimumPrice()))
+                    .collect(Collectors.joining("、")));
+            sb.append("。建议提高预算，或先配齐核心件。\n");
+        }
 
         // 套装标记由后端生成、模型原样转述，金额不经过模型计算
         Map<String, Object> payload = new HashMap<>();
         payload.put("scene", scene);
         payload.put("budget", cap);
-        payload.put("total", sum);
+        payload.put("total", total);
         List<Map<String, Object>> itemNodes = new ArrayList<>();
         for (Furniture f : picked) {
             Map<String, Object> node = new HashMap<>();
