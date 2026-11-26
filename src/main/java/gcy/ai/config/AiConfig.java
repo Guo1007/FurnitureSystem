@@ -8,15 +8,19 @@ import dev.langchain4j.data.document.splitter.DocumentSplitters;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.memory.chat.ChatMemoryProvider;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
+import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.rag.content.retriever.ContentRetriever;
 import dev.langchain4j.rag.content.retriever.EmbeddingStoreContentRetriever;
 import dev.langchain4j.store.embedding.EmbeddingStore;
 import dev.langchain4j.store.embedding.EmbeddingStoreIngestor;
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
+import gcy.ai.model.SanitizingStreamingChatModel;
+import gcy.ai.util.ToolArgumentSanitizer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.core.Cursor;
@@ -99,6 +103,30 @@ public class AiConfig {
                 // 代价是每轮多发送历史 token，flash 模型足够便宜，可接受
                 .maxMessages(40)
                 .build();
+    }
+
+    /**
+     * 创建会清洗工具调用参数的流式模型。
+     * <p>
+     * 模型偶尔会把工具参数输出成 {@code None} 或空值，LangChain4j 在执行工具前
+     * 解析这些参数会直接抛 JsonParseException。这里包一层装饰器，在响应进入
+     * AiService（写入记忆、执行工具）之前把参数修成合法 JSON。
+     * </p>
+     * <p>
+     * 必须用 {@code @Qualifier} 取 starter 创建的原生模型：本 Bean 与
+     * {@code openAiStreamingChatModel} 都是 StreamingChatModel 类型，
+     * 按类型注入会产生歧义。
+     * </p>
+     *
+     * @param openAiStreamingChatModel starter 创建的原生流式模型
+     * @param toolArgumentSanitizer    工具参数清洗器
+     * @return 装饰后的流式模型
+     */
+    @Bean
+    public StreamingChatModel sanitizingStreamingChatModel(
+            @Qualifier("openAiStreamingChatModel") StreamingChatModel openAiStreamingChatModel,
+            ToolArgumentSanitizer toolArgumentSanitizer) {
+        return new SanitizingStreamingChatModel(openAiStreamingChatModel, toolArgumentSanitizer);
     }
 
     /**

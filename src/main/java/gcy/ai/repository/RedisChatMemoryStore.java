@@ -5,6 +5,7 @@ import dev.langchain4j.data.message.ChatMessageDeserializer;
 import dev.langchain4j.data.message.ChatMessageSerializer;
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Repository;
 
@@ -22,6 +23,7 @@ import java.util.List;
  * @date 2026-07-30
  */
 @Repository
+@Slf4j
 @RequiredArgsConstructor
 public class RedisChatMemoryStore implements ChatMemoryStore {
 
@@ -47,8 +49,17 @@ public class RedisChatMemoryStore implements ChatMemoryStore {
      */
     @Override
     public List<ChatMessage> getMessages(Object memoryId) {
-        String jsonMessage = redisTemplate.opsForValue().get(memoryId.toString());
-        return ChatMessageDeserializer.messagesFromJson(jsonMessage);
+        String key = memoryId.toString();
+        String jsonMessage = redisTemplate.opsForValue().get(key);
+        try {
+            return ChatMessageDeserializer.messagesFromJson(jsonMessage);
+        } catch (RuntimeException e) {
+            // 整段记忆是一次性反序列化的，任何一条真正损坏的消息都会让整个会话
+            // 每次请求都失败。与其永久卡死，不如丢弃这份记忆，让用户从新上下文继续。
+            log.warn("会话记忆反序列化失败，已丢弃该会话的损坏记忆: memoryId={}", memoryId, e);
+            redisTemplate.delete(key);
+            return List.of();
+        }
     }
 
     /**

@@ -1,6 +1,6 @@
 package gcy.ai.task;
 
-import gcy.ai.aiservice.FurnitureAiService;
+import gcy.ai.aiservice.PingAiService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -17,6 +17,10 @@ import java.util.List;
  * （DashScope侧模型实例空闲缩容 + OkHttp长连接闲置失效，两者叠加导致
  * 首次请求超时，第二次因已唤醒而成功）。
  * </p>
+ * <p>
+ * 心跳走独立的 {@link PingAiService}：不写会话记忆、不做 RAG 检索，避免把
+ * 整段知识库文本注入探针请求。
+ * </p>
  *
  * @author 郭名城
  * @date 2026-09-24
@@ -26,12 +30,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class AiKeepAliveScheduler {
 
-    /**
-     * 心跳使用的独立记忆桶ID，与用户会话记忆完全隔离
-     */
-    private static final String KEEPALIVE_MEMORY_ID = "keepalive:heartbeat";
-
-    private final FurnitureAiService furnitureAiService;
+    private final PingAiService pingAiService;
 
     /**
      * 每15分钟发送一次心跳。
@@ -44,8 +43,8 @@ public class AiKeepAliveScheduler {
     @Scheduled(fixedDelay = 15 * 60 * 1000, initialDelay = 90 * 1000)
     public void heartbeat() {
         try {
-            List<String> parts = furnitureAiService
-                    .ping(KEEPALIVE_MEMORY_ID, "ping")
+            List<String> parts = pingAiService
+                    .ping("ping")
                     .collectList()
                     .block(Duration.ofSeconds(30));
             log.info("AI保活心跳成功: {}", String.join("", parts));

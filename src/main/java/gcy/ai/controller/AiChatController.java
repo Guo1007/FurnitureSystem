@@ -1,7 +1,9 @@
 package gcy.ai.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
+import dev.langchain4j.data.message.ToolExecutionResultMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -31,6 +33,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Flux;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -119,10 +122,10 @@ public class AiChatController {
                         return Flux.just(errorJson("AI客服响应中断，请稍后再试"));
                     }
                     // 首次失败多为冷启动（模型唤醒/连接重建），此时尚未输出任何内容，
-                    // 重试一次用户无感知。但必须先回滚本轮已写入记忆的用户消息，
-                    // 否则同一条消息会在记忆里出现两次，污染后续多轮对话上下文。
-                    log.error("AI聊天连接阶段失败，回滚记忆后重试一次（冷启动唤醒）: {}", e.getMessage(), e);
-                    rollbackLastUserMessage(memoryId);
+                    // 重试一次用户无感知。但必须先回滚本轮已写入记忆的消息，否则会污染
+                    // 后续多轮对话上下文。
+                    log.error("AI聊天连接阶段失败，回滚本轮记忆后重试一次（冷启动唤醒）: {}", e.getMessage(), e);
+                    rollbackFailedTurn(memoryId);
                     return furnitureAiService.streamChat(memoryId, enhancedMessage)
                             .map(this::contentJson)
                             .concatWith(Flux.just("[DONE]"))
@@ -157,28 +160,52 @@ public class AiChatController {
     }
 
     /**
-     * 回滚最后一条用户消息，供流式聊天失败重试前调用。
+     * 回滚失败轮次写入会话记忆的消息，供流式聊天失败重试前调用。
      * <p>
-     * 流式调用在进入时就把用户消息写进了会话记忆，直接重发会让同一条消息
-     * 在记忆里堆叠两次：token 翻倍，且后续多轮对话上下文被污染。
+     * 流式调用在进入时就把用户消息写进了会话记忆；如果模型已经返回工具调用，
+     * LangChain4j 还会在真正执行工具之前先把 AiMessage 写进记忆。失败时记忆末尾
+     * 可能是：UserMessage、UserMessage + AiMessage(toolCalls)，或再加上若干条
+     * ToolExecutionResultMessage（前面的工具成功、后面的失败）。只删最后一条
+     * UserMessage 会留下没有对应 tool result 的悬空 tool_call，重试时同一条用户
+     * 消息还会再追加一次，导致后续请求携带非法历史。这里把本轮的半截消息整体退回。
      *
      * @param memoryId 会话记忆ID
      */
-    private void rollbackLastUserMessage(String memoryId) {
+    private void rollbackFailedTurn(String memoryId) {
         try {
             List<ChatMessage> messages = chatMemoryStore.getMessages(memoryId);
             if (messages == null || messages.isEmpty()) {
                 return;
             }
-            int last = messages.size() - 1;
-            if (messages.get(last) instanceof UserMessage) {
-                messages.remove(last);
-                chatMemoryStore.updateMessages(memoryId, messages);
-                log.info("已回滚会话记忆中的最后一条用户消息: memoryId={}", memoryId);
+            List<ChatMessage> remaining = new ArrayList<>(messages);
+            int removed = 0;
+            // 先移除本轮已执行成功、但整轮最终失败的工具结果
+            while (!remaining.isEmpty()
+                    && remaining.get(remaining.size() - 1) instanceof ToolExecutionResultMessage) {
+                remaining.remove(remaining.size() - 1);
+                removed++;
+            }
+            // 再移除带工具调用、但没有完整 tool result 的 AiMessage
+            while (!remaining.isEmpty()
+                    && remaining.get(remaining.size() - 1) instanceof AiMessage ai
+                    && ai.hasToolExecutionRequests()) {
+                remaining.remove(remaining.size() - 1);
+                removed++;
+            }
+            // 最后移除本轮追加的用户消息
+            if (!remaining.isEmpty()
+                    && remaining.get(remaining.size() - 1) instanceof UserMessage) {
+                remaining.remove(remaining.size() - 1);
+                removed++;
+            }
+            if (removed > 0) {
+                chatMemoryStore.updateMessages(memoryId, remaining);
+                log.info("已回滚失败轮次的会话记忆: memoryId={}, 移除 {} 条, 剩余 {} 条",
+                        memoryId, removed, remaining.size());
             }
         } catch (Exception e) {
             // 回滚失败不应阻断重试，记录日志即可
-            log.warn("回滚最后一条用户消息失败: memoryId={}", memoryId, e);
+            log.warn("回滚失败轮次的会话记忆失败: memoryId={}", memoryId, e);
         }
     }
 
