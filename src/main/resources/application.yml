@@ -83,13 +83,19 @@ langchain4j:
     streaming-chat-model:
       api-key: ${CHAT_AI_API_KEY:}
       base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
-      model-name: qwen3.7-flash
+      # flash 档工具调用与指令跟随偏弱；改用 plus，并支持在 .env 里通过 CHAT_AI_MODEL 切换
+      model-name: ${CHAT_AI_MODEL:qwen3.7-plus}
+      # 客服导购不需要创意发散：低温度让工具参数和回答更稳定
+      temperature: 0.3
+      top-p: 0.8
       log-requests: ${LANGCHAIN_LOG_REQUESTS:false}
       log-responses: ${LANGCHAIN_LOG_RESPONSES:false}
     chat-model:
       api-key: ${CHAT_AI_API_KEY:}
       base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
-      model-name: qwen3.7-flash
+      model-name: ${CHAT_AI_MODEL:qwen3.7-plus}
+      temperature: 0.3
+      top-p: 0.8
       log-requests: ${LANGCHAIN_LOG_REQUESTS:false}
       log-responses: ${LANGCHAIN_LOG_RESPONSES:false}
     embedding-model:

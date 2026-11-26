@@ -221,8 +221,10 @@ public class AiConfig {
                 // 必须与摄入端、以及建索引时的维度来源保持一致
                 .embeddingModel(embeddingModel)
                 .embeddingStore(embeddingStore)
-                .minScore(0.5)
-                .maxResults(3)
+                // 商品数据走工具实时查询，RAG 只补充静态政策；阈值太低会把无关政策
+                // 每轮塞进上下文，既分散模型注意力也浪费 token
+                .minScore(0.65)
+                .maxResults(2)
                 .build();
     }
 }
